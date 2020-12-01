@@ -1,0 +1,6 @@
+<disk type='file' device='disk'>
+    <target dev='vde' bus='virtio'/>
+    <driver name='qemu' type='raw' cache='none' io='native'/>
+    <source file='/mnt/stabile/images/dummy.qcow2'/>
+    <readonly/>
+</disk>

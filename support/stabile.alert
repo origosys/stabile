@@ -1,0 +1,433 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+# mail.alert - Mail alert for mon
+#
+# The first line from STDIN is summary information, adequate to send
+# to a pager or email subject line.
+#
+# -f from@addr.x   set the smtp envelope "from" address
+#
+use Getopt::Std;
+use Text::Wrap;
+use Data::Dumper;
+use Tie::DBI;
+use ConfigReader::Simple;
+use String::Escape qw( unbackslash backslash );
+use MIME::Lite;
+use URI::Escape;
+use HTTP::Async;
+use HTTP::Request::Common;
+use Proc::ProcessTable;
+use utf8;
+
+$ENV{PATH} = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
+
+getopts ("S:s:g:h:t:l:f:u");
+
+$summary=<STDIN> if (!-t STDIN);
+chomp $summary;
+
+$summary = $opt_S if (defined $opt_S);
+
+$mailaddrs = join (',', @ARGV);
+$mailfrom = "-f $opt_f -F $opt_f" if (defined $opt_f);
+
+my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
+    [qw(DBI_USER DBI_PASSWD)]);
+
+$dbiuser =  $config->get('DBI_USER') || "irigo";
+$dbipasswd = $config->get('DBI_PASSWD') || "";
+
+$oponduty = 'operator@sa.origo.io';
+
+$t = localtime($opt_t);
+($wday,$mon,$day,$tm) = split (/\s+/, $t);
+
+($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($opt_t);
+$year += 1900;
+$month = substr("0" . ($mon+1), -2);
+$pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
+
+my $logfile = "/var/log/stabile/$year-$month:$opt_g:$opt_s";
+unless (-e $logfile) {
+    `/usr/bin/touch $logfile`;
+    `/bin/chown mon:mon $logfile`;
+}
+
+%opstatus = getSavedOpstatus();
+my $ds = doSendAlert($opt_g, $opt_s); # Determine if DOWN alerts have already been sent
+my $logline;
+my $estatus = $opstatus{"$opt_g:$opt_s"}->{'opstatus'};
+my $existing_monitor = (defined $estatus);
+
+#$ALERT = $opt_u ? "UP" : ($summary ? "DOWN" : "STARTUP");
+$ALERT ="DOWN";
+$ALERT = "UP" if ($opt_u);
+$ALERT = "STARTUP" if ($ENV{"MON_ALERTTYPE"} eq 'startup');
+
+my %disabled;
+my @dislist = split(/\n/, `/usr/bin/moncmd list disabled`);
+foreach my $disline (@dislist) {
+    my ($a, $b, $c, $d) = split(' ', $disline);
+    $disabled{"$b" . ($d?":$d":'')} = 1;
+};
+
+if ($disabled{"$opt_g:$opt_s"}) {
+    $logline = "$opt_t, DISABLE, RESTART, $pretty_time";
+
+} elsif ($ALERT eq 'STARTUP' && $existing_monitor) { # Not a new service, just a restart
+    my $EALERT = ($estatus)?"UP":"DOWN";
+    $logline = "$opt_t, $EALERT, RESTART, $pretty_time";
+
+} else {
+    $logline = "$opt_t, $ALERT, $summary, $pretty_time";
+}
+`/bin/echo "$logline" >> $logfile` if ($opt_t);
+# `/bin/echo "$logline :: $ALERT, $ds, $ENV{'MON_LAST_OPSTATUS'}, $existing_monitor, $opstatus{"$group:$service"}->{'alerts_sent'}, $opstatus{"$group:$service"}->{'ack'}" >> /tmp/monlog`;
+
+#
+# The remaining lines normally contain more detailed information,
+# but this is monitor-dependent.
+#
+my $details;
+if (!-t STDIN) {
+    while (<STDIN>) {
+        $details .= $_;
+    }
+}
+chomp $details;
+#`/bin/echo >> /var/log/stabile/test.log "$ALERT, $ds ($opt_g, $opt_s): $ENV{'MON_LAST_OPSTATUS'}: $existing_monitor: $mailaddrs, $details"` if ($opt_s =~ /http/);
+if (   ($ALERT eq 'DOWN' && $ds)
+    || ($ALERT eq 'UP' && $ENV{'MON_LAST_OPSTATUS'} eq '0')
+    || ($ALERT eq 'UP' && !$existing_monitor)
+    ) {
+
+    my ($user, $servername) = updateClientUI();
+    $servername = $opt_g unless ($servername);
+    $user = "mon" if ($user =~ /Error getting user/);
+    my $exclamation = ($ALERT eq 'UP')?'RECOVERY:':'ALERT:';
+    my $engineid = `cat /etc/stabile/config.cfg | sed -n -e 's/^ENGINEID=//p'`; chomp $engineid;
+    my $enginelink = `cat /etc/stabile/baseurl`; chomp $enginelink;
+    my $enginename = `cat /etc/stabile/config.cfg | sed -n -e 's/^ENGINENAME=//p'`; chomp $enginename;
+    my $doxmpp = `cat /etc/stabile/config.cfg | sed -n -e 's/^DO_XMPP=//p'`; chomp $doxmpp;
+    my $sysuuid = `echo servers/$opt_g/list | stash | sed -n -e 's/.*"system" : "//p'| sed -n -e 's/",//p'`;
+    chomp $sysuuid;
+    $sysuuid = $opt_g unless (length $sysuuid == 36);
+
+    if ($mailaddrs
+    # fix for bug in https monitor, which sends out wrong up alerts
+    # &&    !($details =~ /Bad response code/ && $opt_s eq 'https' && $ENV{'MON_ALERTTYPE'} eq 'up')
+    ) {
+
+        my $first_failure = localtime($ENV{'MON_FIRST_FAILURE'});
+        my $subject = "$exclamation $servername:$opt_s is $ALERT ($pretty_time)";
+        my $xmpptext = "$subject\n";
+        $xmpptext .= "IP address: $opt_h\n";
+        $xmpptext .= "Link to engine: $enginelink" if ($enginelink);
+
+        my $mailtext = <<EOF;
+Server UUID: $opt_g
+System UUID: $sysuuid
+Server name: $servername
+Server user: $user
+Service: $opt_s
+Time noticed: $t
+Down since: $first_failure
+Last status: $ENV{'MON_LAST_OPSTATUS'}
+Alert type: $ENV{'MON_ALERTTYPE'}
+EOF
+
+        $mailtext .= "Secs until next alert: $opt_l\n" if ($opt_l);
+        $mailtext .= "IP address: $opt_h\n";
+        $mailtext .= "Link to engine: $enginelink\n" if ($enginelink);
+        $mailtext .= "Detailed text:\n$details" if ($details);
+
+        my $mailhtml = <<END;
+<!DOCTYPE html
+	PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+	 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+	<head>
+		<title>$exclamation $servername:$opt_s is $ALERT</title>
+		<meta http-equiv="Pragma" content="no-cache" />
+		<link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+		<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+	</head>
+	<body class="tundra">
+		<div>
+			<div class="well" style="margin:20px;">
+				<h3 style="color: #e74c3c!important; margin-bottom:30px;">Oops, something is wrong with one of your services!</h3>
+				<div>Monitoring services at <strong>$enginename</strong> noticed that the <strong>$opt_s</strong> service on the server <strong>$servername</strong> stopped responding at <strong>$first_failure</strong>.</div>
+				<br>
+				<div>The server has IP address <strong>$opt_h</strong>, id <strong>$opt_g</strong> and is owned by <strong>$user</strong>.</div>
+				<br>
+				<div>
+					To access the server and hopefully fix the problems, click <a href="$enginelink">here</a>.<br>
+				</div>
+				<br>
+				<div>Thanks,<br>your friendly monitoring daemon</div>
+			</div>
+		</div>
+	</body>
+</html>
+END
+;
+        my $recoveryhtml = <<END;
+<!DOCTYPE html
+	PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+	 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US">
+	<head>
+		<title>$exclamation $servername:$opt_s is $ALERT</title>
+		<meta http-equiv="Pragma" content="no-cache" />
+		<link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css" />
+		<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+	</head>
+	<body class="tundra">
+		<div>
+			<div class="well" style="margin:20px;">
+				<h3 style="color: #27ae60!important; margin-bottom:30px;">Good news! one of your services resumed normal operations</h3>
+				<div>Monitoring services at <strong>$enginename</strong> noticed that the <strong>$opt_s</strong> service on the server <strong>$servername</strong> resumed responding at <strong>$t</strong>.</div>
+				<br>
+				<div>The server has IP address <strong>$opt_h</strong>, id <strong>$opt_g</strong> and is owned by <strong>$user</strong>.</div>
+				<br>
+				<div>Thanks,<br>your friendly monitoring daemon</div>
+			</div>
+		</div>
+	</body>
+</html>
+END
+;
+
+        my $msg = MIME::Lite->new(
+         From     => 'monitoring',
+         To       => $mailaddrs,
+         Type     => 'multipart/alternative',
+         Subject  => $subject,
+         );
+         $msg->add("sysuuid" => $sysuuid);
+
+         my $att_text = MIME::Lite->new(
+           Type     => 'text',
+           Data     => $mailtext,
+           Encoding => 'quoted-printable',
+         );
+         $att_text->attr('content-type'
+           => 'text/plain; charset=UTF-8');
+         $msg->attach($att_text);
+
+         my $att_html = MIME::Lite->new(
+          Type     => 'text',
+          Data     => (($ALERT eq 'UP')?$recoveryhtml:$mailhtml),
+          Encoding => 'quoted-printable',
+         );
+         $att_html->attr('content-type'
+           => 'text/html; charset=UTF-8');
+         $msg->attach($att_html);
+
+         logit($user, $subject);
+         my $res = $msg->send;
+
+        if (0 && $doxmpp) { # XMPP disabled for now
+            my $basedir = '/var/www/stabile';
+            $basedir = `cat /etc/stabile/basedir` if (-e "/etc/stabile/basedir");
+            chomp $basedir;
+            $ENV{REMOTE_USER} = $user;
+            require "$basedir/cgi/Stabile.pm";
+            foreach my $to (split /, */, $mailaddrs) {
+               my $xres = xmppSend($to, $xmpptext, $engineid, $sysuuid);
+            }
+
+        # Send alerts to Origo operators on duty
+            $msg->replace('to', $oponduty);
+            $msg->replace('subject', "[OPERATOR] $subject");
+            $msg->send;
+            my $xres = xmppSend($oponduty, "[OPERATOR]\n$xmpptext", $engineid, $sysuuid);
+         }
+    }
+}
+
+sub updateClientUI {
+    unless (tie %domreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'domains',
+        key=>'uuid',
+        autocommit=>0,
+        CLOBBER=>3,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return "Error connecting to DB"};
+
+    my $user = $domreg{$opt_g}->{'user'};
+    my $servername = $domreg{$opt_g}->{'name'};
+    untie %domreg;
+    if ($user) {
+        my $lastcheck = ($ENV{'MON_LAST_SUCCESS'}>$ENV{'MON_LAST_FAILURE'})?$ENV{'MON_LAST_SUCCESS'}:$ENV{'MON_LAST_FAILURE'};
+#        my $det = $details;
+#        $det =~ s/-//g;
+#        $det =~ s/^\n//;
+#        $det =~ s/\n+/\n/g;
+#        $det =~ s/\n/\\n/g;
+        my $det = qq|Please refresh to see details about this monitors last check.|;
+        my $stat = lc($ALERT);
+        $stat = 'ok' if ($stat eq 'up');
+
+        my $newtasks = qq|{"type":"update","tab":"monitors","timestamp":$opt_t,"sender":"alert"| .
+        ($opt_g?",\"uuid\":\"$opt_g\"":"") .
+        (($opt_g && $opt_s)?",\"id\":\"$opt_g:$opt_s\"":"") .
+        ($ALERT?",\"status\":\"$stat\"":"") .
+        ",\"last_check\":\"$lastcheck\"" .
+        ",\"last_detail\":\"$det\"" .
+        (($stat eq 'ok')?",\"ack\":0":"") .
+        ",\"ackcomment\":\"$ENV{'MON_ACK'}\"" .
+        ",\"opstatus\":\"$ENV{'MON_OPSTATUS'}\"" .
+        ",\"first_failure\":\"$ENV{'MON_FIRST_FAILURE'}\"" .
+        "}, ";
+
+        $newtasks = $1 if ($newtasks =~ /(.+)/); #untaint
+
+        my $fi = scalar @files; `echo "$opt_t UI updating the $fi $ENV{'MON_OPSTATUS'} monitors for $f $user" >> /tmp/monlog`;
+        opendir my($dh), '/tmp' or die "Couldn't open '/tmp': $!";
+        my @files = grep { /^$user~.*\.tasks$/ } readdir $dh;
+        closedir $dh;
+        my $t = new Proc::ProcessTable;
+        my @ptable = @{$t->table};
+        my @pfiles;
+        foreach my $f (@files) {
+            foreach my $p ( @ptable ){
+                my $pcmd = $p->cmndline;
+                if ($pcmd =~ /\/tmp\/$f/) { # Only include pipes with active listeners
+                    push @pfiles, "/tmp/$f";
+                    last;
+                }
+            }
+        };
+        my $tasksfiles = join(' ', @pfiles);
+        $tasksfiles = $1 if ($tasksfiles =~ /(.+)/); #untaint
+        # Write to users named pipes if user is logged in and session file found
+        if ($tasksfiles) {
+            $res = `/bin/echo \'$newtasks\' | /usr/bin/tee  $tasksfiles \&`;
+        } else {
+            # If session file not found, append to orphan tasks file wait a sec and reload
+            $res = `/bin/echo \'$newtasks\' >> /tmp/$user.tasks`;
+            $res .= `chmod 666 /tmp/$user.tasks`;
+            sleep 1;
+            eval {`/usr/bin/pkill -HUP -f ui_update`; 1;} or do {;};
+        };
+        return ($user, $servername);
+    } else {
+        return "Error getting user for $opg_g";
+    }
+}
+
+sub getSavedOpstatus {
+    my $dounbackslash = shift;
+    my $opfile = "/etc/stabile/opstatus";
+    my @oparray;
+    my %opstatus;
+    # Build hash (%opstatus) with opstatus'es etc. to use for services that are in state unknown because of mon reload
+    if (-e $opfile) {
+        open(FILE, $opfile) or {throw Error::Simple("Unable to acces opstatus")};
+        @oparray = <FILE>;
+        close(FILE);
+        foreach my $line (@oparray) {
+            my @pairs = split(/ /,$line);
+            my %h;
+            foreach my $pair (@pairs) {
+                my ($key, $val) = split(/=/,$pair);
+                if ($key eq 'last_result' || !$dounbackslash) {
+                    $h{$key} = $val;
+                } else {
+                    $val =~ s/\\/\\x/g;
+                    $h{$key} = unbackslash($val);
+                }
+            }
+            $h{'line'} = $line;
+            $opstatus{"$h{'group'}:$h{'service'}"} = \%h;
+        }
+    }
+    return %opstatus;
+}
+
+sub doSendAlert {
+    my ($group, $service) = @_;
+    if ($opstatus{"$group:$service"} && $opstatus{"$group:$service"}->{'opstatus'} eq '0'
+#        && ($opstatus{"$group:$service"}->{'alerts_sent'} >= 1 || $opstatus{"$group:$service"}->{'ack'})) {
+        && ($opstatus{"$group:$service"}->{'ack'} )) {
+        return 0; # This service is already down and alerts have been sent
+    } else {
+        return 1;
+    }
+}
+
+sub logit {
+    my ($loguser, $msg) = @_;
+    $loguser = $loguser || 'irigo';
+    my $logfile = "/var/log/stabile/steam.log";
+    my $current_time = time;
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($current_time);
+    $year += 1900;
+    my $month = substr("0" . ($mon+1), -2);
+    my $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
+	if ($msg && $msg ne '') {
+	    utf8::decode($msg);
+		unless (open(TEMP3, ">>$logfile")) {$posterror .= "Status=Error log file '$logfile' could not be written";}
+		print TEMP3 $pretty_time, " : $loguser : $msg\n";
+		close(TEMP3);
+	}
+}
+
+sub xmppSend {
+    my ($to, $msg, $engineid, $sysuuid) = @_;
+    $engineid = `cat /etc/stabile/config.cfg | sed -n -e 's/^ENGINEID=//p'` unless ($engineid);
+    my $doxmpp = `cat /etc/stabile/config.cfg | sed -n -e 's/^DO_XMPP=//p'`;
+    if (!$doxmpp) {
+        return "INFO: DO_XMPP not enabled in config\n";
+
+    } elsif ($to && $msg) {
+        my $xdom;
+        $xdom = $1 if ($to =~ /\@(.+\..+)$/);
+        if ($to eq $oponduty || ($xdom && `host -t SRV _xmpp-server._tcp.$xdom` !~ /NXDOMAIN/)) {
+            require LWP::Simple;
+            my $browser = LWP::UserAgent->new;
+            $browser->agent('stabile/1.0b');
+            $browser->protocols_allowed( [ 'http','https'] );
+            $browser->timeout(10);
+            my $tktcfg = ConfigReader::Simple->new("/etc/apache2/conf-available/auth_tkt_cgi.conf", [qw(TKTAuthSecret)]);
+            my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+            my $tkthash = sha512_hex($tktkey);
+            my $msg_esc = uri_escape($msg);
+            my $posturl = "https://www.origo.io/irigo/engine.cgi?action=xmppsend";
+            my $cmd = "engineid=$engineid\&enginetkthash=$tkthash\&to=$to\&sysuuid=$sysuuid\&msg=$msg_esc";
+            my $ret = system(qq|/usr/bin/curl -k --data "engineid=$engineid\&enginetkthash=$tkthash\&to=$to\&sysuuid=$sysuuid\&msg=$msg_esc" $posturl \&|);
+
+            #my $async = HTTP::Async->new;
+            #my $post = POST $posturl,
+            #    [   engineid => $engineid,
+            #        enginetkthash => $tkthash,
+            #        to => $to,
+            #        msg => $msg
+            #    ];
+            #$async->add( $post );
+
+            #my $postreq = ();
+            #$postreq->{'engineid'} = $engineid;
+            #$postreq->{'enginetkthash'} = $tkthash;
+            #$postreq->{'to'} = $to;
+            #$postreq->{'msg'} = $msg;
+            #$content = $browser->post($posturl, $postreq)->content();
+
+            return "OK: Sent xmpp message to $to $ret\n";
+        } else {
+            return "INFO: srv records not found for $xdom\n";
+        }
+
+    } else {
+        return "ERROR: Invalid xmpp data $to, $msg\n";
+    }
+};

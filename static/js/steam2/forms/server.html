@@ -1,0 +1,280 @@
+<form data-dojo-type="dojox.form.Manager" id="serverFormManager" style="min-width:500px">
+
+<script type="dojo/method" data-dojo-event="_onKeyboardChange"></script>
+<script type="dojo/method" data-dojo-event="_onSaveClick"></script>
+<script type="dojo/method" data-dojo-event="_onNodeChange"></script>
+<script type="dojo/method" data-dojo-event="_onMountClick"></script>
+<script type="dojo/method" data-dojo-event="_onMoveClick"></script>
+<script type="dojo/method" data-dojo-event="_onImageSelect"></script>
+<script type="dojo/method" data-dojo-event="_onImage2Select"></script>
+<script type="dojo/method" data-dojo-event="_onNetworkSelect"></script>
+<script type="dojo/method" data-dojo-event="_onNetwork2Select"></script>
+
+<table cellspacing="10" width="100%">
+    <tr>
+        <td width=">
+            <label for="name">Name</label>
+        </td>
+        <td>
+            <input type="text" name="name" required="true" 
+                   data-dojo-type="dijit.form.ValidationTextBox" 
+                   regExp="[^\0]+"
+                   />
+        </td>
+    </tr>
+    <tr id="serverDialogUuidRow" class="serverDialogAdminRow">
+        <td>
+            <label for="uuid">UUID</label>
+        </td>
+        <td>
+            <input type="text" name="uuid" 
+                   data-dojo-type="dijit.form.TextBox"
+                   disabled="true"
+                   />
+        </td>
+    </tr>
+    <tr id="serverDialogStatusRow">
+        <td>
+            <label for="status">Status</label>
+        </td>
+        <td>
+            <input type="text" name="status"
+                   disabled="true"
+                   data-dojo-type="dijit.form.TextBox"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="memory">Memory</label>
+        </td>
+        <td>
+            <input type="text" name="memory"
+                   value="512"
+                   store="stores.memory"
+                   searchAttr="memory"
+                   data-dojo-type="dijit.form.FilteringSelect"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="vcpus">VCPUs</label>
+        </td>
+        <td>
+            <input type="text" name="vcpu"
+                   value="1"
+                   smallDelta="1"
+                   constraints="{min:1,max:4,places:0}"
+                   data-dojo-type="dijit.form.NumberSpinner"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="diskbus">Diskbus</label>
+        </td>
+        <td>
+            <input type="text" name="diskbus"
+                   store="stores.diskbus"
+                   searchAttr="type"
+                   value="ide"
+                   data-dojo-type="dijit.form.FilteringSelect"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="cdrom">CD-ROM</label>
+        </td>
+        <td>
+            <input type="text" name="cdrom"
+                   required="false"
+                   store="stores.cdroms"
+                   placeHolder="Select a cd-rom"
+                   searchAttr="name"
+                   data-dojo-type="dijit.form.FilteringSelect"
+            />
+            <span id="serverDialogMountButtonWrapper">
+              <button name="mountButton" type="button" data-dojo-type="dijit.form.Button" observer="_onMountClick" style="font-size:80%;">Mount</button></span>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="boot">Boot</label>
+        </td>
+        <td>
+            <input type="text" name="boot"
+                   value="hd"
+                   store="stores.bootDevices"
+                   searchAttr="device"
+                   data-dojo-type="dijit.form.FilteringSelect"
+            />
+        </td>
+    </tr>
+    <tr class="serverDialogAdminRow" style="display:none">
+        <td>
+            <label>
+                <span id="serverDialogNodeDialogLink">Node</span>
+            </label>
+        </td>
+        <td>
+            <input type="text" name="mac"
+                   observer="_onNodeChange"
+                   data-dojo-type="dijit.form.FilteringSelect"
+                   store="stores.nodes"
+                   searchAttr="name"
+                   required="false"
+            />
+            <span id="serverDialogMoveButtonWrapper">
+                <button name="moveButton" type="button"
+                        data-dojo-type="dijit.form.Button" 
+                        observer="_onMoveClick" style="font-size:80%;">Move</button>
+            </span>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="image">
+
+                <span id="serverDialogImageDialogLink">Image</span>
+                <a href="https://www.origo.io/info/stabiledocs/web/servers/image" rel="help" target="_blank" class="irigo-tooltip">help</a>
+            </label>
+        </td>
+        <td>
+            <select type="text" 
+                   data-dojo-type="steam2.FilteringSelectWithDeselect"
+                   name="image"
+                   observer="_onImageSelect"
+                   placeHolder="Select an image"
+                   searchAttr="name"
+                   store="stores.images"
+            >
+              <option value="">--</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span id="serverDialogImage2DialogLink">Image 2</span>
+            <a href="https://www.origo.io/info/stabiledocs/web/servers/image-2" rel="help" target="_blank" class="irigo-tooltip">help</a>
+        </td>
+        <td>
+            <input type="text" 
+                   data-dojo-type="steam2.FilteringSelectWithDeselect"
+                   name="image2"
+                   observer="_onImage2Select"
+                   placeHolder="Select a second image"
+                   searchAttr="name"
+                   store="stores.images"
+                   required="false"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span id="serverDialogNetwork1DialogLink">Connection</span>
+            <a href="https://docs.irigo.com/topics/rICa" rel="help" target="_blank" class="irigo-tooltip">help</a>
+        </td>
+        <td>
+            <input type="text" name="networkuuid1"
+                   required="false"
+                   store="stores.networks"
+                   searchAttr="name"
+                   placeHolder="Select a network"
+                   data-dojo-type="steam2.FilteringSelectWithDeselect"
+                   observer="_onNetworkSelect"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span id="serverDialogNetwork2DialogLink">Connection 2</span>
+        </td>
+        <td>
+            <input type="text"
+                   name="networkuuid2"
+                   store="stores.networks"
+                   required="false"
+                   placeHolder="Select a second network"
+                   searchAttr="name"
+                   data-dojo-type="steam2.FilteringSelectWithDeselect"
+                   observer="_onNetwork2Select"
+            />
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <label for="nicmodel1">
+                Network Interface
+                <a href="https://docs.irigo.com/topics/PdwMq7" rel="help" target="_blank" class="irigo-tooltip">help</a>
+            </label>
+        </td>
+        <td>
+            <input type="text" name="nicmodel1"
+                   data-dojo-type="dijit.form.FilteringSelect"
+                   store="stores.networkInterfaces"
+                   searchAttr="type"
+                   query="{hypervisor:'*'}"
+            />
+        </td>
+    </tr>
+    <tr class="serverDialogAdminRow">
+        <td>
+            <label for="autostart">
+                Auto-start
+            </label>
+        </td>
+        <td>
+            <input  type="checkbox" name="autostart" data-dojo-type="dijit.form.CheckBox" noonchange="this.value=this.checked?true:'';"/>
+        </td>
+    </tr>
+    <tr id="serverDialogTunnelRow">
+      <td>
+        <span id="serverDialogTunnelLink">Tunnel</span><a href="https://docs.irigo.com/topics/gfpB8M" rel="help" target="_blank" class="irigo-tooltip">help</a>
+      </td>
+      <td>
+        <span id="serverDialogTunnelButton"></span>
+      </td>
+    </tr>
+    <tr id="serverDialogConsoleRow">
+      <td>
+        <span id="serverDialogConsoleLink">Java Console</span>
+        <a href="https://docs.irigo.com/topics/HDwg" rel="help" target="_blank" class="irigo-tooltip">help</a>
+      </td>
+      <td>
+        <span id="serverDialogConsoleButton"></span>
+        (key mappings <a href="//docs.irigo.com/topics/HEpmybLN" rel="help" target="_blank" class="irigo-tooltip">help</a>)
+      </td>
+    </tr>
+    <tr id="serverDialogRdpKeyboardRow">
+      <td>
+        Keyboard layout
+      </td>
+      <td>
+        <input data-dojo-type="dijit.form.Select" name="keyboard"
+             value="en-us" store="rdp.Viewer.keyboardLayouts" observer="_onKeyboardChange"></div> 
+      </td>
+    </tr>
+    <tr id="serverDialogDisplayRow" class="serverDialogAdminRow">
+        <td>
+          Display
+        </td>
+        <td>
+          <span id="serverDialogDisplayLink"></span>
+        </td>
+    </tr>
+
+    <tr>
+        <td></td>
+        <td align="right">
+            <span id="serverDialogActions"></span>
+
+            <button name="saveButton" data-dojo-type="dijit.form.Button" observer="_onSaveClick" style="display:none;" id="dialogSaveButton">
+                Save
+            </button>
+
+        </td>
+    </tr>
+</table>
+</form>

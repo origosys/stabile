@@ -1,0 +1,4 @@
+<disk type='file' device='cdrom'>
+  <target dev='hdd' bus='ide'/>
+  <readonly/>
+</disk>

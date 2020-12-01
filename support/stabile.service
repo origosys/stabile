@@ -1,0 +1,15 @@
+[Unit]
+Description=Origo Stabile boot and shutdown procedures
+Wants=network-online.target
+After=mysql.service
+Requires=mysql.service
+After=pressurecontrol.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/local/bin/steamExec post-boot
+ExecStop=/usr/local/bin/steamExec pre-shutdown
+
+[Install]
+WantedBy=multi-user.target

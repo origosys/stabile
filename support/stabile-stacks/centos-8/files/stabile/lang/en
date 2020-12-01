@@ -1,0 +1,20 @@
+index_name=Server name
+index_image=Server image
+index_status=Server status
+index_none=No servers have added to this stack yet.
+index_add=<span class="fui-plus" title="Add server"></span>
+index_return=server list
+
+edit_title=Edit Server
+create_title=Create Server
+edit_header=SimpleStack server details
+edit_domain=Server name
+edit_directory=Directory containing server contents
+
+save_err=Failed to save server
+save_ename=Missing or invalid server name
+save_egone=Server no longer exists
+
+log_create=Created server $1
+log_modify=Modified server $1
+log_delete=Deleted server $1

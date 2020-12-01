@@ -1,0 +1,18 @@
+<div hidefocus="hidefocus" role="grid" dojoAttachEvent="onmouseout:_mouseOut">
+    <table class="dojoxGridMasterSearch" data-dojo-attach-point="searchNode">
+        <tr>
+            <td>
+                Show: <span data-dojo-attach-point="searchFilterNode"></span>
+                <span data-dojo-attach-point="summaryNode"></span>
+            </td>
+            <td align="right">
+                <span data-dojo-attach-point="bulkOperationsNode"></span>
+                <span data-dojo-attach-point="searchQueryInputNode" placeHolder="type to search"></span>
+            </td>
+        </tr>
+    </table>
+    <div class="dojoxGridMasterHeader" data-dojo-attach-point="viewsHeaderNode" role="presentation"></div>
+    <div class="dojoxGridMasterView" data-dojo-attach-point="viewsNode" role="presentation"></div>
+    <div class="dojoxGridMasterMessages" style="display: none;" data-dojo-attach-point="messagesNode"></div>
+    <span data-dojo-attach-point="lastFocusNode" tabindex="0"></span>
+</div>

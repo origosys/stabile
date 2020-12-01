@@ -1,0 +1,987 @@
+#!/usr/bin/perl -U
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+package Stabile::Pressurecontrol;
+
+use Config::Simple;
+use ConfigReader::Simple; # Needed for parsing Apache config
+use Data::UUID;
+use LWP::Simple;
+use Digest::SHA qw(sha512_base64 sha512_hex);
+use Data::Dumper;
+use JSON;
+use Tie::DBI;
+use Proc::Daemon;
+use Proc::ProcessTable;
+use HTTP::Daemon;
+use URI::Escape qw(uri_escape uri_unescape);
+use Error qw(:try);
+# use sigtrap 'handler' => \&TERMINATE, 'QUIT', 'INT', 'TERM', 'KILL', 'STOP';
+use sigtrap 'handler' => \&HUP, 'HUP';
+
+my $running = 1;
+my $naptime = 90; # seconds
+$user = 'irigo';
+
+my $argv = shift if $ARGV[0];
+my $debug = 1 if ($argv eq 'debug');
+my $cfg = new Config::Simple("/etc/stabile/config.cfg");
+my $nodecfg = new Config::Simple("/etc/stabile/nodeconfig.cfg");
+
+my $uuid = $cfg->param('ENGINEID') || '';
+my $dbiuser =  $cfg->param('DBI_USER') || "irigo";
+my $dbipasswd = $cfg->param('DBI_PASSWD') || "";
+my $engineuser = $cfg->param('ENGINEUSER') || "";
+my @spoolpaths = $cfg->param('STORAGE_POOLS_LOCAL_PATHS');
+my $downloadmasters = $cfg->param('DOWNLOAD_MASTERS');
+
+my $valve_readlimit = $cfg->param('VALVE_READ_LIMIT'); # e.g. 125829120 = 120 * 1024 * 1024 = 120 MB / s
+my $valve_writelimit = $cfg->param('VALVE_WRITE_LIMIT');
+my $valve_iopsreadlimit = $cfg->param('VALVE_IOPS_READ_LIMIT'); # e.g. 1000 IOPS
+my $valve_iopswritelimit = $cfg->param('VALVE_IOPS_WRITE_LIMIT');
+
+my $vm_readlimit = $nodecfg->param('VM_READ_LIMIT'); # e.g. 125829120 = 120 * 1024 * 1024 = 120 MB / s
+my $vm_writelimit = $nodecfg->param('VM_WRITE_LIMIT');
+my $vm_iopsreadlimit = $nodecfg->param('VM_IOPS_READ_LIMIT'); # e.g. 1000 IOPS
+my $vm_iopswritelimit = $nodecfg->param('VM_IOPS_WRITE_LIMIT');
+my $identity = $nodecfg->param('IDENTITY');
+
+my $stabile_upgrade = $cfg->param('UPGRADE');
+my $datanic = $cfg->param('ENGINE_DATA_NIC');
+
+my $basedir = "/var/www/stabile";
+$basedir = `cat /etc/stabile/basedir` if -e "/etc/stabile/basedir";
+chomp $basedir;
+
+my $baseurl = "https://localhost/stabile";
+$baseurl = `cat /etc/stabile/baseurl` if -e "/etc/stabile/baseurl";
+chomp $baseurl;
+
+unless (checkDB()) {
+    die "Unable to connect to db...\n";
+}
+
+require "$basedir/cgi/Stabile.pm";
+
+if ($stabile_upgrade) {
+    print "Steamgine upgrade requested. Hang on...\n";
+    $cfg->delete('UPGRADE');
+    $cfg->save();
+    `apt-get update`;
+    if (`hostname` =~ /orellana/) {# Don't upgrade devel server
+        print "Not upgrading development source server...";
+        `echo "Not upgrading development source server..." >> /tmp/stabile.upgrade.log`
+    } else {
+        `echo "upgrading" > /tmp/stabile.upgrading`; # This file makes sure postinst does not kill pressurecontrol
+        `echo "Steamgine upgrade requested. Hang on..." >> /tmp/stabile.upgrade.log`;
+        print `DEBCONF_DEBUG=developer apt-get -q -y --force-yes --no-install-recommends install stabile 2>&1 | tee -a /tmp/stabile.upgrade.log`;
+        unlink '/tmp/stabile.upgrading';
+        exit;
+    }
+}
+
+# Make webmin inaccessible from 10.0.0.0
+print `/sbin/iptables -D INPUT -p udp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP 2>/dev/null`;
+print `/sbin/iptables -A INPUT -p udp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP`;
+print `/sbin/iptables -D INPUT -p tcp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP 2>/dev/null`;
+print `/sbin/iptables -A INPUT -p tcp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP`;
+# Make ugly exception for virtual instances running in Stabile
+if (-e "/tmp/internalip") {
+    my $internalip = `cat /tmp/internalip`; chomp $internalip;
+    print `/sbin/iptables -D INPUT -p tcp --destination-port 10000 -s $internalip/24 -j ACCEPT 2>/dev/null`;
+    print `/sbin/iptables -I INPUT -p tcp --destination-port 10000 -s $internalip/24 -j ACCEPT`;
+}
+# Don't route packets to pistons
+print `/sbin/iptables -D FORWARD -i $datanic+ -o $datanic+ -d 10.0.0.0/24 -j DROP`;
+print `/sbin/iptables -A FORWARD -i $datanic+ -o $datanic+ -d 10.0.0.0/24 -j DROP`;
+
+# Make sure webmin conf is readable
+`chmod 644 /etc/webmin/miniserv.conf`;
+# Make sure log is readable and writable
+`touch /var/log/stabile/steam.log`;
+`chown www-data:www-data /var/log/stabile/steam.log`;
+`chmod 664 /var/log/stabile/steam.log`;
+# Make sure ui_update can remove files from /tmp
+`chmod -t /tmp`;
+# Copy customized guacamole index file
+if (-e "/usr/share/stabile/guacamole-index.html" && !(`grep stabile /var/lib/tomcat8/webapps/guacamole/index.html`)) {
+    `cp /usr/share/stabile/guacamole-index.html /var/lib/tomcat8/webapps/guacamole/index.html`;
+    `systemctl restart tomcat8`;
+}
+# Handle strange error on node when reading sudoers file
+#system("perl -pi -e 's/(Defaults.*)/Defaults:irigo !requiretty/' /mnt/stabile/tftp/bionic/casper/filesystem.dir/etc/sudoers.d/stabile");
+
+print "Mounting storage pools\n";
+mountPaths();
+
+print "Checking quotas\n";
+foreach my $sp (@spoolpaths) {
+    `quotacheck -c "$sp"`;
+}
+
+if (-d "/sys/fs/cgroup") {
+    print "Setting auxilliary cgroups limits\n";
+    my $file = "/etc/cgconfig.conf";
+    open (FILE, "< $file") || die "problem opening $file\n";
+    my @lines = <FILE>;
+    close FILE;
+    chomp @lines;
+    my $group;
+    my @newlines;
+    for my $line (@lines) {
+        $group = $1 if ($line =~ /^group (\S+) \{/ );
+        if ($group eq 'stabile') {
+            $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $valve_readlimit";/;
+            $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $valve_writelimit";/;
+            $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $valve_iopsreadlimit";/;
+            $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $valve_iopswritelimit";/;
+        } elsif ($group eq 'stabilevm') {
+            $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $vm_readlimit";/;
+            $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $vm_writelimit";/;
+            $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $vm_iopsreadlimit";/;
+            $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $vm_iopswritelimit";/;
+        }
+        push @newlines, $line;
+    }
+    open (FILE, "> $file") || die "problem opening $file\n";
+    print FILE join("\n", @newlines);
+    close (FILE);
+    `cgconfigparser -l /etc/cgconfig.conf`;
+} else {
+    print "cgroups are not enabled!\n";
+}
+
+if ($uuid && !ref $uuid) {
+    ;
+} else {
+    my $ug = new Data::UUID;
+    $uuid = $ug->create_str();
+    $cfg->param('ENGINEID', $uuid);
+    $cfg->save();
+    $main::syslogit->('pressurecontrol', 'info', "Generated new UUID: $uuid");
+}
+
+if ($uuid) {
+    $main::syslogit->('pressurecontrol', 'info', "Starting pressurecontrol on engine: $uuid");
+} else {
+    $main::syslogit->('pressurecontrol', 'info', "Unable to get engine id...");
+    die "Unable to get engine id...\n";
+}
+
+my $tktcfg_file = "/etc/apache2/conf-available/auth_tkt_cgi.conf";
+my $tktcfg = ConfigReader::Simple->new($tktcfg_file, [qw(TKTAuthSecret)]);
+my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+
+unless ($tktkey) {
+	$main::syslogit->('pressurecontrol', 'info', "Unable to get engine tktkey...");
+	die "Unable to get engine tktkey...\n";
+}
+
+my $browser = LWP::UserAgent->new;
+$browser->timeout(15);
+$browser->agent('pressurecontrol/1.0b');
+$browser->protocols_allowed( [ 'http','https'] );
+
+my %postreq;
+$postreq->{'engineid'} = $uuid;
+$postreq->{'enginetkthash'} = sha512_hex($tktkey);
+
+my $linked = $cfg->param('ENGINE_LINKED');
+print "Engine is marked as linked\n" if ($linked);
+my $content;
+if ($linked) {
+    print "Checking linking with Stabile Registry\n";
+    $content = $browser->post("https://www.origo.io/irigo/engine.cgi?action=lookup", $postreq)->content();
+    $linked = ($content =~ /(.*is linked.*)/i);
+} else {
+    print "This engine is not marked as linked to Stabile Registry\n";
+}
+
+if ($content =~ /(.*linked.*)/i) {
+    print $1,"\n";
+} else {
+    print "Linking could not be verified - check your configuration and/or your Internet connection\n";
+    print $content;
+}
+$main::syslogit->('pressurecontrol', 'info', "This engine is " . ($linked?'':'not') . " linked to Stabile Registry.");
+
+# If linked, get config parameters from origo.io
+$cfg->param('ENGINE_LINKED', 0+$linked);
+if ($linked) {
+    my %cfgkeys = filterCfgParams();
+    my %enginekeys = %{$cfgkeys{'engine'}};
+    my %pistonkeys = %{$cfgkeys{'piston'}};
+
+    unless (tie %idreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'nodeidentities',
+        key=>'identity',
+        autocommit=>0,
+        CLOBBER=>3,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {throw Error::Simple("Register could not be accessed")};
+
+    my %nodeconfigs;
+    # Build hash of known node config files
+    foreach my $valref (values %idreg) {
+        my $nodeconfigfile = $valref->{'path'} . "/casper/filesystem.dir/etc/stabile/nodeconfig.cfg";
+        next if ($nodeconfigs{$nodeconfigfile}); # Node identities may share basedir and node config file
+        $nodeconfigfile = $valref->{'path'} . "/live/filesystem.dir/etc/stabile/nodeconfig.cfg" unless (-e $nodeconfigfile); # support old naming
+        if (-e $nodeconfigfile) {
+            my $nodecfg = new Config::Simple($nodeconfigfile);
+            $nodeconfigs{$nodeconfigfile} = $nodecfg;
+        }
+    }
+    my $defaultpath = $idreg{'default'}->{'path'} . "/casper/filesystem.dir/etc/stabile/nodeconfig.cfg";
+    untie %idreg;
+    my @nodecfgkeys = keys %nodeconfigs;
+
+    foreach my $line (split /\n/, $content) { # This is where we get ENGINENAME and ENGINEOWNER and write them to config
+        next if ($line=~ /(.*is linked.*)/i || !$line);
+        if ($line =~ /(\S+): ?(.*)/) {
+            my $k = $1;
+            my $v = $2; # Value received from origo.io
+            if ($enginekeys{$k}) {
+                my @vals = $cfg->param($k); my $val = join(", ", @vals);
+                if ($val ne $v) {
+                    print "Received modified config: $line\n";
+                    $cfg->param($k, $v);
+                } else {
+                    #print "Unmodified config line received: $line, $val[0]\n";
+                }
+            } elsif ($pistonkeys{$k}) {
+                foreach my $cfgkey (@nodecfgkeys) {
+#                    my @vals = $nodecfg->param($k); my $val = join(", ", @vals);
+                    my @vals = $nodeconfigs{$cfgkey}->param($k); my $val = join(", ", @vals);
+                    if ($val ne $v) {
+                    # Different node types may require different interface specifications
+                    # maintained manually
+                        if (($k eq 'ADMIN_NIC' || $k eq 'DATA_NIC') && $cfgkey ne $defaultpath) {
+                            print "Not changing NIC on non-default nodeidentity $cfgkey: $line\n";
+                        } else {
+                            print "Received modified node config ($cfgkey): $line\n";
+                            $nodeconfigs{$cfgkey}->param($k, $v) ;
+                            if ($k =~ /READ_LIMIT|WRITE_LIMIT/) {
+                                print `echo /nodes/reloadall | stash`;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    foreach my $nodecfg (values %nodeconfigs) {$nodecfg->save()};
+} else {
+	$postreq = {};
+}
+$cfg->save();
+
+if ($downloadmasters) {
+    downloadMasters();
+} else {
+    print "Not downloading masters from origo.io, because DOWNLOAD_MASTERS not set in config.\n"
+}
+
+print "Starting pressurecontrol on engine: $uuid\n";
+
+my $pid = fork();
+
+if ($pid) {
+    my $pid2 = fork();
+    if ($pid2) {
+        my $amtdone;
+        $amtdone = 1 if ($debug); # Don't wait for this when debugging
+        if ($uuid) {
+            my $tktname = substr($uuid, 0, 8);
+            my $cookiebase;
+            $cookiebase = `cat /etc/stabile/cookiebase` if -e "/etc/stabile/cookiebase";
+            chomp $cookiebase;
+
+            my $apachecfg = '/etc/apache2/sites-available/stabile-ssl';
+            $apachecfg = '/etc/apache2/sites-available/stabile-ssl.conf' if -e ('/etc/apache2/sites-available/stabile-ssl.conf');
+            $apachecfg = '/etc/apache2/conf.d/stabile-ssl.conf' if -e ('/etc/apache2/conf.d/stabile-ssl.conf');
+            $apachecfg = '/etc/apache2/conf-available/stabile-ssl.conf' if -e ('/etc/apache2/conf-available/stabile-ssl.conf');
+            system("perl -pi -e 's/(.*TKTAuthCookieName.*\\n)//' $apachecfg");
+            system("perl -pi -e 's/(.*TKTAuthDomain.*\\n)//' $apachecfg");
+            if ($cookiebase) {
+                system("perl -pi -e 's/(.*TKTAuthLoginURL.*)/\$1\\n        TKTAuthCookieName auth_$tktname\\n        TKTAuthDomain $cookiebase/' $apachecfg");
+            } else {
+                system("perl -pi -e 's/(.*TKTAuthLoginURL.*)/\$1\\n        TKTAuthCookieName auth_$tktname/' $apachecfg");
+            }
+
+            system("perl -pi -e 's/(.*TKTAuthCookieName.*\\n)//' $tktcfg_file");
+            system("perl -pi -e 's/(^<Directory \\\/var\\\/www\\\/.*auth>.*)/\$1\\n  TKTAuthCookieName auth_$tktname/' $tktcfg_file");
+
+        }
+        print `systemctl restart apache2`;
+        my $reportbackup = 0;
+        my $command = 'fullstatsb';
+        # Main loop
+        while ($running) {
+            $cfg = new Config::Simple("/etc/stabile/config.cfg");
+            my $dl = $cfg->param('DOWNLOAD_MASTERS');
+            # Monitor changes in downloadmasters - only download if changed - periodic check is done below
+            if (!$downloadmasters && $dl) {
+                print "Now downloading master images...\n";
+                downloadMasters();
+            } else {
+                print "Not downloading master images right now...\n";
+            }
+            $downloadmasters = $dl;
+
+            # Remove dangling up_update processes and pipes. New pipes get created by ui_update cgi's that are active
+            print "Cleaning up ui_update tasks and named pipes\n";
+            print `/bin/rm /tmp/*.tasks 2>/dev/null; /usr/bin/pkill -f "/bin/cat < /tmp/.*tasks"`;
+            `/usr/bin/pkill -f "/usr/bin/tee /tmp"`; # Kill hanging ui updates
+
+#            my $statsjson = `echo /nodes/$command | stash 2>>/dev/null`;
+            my $statsjson = `REMOTE_USER=irigo $basedir/cgi/nodes.cgi -c -a $command`;
+
+            if ($linked) {
+                print "Reporting status to Stabile Registry ($command)\n";
+                $postreq->{'POSTDATA'} = $statsjson;
+                #            print $statsjson;
+                my $res = $browser->post("https://www.origo.io/irigo/engine.cgi?action=status", $postreq)->content();
+                my $ok = ($res =~ /OK: (.*)/i);
+                print $res;
+            }
+
+            $reportbackup++;
+            if ($reportbackup > 100) {
+                $command = 'fullstatsb';
+                downloadMasters();
+                $reportbackup = 0;
+            } else {
+                $command = 'fullstats';
+            }
+
+            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/nodes.cgi -a updateregister -f`;
+            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/servers.cgi -a updateregister -f`;
+            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/images.cgi -a updateregister -f`;
+            unless ($amtdone) {
+                print "Updating AMT info\n";
+                print &pretty_time.": ".`REMOTE_USER=irigo $basedir/cgi/nodes.cgi -a updateamtinfo`;
+                $amtdone = 1;
+            }
+            print &pretty_time.": ".`/usr/local/bin/steamExec releaseolddhcpleases`;
+
+            sleep $naptime;
+        }
+    } else {
+        print "Registering Gearman worker\n";
+        use Storable qw(freeze thaw);
+        use Gearman::Worker;
+        use List::Util qw( sum );
+        my $worker = Gearman::Worker->new;
+        $worker->job_servers('127.0.0.1:4730');
+        $worker->register_function(steamexec =>
+            sub {
+                my %args = %{ thaw($_[0]->arg) };
+                my $tktuser = $args{tktuser};
+                my $user = $args{user};
+                my $target = $args{target};
+                my $package = $args{package};
+                my $uargs;
+                my $res = "No result";
+                if ($args{args}) {
+                    if (ref $args{args}) { # not a string
+                        $uargs = uri_escape( JSON->new->allow_nonref->encode ( $args{args} ));
+                    } else { # assume a string
+                        $uargs = uri_escape($args{args});
+                    }
+                }
+                if ($args{action}) {
+                    if ($package =~ /systems|servers|images|networks|nodes|users/) {
+                        my $action = 'gear_' . $args{action};
+                        my $cmd = qq|REMOTE_USER=$tktuser $basedir/cgi/$package.cgi -v -s $user -a $action|;
+                        $cmd .= qq| -t "$target"| if ($target);
+                        $cmd .= qq| -g "$uargs"| if ($uargs);
+                        print "Executing $cmd\n";
+                        $res = `$cmd`;
+                        print "-> $res\n" if ($debug);
+                    } else {
+                        print "Not executing $args{action}, $package\n";
+                    }
+                }
+                $res;
+            });
+        $worker->register_function(restart_apache =>
+            sub {
+                `pkill -HUP apache2`;
+            });
+        $worker->register_function(sum => sub { sum @{ thaw($_[0]->arg) } });
+        $worker->work while ($running);
+    }
+} else {
+    my $d = HTTP::Daemon->new(
+        LocalAddr => '127.0.0.1',  # remove this to listen from other machines
+                       # (i.e. open-relay... be careful of spammers!)
+        LocalPort => 8082,
+        ReuseAddr => 1
+    ) || die "Local port not available";
+    print "Starting managementlink proxy on:", $d->url, "\n";
+
+    # Avoid leaving zombies
+    $SIG{CHLD} = 'IGNORE';
+    # Avoid dying from browser cancel
+    $SIG{PIPE} = 'IGNORE';
+
+    my %networks;
+    print "Configuring networking and loading network tables\n";
+    eval {`/bin/echo 1 > /proc/sys/net/ipv4/ip_forward`; 1;} or do {print "Unable to enable nat'ing: $@\n";};
+
+    $content = `REMOTE_USER=irigo $basedir/cgi/networks.cgi -a jsonlist -f`;
+    my $nets = from_json($content);
+    foreach my $net (@$nets) {
+        $networks{$net->{uuid}} = $net;
+    };
+    fork(); fork(); fork(); # 2^3 = 8 processes
+
+    my $dbrowser = LWP::UserAgent->new;
+    $dbrowser->timeout(30);
+    $dbrowser->agent('pressurecontrol/1.0b');
+    $dbrowser->protocols_allowed( [ 'http','https'] );
+
+    while (my $c = $d->accept) {
+        while (my $request = $c->get_request) {
+            my $uri = $request->uri->as_string;
+            my $host = $c->sockhost;
+            my $response;
+            if ($uri =~ /^\/\/(https?:\/\/?)?(\S{36})(:\d+)?(.*)/) {
+                my $prot = $1;
+                $prot = "$prot/" unless ($prot =~ /\/\//);
+                my $geturi = ($prot||'http://') . "$2$3$4";
+                my $networkuuid = $2;
+                my $baseuri = "$baseurl/pipe/$2$3/";
+                my $uripath = $4;
+                $host = $2 if ($uripath =~ /(\?|\&)host=(.+)\&/ || $uripath =~ /(\?|\&)host=(.+)/);
+                my $user = $request->header('STEAM_USER');
+                my $networkuser = $networks{$networkuuid}->{'user'};
+                if (!$networkuser) { # If not found, we look up ip etc. in the DB
+                    print "Loading $networkuuid ($uri, $user) from db\n";
+                    $content = `REMOTE_USER=$user $basedir/cgi/networks.cgi -a list -u $networkuuid`;
+                    print "Got: $content\n";
+                    my $net = from_json($content);
+                    if (ref $net eq 'HASH') {
+                        $intip = $net->{'internalip'};
+                        $extip = $net->{'externalip'};
+                        $ip = $intip;
+                        $ip = $extip if (!$ip || $ip eq '--');
+                        $networkuser = $net->{'user'};
+
+                        $networks{$networkuuid}->{'internalip'} = $intip;
+                        $networks{$networkuuid}->{'externalip'} = $extip;
+                        $networks{$networkuuid}->{'user'} = $networkuser;
+                    }
+                }
+                $user = validateUser($user, $networkuser); # Set $user to $networkuser if validated
+                if ($user) {
+                    my $extip = $networks{$networkuuid}->{'externalip'};
+                    my $intip = $networks{$networkuuid}->{'internalip'};
+                    my $ip = $intip;
+                    $ip = $extip if (!$ip || $ip eq '--');
+                    if ($ip && $networkuser && $networkuser eq $user) {
+                        $geturi =~ s/$networkuuid/$ip/;
+                        #$geturi .= '/' unless ($geturi =~ /\/$/);
+                        print "Getting $networkuuid: $geturi ($uri)\n";
+                        $request->uri($geturi);
+                        $request->remove_header( 'Referer' );
+                        $request->header('Host' => $host) if ($host);
+                        if ($uri =~ /:4200\/\?$/) { # shellinaboxd
+                            $dbrowser->timeout(120);
+                            $response = $dbrowser->simple_request( $request );
+                            $dbrowser->timeout(30);
+                        } else {
+                            $response = $dbrowser->simple_request( $request );
+                        }
+
+                    # Do a lot of proxy text translations in order to fix things up a bit in the browser
+                        my $link = $response->header('Link');
+                        $link =~ s/<\/(\w)/<$baseuri$1/gi;
+                        $response->header('Link', $link);
+
+                        my $loc = $response->header('Location');
+                        if ($loc && $loc =~ /^https?:\/\/.+\/(.+)\//) {
+                            $response->header('Location', "$baseuri/$1/");
+                        }
+                        ${$response->content_ref} =~ s/\{internalip\}/$ip/gi;
+                        ${$response->content_ref} =~ s/\{externalip\}/$extip/gi;
+                        # \w is included to avoid matching url's staring with //, which should be left alone
+                        ${$response->content_ref} =~ s/(href|src|action|value)=('|")\/(\w)/$1=$2$baseuri$3/gi;
+                        # This is purely to fixup javascript in Wordpress install.php
+                        ${$response->content_ref} =~ s/\\\/home/../;
+                        # This is purely to fixup image path in Thirdlane PBX UI
+#                        ${$response->content_ref} =~ s/\.\.\/\.\.\/\.\.\//..\/..\//;
+
+
+                        ${$response->content_ref} =~ s/(load\()('|")\//$1$2$baseuri/gi;
+                        $response->push_header( 'X-Via' => "1.1 $origuri" );
+                        $response->push_header( 'X-BaseUri' => "1.1 $baseuri" );
+                        $response->remove_header( 'Content-Security-Policy');
+                        $response->push_header( 'Content-Security-Policy' => "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ajax.googleapis.com https://code.jquery.com https://ajax.microsoft.com; style-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://ajax.googleapis.com https://code.jquery.com" );
+                        $c->send_response( $response );
+                        print "Got: $geturi\n";
+                    } else {
+                        my $msg = "Not found: $networkuuid, $ip, $networkuser, " . $user;
+                    #    $c->send_status_line('200', $msg);
+                        $c->send_status_line('404', $msg);
+                        $c->send_header('X-Via', "1.1 $geturi");
+                        print "$msg\n";
+                        #last;
+#                        $c->send_error(404);
+                    }
+                } else {
+                    $c->send_error(RC_FORBIDDEN);
+                }
+            }    else {
+                my $msg = "Forbidden - not allowing: $uri";
+                $c->send_status_line('404', $msg); #403
+                $c->send_header('X-Via', "1.1 $uri");
+                #$c->send_error(RC_FORBIDDEN, $msg);
+                #$main::syslogit->($stackuser, 'info', $msg);
+                print "$msg\n";
+                #last;
+            }
+        }
+        $c->close;
+        undef($c);
+    }
+}
+
+print "Done\n";
+exit;
+
+sub lookupProcess {
+    my $process = shift;
+    my $match;
+    my $t = new Proc::ProcessTable;
+    foreach $p ( @{$t->table} ){
+        my $pcmd = $p->cmndline;
+        if ($pcmd =~ /$process/) {
+            $match = $p->pid;
+            last;
+        }
+    }
+    return $match;
+}
+
+sub validateUser {
+    my ($vuser, $account) = @_;
+
+    unless (tie %userreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'users',
+        key=>'username',
+        autocommit=>0,
+        CLOBBER=>1,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return};
+
+    my $dbuser = $userreg{$vuser}->{'username'};
+    unless ($dbuser) {untie %userreg; $vuser = '';};
+
+    $privileges = $userreg{$vuser}->{'privileges'};
+    if (index($privileges,"d")!=-1) {$vuser = ''}; # disabled user
+
+    if ($account && $vuser && $account ne $vuser) {
+        my %ahash;
+        my @accounts = split(/,\s*/, $userreg{$vuser}->{'accounts'});
+        my @accountsprivs = split(/,\s*/, $userreg{$vuser}->{'accountsprivileges'});
+        for my $i (0 .. $#accounts)
+            { $ahash{$accounts[$i]} = $accountsprivs[$i] || 'r'; }
+
+        if ($ahash{$account}) {
+            my $privileges = $ahash{$account};
+            if ($userreg{$account}->{'username'} && index($privileges,"d")==-1){
+                $vuser = $account;
+            } else {
+                $vuser = '';
+            }
+        } else {
+            $vuser = '';
+        }
+    }
+
+    untie %userreg;
+    return $vuser;
+}
+
+sub checkDB {
+	my $dbOK = 0;
+	eval {
+		if (tie %userreg,'Tie::DBI', {
+		    db=>'mysql:steamregister',
+		    table=>'users',
+		    key=>'username',
+		    autocommit=>0,
+		    CLOBBER=>1,
+		    user=>$dbiuser,
+		    password=>$dbipasswd}) {
+				untie %userreg;	
+                print "Database looks OK\n";
+			    $dbOK = 1;
+		}
+	};
+	unless ($dbOK) {
+        eval {
+            print "Creating initial DB...\n";
+            `/var/lib/dpkg/info/stabile.postinst createdb`;
+            if (tie %userreg, 'Tie::DBI', {
+                    db         => 'mysql:steamregister',
+                    table      => 'users',
+                    key        => 'username',
+                    autocommit => 0,
+                    CLOBBER    => 1,
+                    user       => $dbiuser,
+                    password   => $dbipasswd }) {
+                untie %userreg;
+                $dbOK = 1;
+                `systemctl restart tomcat8`; # This looks like a first run, restart tomcat to load our auth
+            }
+        };
+    }
+	return $dbOK;
+}
+
+sub pretty_time {
+    my $current_time = time;
+    ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($current_time);
+#    my $year += 1900;
+    my $month = substr("0" . ($mon+1), -2);
+    my $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec;
+    return $pretty_time;
+}
+
+# Pick out config file parameters from general hash
+sub filterCfgParams {
+    my $paramsref = shift;
+    my %params = %{$paramsref};
+
+    my @engineparams = qw(
+    EXTERNAL_IP_RANGE_START
+    EXTERNAL_IP_RANGE_END
+    VLAN_RANGE_START
+    VLAN_RANGE_END
+    EXTERNAL_SUBNET_SIZE
+    PROXY_IP
+    PROXY_SUBNET_SIZE
+    PROXY_GW
+    PROXY_NIC
+    PROXY_IP_RANGE_START
+    PROXY_IP_RANGE_END
+    RDIFF-BACKUP_ENABLED
+    RDIFF-BACKUP_USERS
+    ENGINE_DATA_NIC
+    EXTERNAL_NIC
+    EXTERNAL_IP_QUOTA
+    MEMORY_QUOTA
+    VCPU_QUOTA
+    STORAGE_QUOTA
+    RX_QUOTA
+    TX_QUOTA
+    STORAGE_POOLS_RDIFF-BACKUP_ENABLED
+    STORAGE_POOLS_ADDRESS_PATHS
+    STORAGE_POOLS_LOCAL_PATHS
+    STORAGE_POOLS_NAMES
+    STORAGE_POOLS_MOUNTABLE
+    STORAGE_POOLS_DEFAULTS
+    STORAGE_BACKUPDIR
+    DBI_USER
+    DBI_PASSWD
+    CPU_OVERCOMMISION
+    DO_DNS
+    DO_XMPP
+    SHOW_COST
+    ENGINEID
+    ENGINENAME
+    ENGINEUSER
+    DOWNLOAD_MASTERS
+    NODE_STORAGE_OVERCOMMISSION
+    NODESTORAGE_QUOTA
+    CURRENCY
+    EXTERNALIP_PRICE
+    NODESTORAGE_PRICE
+    STORAGE_PRICE
+    MEMORY_PRICE
+    VCPU_PRICE
+    VALVE_READ_LIMIT
+    VALVE_WRITE_LIMIT
+    VALVE_IOPS_READ_LIMIT
+    VALVE_IOPS_WRITE_LIMIT
+    );
+    my @pistonparams = qw(
+    ADMIN_SERVER_ADDRESS
+    STORAGE_SERVERS_ADDRESS_PATHS
+    STORAGE_SERVERS_LOCAL_PATHS
+    ADMIN_NIC
+    DATA_NIC
+    INITIALIZE_LOCAL_DISK
+    VM_READ_LIMIT
+    VM_WRITE_LIMIT
+    VM_IOPS_READ_LIMIT
+    VM_IOPS_WRITE_LIMIT
+    PISTON_READ_LIMIT
+    PISTON_WRITE_LIMIT
+    PISTON_IOPS_READ_LIMIT
+    PISTON_IOPS_WRITE_LIMIT
+    );
+
+    my %cfghash;
+    if ($paramsref) {
+        foreach my $param (@engineparams) {
+            $cfghash{$param} = $params{$param} if (defined $params{$param});
+        }
+        foreach my $param (@pistonparams) {
+            $cfghash{$param} = $params{$param} if (defined $params{$param});
+        }
+    } else {
+        my %enginehash; @enginehash{@engineparams} = (1) x @engineparams;
+        my %pistonhash; @pistonhash{@pistonparams} = (1) x @pistonparams;
+
+        $cfghash{engine} = \%enginehash;
+        $cfghash{piston} = \%pistonhash;
+    }
+    return %cfghash;
+}
+
+sub mountPaths {
+    my @tenderlist = $cfg->param('STORAGE_POOLS_ADDRESS_PATHS');
+    my @tenderpathslist = $cfg->param('STORAGE_POOLS_LOCAL_PATHS');
+
+    my $mounts = `cat /proc/mounts`;
+    for (my $i=0; $i<= scalar @tenderpathslist; $i++) {
+        my $path = $tenderpathslist[$i];
+        my $host = $tenderlist[$i];
+        next unless ($path && $host);
+        # Directory / mount point must exist
+        if (!(-d $path)) {
+            print "Creating storage pool $path ($host)\n";
+            mkdir "$path" or {print ("Error $path could not be created\n")};
+        } else {
+            print "Storage pool exists: $path ($host)\n";
+        };
+        unless ($host eq 'local' || $mounts =~ m/$path/i) {
+            $main::syslogit->('pressurecontrol', 'info', "Mounting $path from $host");
+            eval {print `mount -o intr,noatime,nfsvers=3 $host $path`; 1;} or do {print $@;};
+        }
+    }
+    # Allow user irigo to receive snapshots from nodes
+    print `zfs allow irigo create,mount,snapshot,receive,mountpoint,compression,sharenfs,userprop stabile-backups` if (`zfslist` =~ /stabile-backups/);
+}
+
+sub downloadMasters {
+    print "Looking for available masters at Stabile Registry...\n";
+    # Reload config in case storage setup changed
+    $cfg = new Config::Simple("/etc/stabile/config.cfg");
+    @spoolpaths = $cfg->param('STORAGE_POOLS_LOCAL_PATHS');
+
+    unless (tie %imagereg,'Tie::DBI', { # Needed for ValidateItem
+        db=>'mysql:steamregister',
+        table=>'images',
+        key=>'path',
+        autocommit=>0,
+        CLOBBER=>3,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {print "Image register could not be accessed\n"; exit 0;};
+
+    $content = $browser->post("https://www.origo.io/irigo/engine.cgi?action=liststackmasters", $postreq)->content();
+    my $stacks = {};
+    if ($content =~ /^{/) {
+        $stacks = from_json($content);
+        print Dumper($stacks) if ($debug);
+    }
+    my @cmds;
+    foreach my $stackuser (keys %$stacks) {
+        my $ustacks = $stacks->{$stackuser};
+        my @dowloadalerts;
+        foreach my $stack (@$ustacks) {
+            my $fname = $stack->{'filename'};
+            my $name = $stack->{'name'};
+            my $managementlink = $stack->{'managementlink'};
+            my $upgradelink = $stack->{'upgradelink'};
+            my $terminallink = $stack->{'terminallink'};
+            my $fname2 = $stack->{'image2'};
+            my $name2 = $stack->{'name2'};
+            my $version = $stack->{'version'};
+            my $current = $stack->{'current'};
+            my $appid = $stack->{'appid'};
+            my $suser = $stack->{'user'};
+            my $fsize = $stack->{'size'};
+            my $vsize = $stack->{'virtualsize'};
+            my $fsize2 = $stack->{'size2'};
+            my $frealsize = $stack->{'realsize'};
+            my $imgurl = "$stack->{'url'}?auth_tkt=$stack->{'tkt'}";
+            my $imgurl2;
+            my $match;
+            my $match2;
+            my $lsize;
+            my $lrealsize;
+            my $lsize2;
+            my $lrealsize2;
+            my $f;
+            my $f2;
+            foreach my $sp (@spoolpaths) {
+                $f = "$sp/$stackuser/$fname";
+                if (-e $f) {
+                    my @stat = stat($f);
+                    $lsize = $stat[7];
+                    $lrealsize = $stat[12] * 512;
+                    $match = 1;
+                    last;
+                }
+            }
+            my $msg;
+            my $cmd;
+            my $img = $imagereg{$f};
+            if ($match && $imagereg{$f} && ($imagereg{$f}->{'version'} ge $version || $lsize == $fsize) ) {
+                $msg = "Image $fname ($version) found in $f [$fsize bytes]. Updating: $name, $suser. ";
+                $imagereg{$f}->{'status'} = 'unused' if ($imagereg{$f}->{'status'} eq 'downloading');
+                $imagereg{$f}->{'version'} = $version unless ($imagereg{$f}->{'version'} eq $version);
+            } else {
+                if (!$current) {
+                    $msg = "Image $fname is not latest version, not downloading. ";
+                } elsif (!lookupProcess($fname)) { # Check if image is already being downloaded
+                    $f = "$spoolpaths[0]/$stackuser/$fname";
+                    print `echo "status=downloading" > "$f.meta"`;
+                    $msg = "Image $fname not found. Downloading $fsize bytes to $f ($stack->{url})... ";
+                    my $msize = int($fsize /1024/1024);
+                    my $uimsg = qq|Now downloading $name ($msize) MB)|;
+                    push @dowloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg};
+#                    $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
+                    $cmd = qq|wget --no-check-certificate --no-verbose --tries=4 -a /mnt/stabile/images/stacks-xfer.log -O "$f" $imgurl|;
+                    $cmd .= qq|; rm "$f.meta"; steamExec updateimagestatus "$f" installable $vsize; steamExec updatebackingfile "$f"|;
+                } else {
+                    $msg = "Image $fname is already being downloaded. ";
+                }
+            }
+
+            if ($imagereg{$f}) {
+                $imagereg{$f}->{'name'} = $name if ($name);
+                $imagereg{$f}->{'managementlink'} = $managementlink;
+                $imagereg{$f}->{'upgradelink'} = $upgradelink;
+                $imagereg{$f}->{'terminallink'} = $terminallink;
+                $imagereg{$f}->{'version'} = $version;
+                $imagereg{$f}->{'appid'} = $appid;
+            } else {
+                if ($name && $current) {
+                    my $ug = new Data::UUID;
+                    my $newuuid = $ug->create_str();
+                    $imagereg{$f} = {
+                        uuid=>$newuuid,
+                        user=>$stackuser,
+                        name=>$name,
+                        managementlink=>$managementlink,
+                        upgradelink=>$upgradelink,
+                        terminallink=>$terminallink,
+                        version=>$version,
+                        virtualsize=>$virtualsize,
+                        appid=>$appid
+                    }
+                }
+            }
+            if ($f =~ /\.master\.qcow2$/) {
+                $imagereg{$f}->{'installable'} = 'true';
+                # Check for old versions and remove installable flag in order to not confuse matters
+                if ($appid) {
+                    foreach my $imgref (values %imagereg) {
+                        if (
+                            $imgref->{'path'} =~ /\.master\.qcow2$/
+                            && $imgref->{'appid'} eq $appid
+                            && $imgref->{'path'} ne $f
+                            && $imgref->{'version'} lt $img->{'version'}
+                        ) {
+                            my $imgversion = $imgref->{'version'} || '1.0';
+                            print "Removing installable flag from old version: $imgref->{path} ($imgref->{'version'} < $img->{'version'})\n";
+                            $imgref->{'installable'} = 'false';
+                            $imgref->{'name'} .= " ($imgversion)" unless ($imgref->{'name'} =~ /$imgversion/ );
+                        }
+                    }
+                }
+            }
+
+            my $cmd2;
+            if ($fname2) { # This app also has a data image
+                foreach $sp (@spoolpaths) {
+                    $f2 = "$sp/$stackuser/$fname2";
+                    if (-e $f2) {
+                        my @stat = stat($f2);
+                        $lsize2 = $stat[7];
+                        $lrealsize2 = $stat[12] * 512;
+                        $match2 = 1;
+                        last;
+                    }
+                }
+                $imgurl2 = "$stack->{'url2'}?auth_tkt=$stack->{'tkt'}";
+
+                # if ($match2 && $lsize2 >= $fsize2) {
+                if ($match2 && $imagereg{$f2} && ($imagereg{$f2}->{'version'} ge $version || $lsize2 == $fsize2) ) {
+                    $msg .= "Image2 $fname2 found in $f2 [$fsize2 bytes]. Updating: $name2 ";
+                    $imagereg{$f2}->{'status'} = 'unused' if ($imagereg{$f2}->{'status'} eq 'downloading');
+                } else {
+                    if (!lookupProcess($fname2)) { # Check if image is already being downloaded
+                        $f2 = "$spoolpaths[0]/$stackuser/$fname2";
+                        print `echo "status=downloading" > "$f2.meta"`;
+                        $msg .= "Image2 $fname2 not found. Downloading $fsize2 bytes to $f2... ";
+                        my $msize = int($fsize2 /1024/1024);
+                        my $uimsg = qq|Now downloading $name2 ($msize) MB)|;
+                        push @dowloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg};
+#                        $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
+                        $cmd2 = qq|wget --no-check-certificate --no-verbose --tries=4 -a /mnt/stabile/images/stacks-xfer.log -O "$f2" $imgurl2|;
+                        $cmd2 .= qq|; rm "$f2.meta"; steamExec updateimagestatus "$f2" downloaded $fsize2; steamExec updatebackingfile "$f2"|;
+                    } else {
+                        $msg .= "Image $fname is already being downloaded. ";
+                    }
+                }
+
+                if ($imagereg{$f2}) {
+                    $imagereg{$f2}->{'name'} = $name2 if ($name2);
+                    $imagereg{$f2}->{'version'} = $version;
+                    $imagereg{$f2}->{'appid'} = $appid;
+                } else {
+                    if ($name2) {
+                        my $ug = new Data::UUID;
+                        my $newuuid = $ug->create_str();
+                        $imagereg{$f2} = {
+                            uuid=>$newuuid,
+                            user=>$stackuser,
+                            name=>$name2,
+                            version=>$version,
+                            appid=>$appid
+                        }
+                    }
+                }
+            }
+            # Update data image information
+            $imagereg{$f}->{'image2'} = $f2;
+            tied(%imagereg)->commit;
+            push @cmds, $cmd if ($cmd);
+            push @cmds, $cmd2 if ($cmd2);
+            print "$msg\n" if ($msg);
+            $main::updateUI->(@dowloadalerts) if (@dowloadalerts); # notify user
+            $main::syslogit->($stackuser, 'info', $msg) if ($msg && ($cmd || $cmd2));
+        }
+    }
+    untie %imagereg;
+    undef %imagereg;
+    foreach my $cmd (@cmds) {
+        #print "$cmd\n";
+        #system("sh $cmd &");
+        my $daemon = Proc::Daemon->new(
+                work_dir => '/usr/local/bin',
+                exec_command => $cmd
+            ) or do {$msg = "Error downloading $fname $@";};
+        my $pid = $daemon->Init() or do {$msg = "Error downloading $fname $@";};
+    }
+}
+
+sub TERMINATE {
+    print "Terminating\n" if ($running);
+    $running = 0;
+}
+
+sub HUP {
+}

@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Test Stats Charts</title>
+        <script>
+            var djConfig = {
+              isDebug: true,
+              parseOnLoad: true,
+              packages: [{
+                  name: 'fileTree',
+                  location: '/stabile/static/js/fileTree'
+                },{
+                  name: 'steam2',
+                  location: '/stabile/static/js/steam2'
+                },{
+                  name: 'stabile',
+                  location: '/stabile/static/js/stabile'
+                },{
+                  name: 'evd',
+                  location: '/stabile/static/js/evd'
+                },{
+                  name: 'java',
+                  location: '/stabile/static/js/java'
+                },{
+                  name: 'ssh',
+                  location: '/stabile/static/js/ssh'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                },{
+                  name: 'rdp',
+                  location: '/stabile/static/js/rdp'
+                },{
+                  name: 'util',
+                  location: '/stabile/static/js/util'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                }
+              ]
+            };
+        </script>
+        <script src="//ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojo/dojo.js"
+                data-dojo-config="async: 0"></script>
+
+        <!-- <script src="/stabile/static/js/dojo-release-1.7.2-src/dojo/dojo.js"></script> -->
+        <!-- <script src="//static.irigo.com/dojo/1.7.2/dojo/dojo.js"></script> -->
+
+        <link rel="stylesheet" href="/stabile/static/css/style.css" />
+
+        <style>
+.container_12{
+  width: 960px;
+  margin: 0 auto; 
+}
+.grid_4{
+  width:300px;
+  margin: 0 10px;
+  float:left;
+  display: inline;
+  position: relative;
+}
+.grid_8{
+  width:620px;
+  margin: 0 10px;
+  display: inline;
+  float:left;
+  position: relative;
+}
+section {
+border: none;
+border-top: 1px solid #EAEAEA;
+padding: 15px 0;
+}
+        </style>
+        <link rel="stylesheet" href="//static.irigo.com/dojo/1.7.2/dojox/grid/resources/Grid.css"></link>
+        <link rel="stylesheet" href="//static.irigo.com/dojo/1.7.2/dojox/grid/resources/tundraGrid.css"></link>
+        <link rel="stylesheet" href="//static.irigo.com/dojo/1.7.2/dojo/resources/dojo.css"></link>
+    </head>
+    <body class="tundra">
+
+        <div class="container_12">
+
+              <div style="position:fixed;width:300px">
+                <section>
+                    <label for="serverSelect">Server:</label>
+                    <input id="serverSelect"></input>
+                </section>
+                <section>
+                    <div style="margin-bottom:5px">
+                    Zoom:
+                    </div>
+                    <div id="slider">
+                        <div id="rules"></div>
+                    </div>
+                    <div style="margin-bottom:5px">&nbsp;</div>
+                </section>
+                <section>
+                    <span>From:</span><input id="from" name="from"></input><span>To:</span><input name="to" id="to"></input>
+                </section>
+              </div>
+
+            <div class="grid_4">&nbsp;</div>
+            
+            <div class="grid_8">
+                <div class="chart" style="width:620px;margin:5px;">
+                  	<h2>Cpu Load</h2>
+                    <div id="statisticsLoading" style="width:620px;height:85px;display:none;">
+                        <img  height="20px" style="vertical-align:middle;" alt="..." src="/stabile/static/img/loader.gif"></img>
+                    </div>
+                  	<div id="chartCpuLoad" style="width:620px;height:160px;"></div>
+                </div>
+                  
+                <div class="chart" style="width:620px;margin:5px">
+                    <h2>Network Activity</h2>
+                  	<div id="chartNetworkActivity" style="width:620px;height:160px;"></div>
+                </div>
+                
+                <div class="chart" style="width:620px;margin:5px">
+                  	<h2>Disk IO</h2>
+                  	<div id="chartIO" style="width:620px;height:160px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <script src="testStatsChart.js"></script>
+
+    </body>
+</html>

@@ -1,0 +1,17 @@
+[Unit]
+DefaultDependencies=no
+Description=Stabile Movepiston
+Wants=network-online.target
+After=mysql.service
+After=libvirtd.service
+After=network-online.target
+Requires=mysql.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/movepiston
+TimeoutSec=15
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

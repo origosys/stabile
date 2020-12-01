@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Test servers grid</title>
+        <script>
+            var djConfig = {
+              isDebug: true,
+              async:1,
+              packages: [{
+                  name: 'fileTree',
+                  location: '/stabile/static/js/fileTree'
+                },{
+                  name: 'steam2',
+                  location: '/stabile/static/js/steam2'
+                },{
+                  name: 'stabile',
+                  location: '/stabile/static/js/stabile'
+                },{
+                  name: 'plupload',
+                  location: '/stabile/static/js/plupload'
+                },{
+                  name: 'evd',
+                  location: '/stabile/static/js/evd'
+                },{
+                  name: 'java',
+                  location: '/stabile/static/js/java'
+                },{
+                  name: 'ssh',
+                  location: '/stabile/static/js/ssh'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                },{
+                  name: 'rdp',
+                  location: '/stabile/static/js/rdp'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                }
+              ]
+            };
+        </script>
+        <script src="/stabile/static/js/dojo/dojo.js" ></script>
+        <script src="//docs.irigo.com/plugin/embed.js"></script>
+
+        <link rel="stylesheet" href="/stabile/static/css/style.css" />
+
+        <style>
+            #grid{width:100%;height:400px;}
+        </style>
+
+        <link rel="stylesheet" href="/stabile/static/js/dojox/grid/resources/Grid.css"></link>
+        <link rel="stylesheet" href="/stabile/static/js/dojox/grid/resources/tundraGrid.css"></link>
+        <link rel="stylesheet" href="/stabile/static/js/dojo/resources/dojo.css"></link>
+        <link rel="stylesheet" href="/stabile/static/js/dojox/widget/Toaster/Toaster.css" ></link>
+    </head>
+
+    <body class="tundra">
+        <div id="toaster" style="font-size: 14px;"></div>
+
+        <div id="grid"></div>
+
+        <div class="border_container_south">
+            <button data-dojo-type="dijit.form.Button" onclick="steam2.models.Server.newDialog()">New&hellip;</button>
+            <button data-dojo-type="dijit.form.Button" onclick="steam2.stores.servers.reset()">Refresh</button>
+        </div>
+
+      <script>
+require([
+'doh/runner',
+'dojo/_base/connect',
+'dojo/parser',
+'dojo/ready',
+'dojo/query',
+'dojox/widget/Toaster',
+'steam2/user',
+'steam2/ServersGrid',
+'steam2/channel',
+'dijit/form/Button',
+], function(runner, connect, parser, ready, query, DataGrid,
+JsonRestStore, Toaster, user, ServersGrid, channel, Button){
+
+    ready(function(){
+        var grid = new steam2.ServersGrid({}, 'grid');
+        grid.startup();
+     
+        new dojox.widget.Toaster({
+            positionDirection:"br-left",
+            duration:0,
+            messageTopic:"message"
+        }, dojo.byId('toaster'));
+         
+        dojo.parser.parse();
+        window.grid = grid;
+
+        doh.register("tests.testServersGrid", [
+            function shouldCreateGrid(t){
+                var elms = query('.dojoxGridMasterHeader');
+                t.t(elms.length !== 0);
+            }
+        ]); 
+         
+        doh.run();
+    });
+});
+      </script>
+
+      <div id="applets"></div>
+        
+    </body>
+</html>

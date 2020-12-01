@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title></title>
+        <script>
+            var djConfig = {
+              isDebug: true,
+              packages: [{
+                  name: 'fileTree',
+                  location: '/stabile/static/js/fileTree'
+                },{
+                  name: 'steam2',
+                  location: '/stabile/static/js/steam2'
+                },{
+                  name: 'evd',
+                  location: '/stabile/static/js/evd'
+                },{
+                  name: 'java',
+                  location: '/stabile/static/js/java'
+                },{
+                  name: 'ssh',
+                  location: '/stabile/static/js/ssh'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                },{
+                  name: 'rdp',
+                  location: '/stabile/static/js/rdp'
+                },{
+                  name: 'util',
+                  location: '/stabile/static/js/util'
+                },{
+                  name: 'vnc',
+                  location: '/stabile/static/js/vnc'
+                },{
+                  name: 'stabile',
+                  location: '/stabile/static/js/stabile'
+                }
+              ]
+            };
+        </script>
+        <script src="/stabile/static/js/dojo/dojo.js" data-dojo-config="async: false"></script> --
+
+        <script src="//docs.irigo.com/plugin/embed.js"></script>
+
+        <link rel="stylesheet" href="//static.irigo.com/dojo/1.7.2/dijit/themes/claro/claro.css"/>
+        <link rel="stylesheet" href="/stabile/static/js/fileTree/Tree.css" />
+        <style>
+.container_12{
+  width: 960px;
+  margin: 0 auto;
+}
+.grid_4{
+  width:300px;
+  margin: 0 10px;
+  float:left;
+  display: inline;
+  position: relative;
+}
+.grid_8{
+  width:620px;
+  margin: 0 10px;
+  display: inline;
+  float:left;
+  position: relative;
+}
+section {
+  border: none;
+  border-top: 1px solid #EAEAEA;
+  padding: 15px 0;
+}
+        </style>
+
+    </head>
+    <body class="claro">
+        <div class="container_12">
+            <h1>Filebrowser</h1>
+
+            <div class="grid_4">
+
+                <section>
+                    <input id="imageSelect"></input>
+                </section>
+            </div>
+
+            <div class="grid_8">
+              <div id="loader" class="dijitTreeExpandoLoading" style="width:20px;opacity:0;position:fixed;left:0;top:0;">&nbsp;</div>
+              <div id="trees"></div>
+            </div>
+        </div>
+
+        <script>
+require([
+"dojo/on",
+"dojo/_base/xhr",
+"dojo/dom-construct",
+"dojo/fx/Toggler",
+"dijit/form/Button",
+"dijit/tree/ForestStoreModel",
+"dijit/form/FilteringSelect",
+"fileTree/FileStore",
+"fileTree/Tree",
+"steam2/stores",
+"steam2/models/Image"
+],
+function(on, xhr, domConstruct, Toggler, Button, ForestStoreModel,FilteringSelect, Store, Tree, stores, Image){
+
+    var imageSelect = new FilteringSelect({
+        id: "imageSelect",
+        placeHolder: "Select image",
+        store: stores.images,
+        query: {status:/^used$|^unused$/},
+        searchAttr: "name"
+    }, "imageSelect");
+
+    on(imageSelect, "change", function(uuid){
+        Image.showFilesDialog(uuid);
+    });
+
+});
+        </script>
+    </body>
+</html>

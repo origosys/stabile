@@ -1,0 +1,10 @@
+[
+  {
+    "status":"inactive", 
+    "name":"my-server", 
+    "mac": "", 
+    "image": "/foo", 
+    "networkuuid1":"10", 
+    "networkuuid2":""
+  }
+]

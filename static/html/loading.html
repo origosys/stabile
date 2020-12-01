@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Loading...</title>
+    <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/themes/base/jquery-ui.css" />
+    <link rel="stylesheet" href="/stabile/static/css/style.css" />
+</head>
+<body style="background-color:white!important;">
+<div style="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; padding-top:15%; border: 0px solid;">
+    <h3>
+        <!-- img src="/stabile/static/img/loader.gif" style="vertical-align:middle; margin-right:20px;" alt="loading..." / -->
+        Your stack is loading. Hang on...
+    </h3>
+    <div style="text-align:left; width:400px; margin-left:auto; margin-right:auto; font-size: 14px;">
+        <div id="progressbar" style="height:12px; margin: 20px 18px 20px 0"></div>
+        <!-- We will wait <span id="stacksecs">60</span> seconds for your
+        app to boot and its management interface to be available.<br -->
+        Feel free to close this dialog - you can return to the management interface by clicking the "manage" button on the dashboard.
+    </div>
+</div>
+<script>
+    var tminus = 60;
+    var counter = 0;
+    var stacksecs = document.getElementById("stacksecs");
+    var id = setInterval(function() {
+        tminus--;
+        counter += 100/60;
+        if(tminus < 0) {
+            //stacksecs.innerHTML = "0";
+            clearInterval(id);
+        } else {
+            //stacksecs.innerHTML = tminus.toString();
+            $("#progressbar").progressbar({value: counter});
+        }
+    }, 1000);
+
+</script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js" type="text/javascript"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/jquery-ui.min.js" type="text/javascript"></script>
+<script>
+    $(document).ready(function(){
+        $("#progressbar").progressbar({value: 0});
+    });
+</script>
+</body>
+</html>

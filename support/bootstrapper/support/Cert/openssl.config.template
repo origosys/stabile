@@ -1,0 +1,11 @@
+[ req ]
+	prompt=no
+	default_bits           = 2048
+	distinguished_name     = req_distinguished_name
+
+[ req_distinguished_name ]
+	O=Origo Systems ApS
+	CN=[%HOSTNAME%]
+	emailAddress=info@origo.io
+	C=DK
+	L=Århus

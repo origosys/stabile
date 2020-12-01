@@ -1,0 +1,36 @@
+<div>
+    <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
+        <button class="btn btn-sm btn-success pull-left shadow" onclick="servers.grid.newItem()" id="serversNewButton" style="display:none;">
+            New server&hellip;
+        </button>
+
+        <div class="pull-right" style="margin-left:10px;">
+            <form action="#servers" method="get" onsubmit="document.getElementById('servers_search_query').blur(); return false;">
+                <div data-dojo-type="stabile.ClearTextBox" id="servers_search_query" data-dojo-props='placeHolder:"Search by name", intermediateChanges:false'>
+                </div>
+            </form>
+        </div>
+
+        <div class="pull-right">
+            <span id="machines_sum" style="font-size:90%; color:#AAAAAA; vertical-align: sub;"></span>
+            <span style="vertical-align: sub; margin-left:10px;">Show:</span>
+            <select id="servers_status_filter_select" dojoType="dijit.form.Select">
+                <option value="all" selected="selected">All</option>
+                <option value="running">Running</option>
+                <option value="inactive">Inactive</option>
+                <option value="shutoff">Shutoff</option>
+            </select>
+        </div>
+
+    </div>
+
+    <!-- end top button container  -->
+
+    <div id="servers-grid" class="grid-div"></div>
+
+    <!-- end grid container -->
+
+    <div class="border_container_south">
+        <a href="#servers" onClick="servers.grid.refresh();/*home.grid.refresh();*/home.updateVitals('update');" title="refresh" class="pull-right float btn"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+    </div>
+</div>

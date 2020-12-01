@@ -1,0 +1,61 @@
+<div>
+    <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
+
+        <div class="plupload_progress">
+            <div class="plupload_progress_container">
+                <div class="plupload_progress_bar"></div>
+            </div>
+        </div>
+
+        <div class="btn-group dropdown" style="float:left; position: absolute;">
+            <button type="button" class="btn btn-success btn-sm shadow" onclick="window['images'].grid.newItem();" id="imagesNewButton">New image&hellip;</button>
+            <button type="button" class="btn btn-success btn-sm dropdown-toggle shadow" data-toggle="dropdown" aria-expanded="false" style="border-left-color: #64ba13 !important;">
+                <span class="caret"></span>
+                <span class="sr-only">Toggle Dropdown</span>
+            </button>
+            <ul class="dropdown-menu" role="menu">
+                <li id="imagesUploadButton"><a href="#images" onclick="upload.showDialog();">Upload&hellip;</a></li>
+            </ul>
+        </div>
+
+        <span id="missingbackups" style="color:red; margin-left:140px; margin-right:20px; vertical-align: -webkit-baseline-middle; vertical-align: -moz-middle-with-baseline;"></span>
+
+        <div class="pull-right" style="margin-left:10px;">
+            <form action="#images" method="get" onsubmit="document.getElementById('images_search_query').blur(); return false;">
+                <div id="images_search_query" class="searchQueryInput"
+                     data-dojo-type="stabile.ClearTextBox"
+                     data-dojo-props="placeHolder:'search by name', intermediateChanges:false">
+                </div>
+            </form>
+        </div>
+
+        <div class="pull-right">
+            <span id="storage_sum" style="font-size:90%; color:#AAAAAA; vertical-align: sub;"></span>
+            <span style="vertical-align: sub; margin-left:10px;">Show:</span>
+            <select id="images_type_filter_select" data-dojo-type="dijit.form.Select">
+                <option value="all">All</option>
+                <option value="user_images" selected="selected">My Images</option>
+                <option value="user_master_images">My Master Images</option>
+                <option value="user_cd_roms">My Cd-roms</option>
+                <option value="common_master_images">Shared Master Images</option>
+                <option value="common_cd_roms">Shared Cd-roms</option>
+            </select>
+            <select id="images_storagepool_filter_select" data-dojo-type="dijit.form.Select">
+                <option value="all" selected="selected">on all storage</option>
+                <option value="shared_storage_pools">on shared storage</option>
+                <option value="node_storage_pools">on node storage</option>
+                <script type="dojo/method" event="onChange" args="value">
+                </script>
+            </select>
+        </div>
+        
+        <button title="Click to perform a ZFS snapshot of available ZFS volumes and sync them with backup storage." type="button" class="btn btn-info btn-xs shadow pull-right" onclick="window['images'].doZBackup();" id="dozbackup" style="display:none; margin-top: 5px; margin-right:8px;">Backup now</button>
+
+    </div>
+
+    <div id="images-grid" class="grid-div"></div>
+
+    <div class="border_container_south">
+        <a href="#images" onClick="window['images'].grid.refresh(); window['images'].updateMissingBackups();" title="refresh" class="pull-right float btn"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+    </div>
+</div>

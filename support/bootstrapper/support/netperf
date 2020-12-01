@@ -1,0 +1,8 @@
+service netperf 
+{
+	server		= /usr/local/bin/netserver
+	socket_type	= stream
+	protocol	= tcp
+	user		= root
+	wait		= no
+}                                                                               

@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Test servers grid</title>
+        <script>
+            var djConfig = {
+              isDebug: true,
+              async:1,
+              packages: [{
+                  name: 'steam2',
+                  location: '/stabile/static/js/steam2'
+                }
+              ]
+            };
+        </script>
+        <script src="/stabile/static/js/dojo/dojo.js" ></script>
+        <link rel="stylesheet" href="/stabile/static/css/style.css" />
+
+        <link rel="stylesheet" href="/stabile/static/js/dojo/resources/dojo.css"></link>
+    </head>
+
+    <body class="tundra">
+
+      <h1>Filtering Select With Deselect</h1>
+
+      <h3>With a preset value</h3>
+      <div id="select"></div>
+
+      <h3>With no preset value</h3>
+      <div id="select2"></div>
+
+      <script>
+
+require([
+"doh/runner",
+"dojo/store/Memory",
+"dojo/data/ObjectStore",
+"steam2/FilteringSelectWithDeselect"
+], function(doh, Memory, ObjectStore, FilteringSelectWithDeselect){
+
+    var data = [
+        {id:1, name:"One"},
+        {id:2, name:"Two"}
+    ];
+
+    var store = new ObjectStore(new Memory({data: data}));
+
+    var fs1 = new FilteringSelectWithDeselect({
+        placeHolder: 'Select something',
+        required:false,
+        store:store,
+        value:1
+    }, 'select');
+
+    var fs2 = new FilteringSelectWithDeselect({
+        placeHolder: 'Select something',
+        required:false,
+        store:store
+    }, 'select2');
+
+    doh.register("tests.testFilteringSelectWithDeselect", [
+
+        function select_with_a_value_should_have_deselect_option(t){
+            t.is('', fs1.deselectNode.style.display);
+        },
+
+        function select_with_no_value_should_not_have_deselect_option(t){
+            t.is('none', fs2.deselectNode.style.display);
+        },
+
+        function deselecting_should_hide_deselect_option(t){
+            fs1.set('value', '');
+            t.is('none', fs1.deselectNode.style.display);
+            // change back again
+            fs1.set('value', 1);
+        },
+
+        function disabling_widget_should_hide_the_deselect_option(t){
+            fs1.set('disabled', true);
+            t.is('none', fs1.deselectNode.style.display);
+            // change back again
+            fs1.set('disabled', false);
+        }
+    ]);
+
+    doh.run();
+
+});
+      </script>
+    </body>
+</html>

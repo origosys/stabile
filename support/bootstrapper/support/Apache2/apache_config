@@ -1,0 +1,26 @@
+<VirtualHost *:80>
+    AddHandler cgi-script cgi pl py
+    DocumentRoot /var/www/
+    ServerAdmin webmaster@localhost
+
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{REQUEST_URI} !^/stabile/piston/
+# Uncomment to redirect all traffic to ssl
+#    RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI}
+	Alias /stabile /var/www/stabile
+
+    <Location /stabile/piston>
+        Options ExecCGI FollowSymLinks Includes IncludesNOEXEC
+        AuthName "Services"
+        require valid-user
+        Satisfy all
+        AuthType Basic
+        AuthBasicProvider file
+        AuthUserFile /etc/apache2/htpasswd-piston
+        order deny,allow
+        deny from all
+        allow from 10.0.0.0/255.255.255.0
+        allow from 127.0.0.1
+    </Location>
+</VirtualHost>

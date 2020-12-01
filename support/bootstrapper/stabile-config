@@ -1,0 +1,114 @@
+#! /usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+use strict;
+use Debconf::Client::ConfModule qw(:all);
+#use Data::Dumper;
+use Data::Password qw(:all);
+
+version('2.0');
+my $out = *STDERR;
+
+my @qs = ("stabile/letsencrypt", "stabile/hostname", "stabile/initial_user", "stabile/initial_password");
+my @titles = ("Configure SSL", "Set hostname", "Create initial user", "Set initial user password");
+my @required = (0, 0, 1, 1);
+my $alert;
+my $interactive = $ENV{'DEBIAN_FRONTEND'} ne 'noninteractive';
+my $syshostname = `cat /etc/hostname`;
+chomp $syshostname;
+set("stabile/hostname", $syshostname);
+my $hostname = $syshostname;
+my $req = 0;
+
+for (my $i==0; $i<scalar @qs; $i++) {
+    if ($req>3) { # prevent deadlocks
+        $req = 0;
+        $alert = 0;
+        $i++;
+    }
+    my $q = $qs[$i];
+    capb(($i==0)?'':'backup'); # Don't show cancel on first question
+    my $title = $titles[$i];
+    $title = "* $title" if ($required[$i]);
+    if ($alert) { # Alert that this is a required field
+        $title = "$title ($alert)";
+        $alert = 0;
+    }
+    title($title);
+    input("high", $q);
+    my ($ret, $rstring) = go();
+#    print $out "got reply: $ret, $rstring, " . get($q). "\n";
+    if ($ret eq '30') { # Cancel button pressed, go back one
+        $i = $i-2;
+        $i = -1 if ($i<0);
+    } elsif (!get($q) && $required[$i]) { # No input - redisplay question
+        $alert = "required - please fill out";
+        if ($interactive) {
+            $i--;
+            $req++;
+        }
+    } elsif ($q eq "stabile/hostname") {
+        $hostname =  get($q) || $syshostname;
+        my $ip;
+        my $letsencrypt = get("stabile/letsencrypt");
+        $letsencrypt = '' if ($letsencrypt eq 'false');
+        if ($letsencrypt) {
+            $ip = `dig \@1.1.1.1 +short $hostname`; chomp $ip;
+        } else {
+            $ip = `dig +short $hostname`; chomp $ip;
+            unless ($ip) {
+                $ip = $1 if (`getent hosts $hostname` =~ /(\d+\.\d+\.\d+\.\d+)/);
+            }
+        }
+        $ip = $1 if ($ip =~ /(\d+\.\d+\.\d+\.\d+)/s);
+        if (!$ip) {
+            $alert = "hostname must resolve to an IP address";
+            set($q, $syshostname);
+            if ($interactive) {
+                $i--;
+                $req++;
+            }
+        } elsif ($letsencrypt && !($hostname =~ /.+\..+/)) {
+            $alert = "hostname must be a FQDN";
+            set($q, $syshostname);
+            if ($interactive) {
+                $i--;
+                $req++;
+            }
+        } elsif ($letsencrypt) {
+            my $pubip = `curl --silent checkip.dyn.com`;
+            if ($pubip =~ /IP Address: (\d+\.\d+\.\d+\.\d+)/) {
+                $pubip = $1
+            } else {
+                $pubip = '';
+            }
+            if ($ip ne $pubip) {
+                $alert = "$hostname does not resolve ($ip) to your public IP address ($pubip), please correct or disable Let's Encrypt.";
+                set($q);
+                if ($interactive) {
+                    $i--;
+                    $req++;
+                }
+            }
+        }
+    } elsif ($q eq "stabile/initial_password") {
+        $MAXLEN = 20;
+        my $pwd = get($q);
+        my $msg = IsBadPassword($pwd);
+        if ($msg) {
+            $alert = "$msg - please choose a stronger password!";
+            set($q);
+            if ($interactive) {
+                $i--;
+                $req++;
+            }
+        }
+    }
+}
+
+# echo "get stabile/hostname" | debconf-communicate
+# echo "set stabile/hostname myhost" | debconf-communicate

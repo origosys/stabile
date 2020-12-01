@@ -1,0 +1,145 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+# Monitor disk space usage
+#
+# Arguments are:
+#
+# "Node IP address" "image path" [kBfree|free%] ["1:2:3"|"all"]
+#
+# This script will exit with value 1 if any partition has less than
+# "kBfree" kilobytes, or less than "free" percent available.
+#
+# The first output line is a list of the paths which failed, and
+# how much space is free, in megabytes.
+
+use URI::Escape;
+use Tie::DBI;
+use Data::Dumper;
+use ConfigReader::Simple;
+
+$ENV{PATH} = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
+
+#my $macip = shift;
+#$macip =~ /(.+)/; $macip = $1; # Untaint
+#my $path = shift;
+#$path =~ /(.+)/; $path = uri_unescape($1); # Untaint
+#$path =~ s/([ ])/\\$1/g;
+
+my @argv = @ARGV;
+pop @argv if ($#ARGV>0); # mon sends IP as last param, which we don't need
+
+my $serveruuid = $argv[0];
+$serveruuid =~ /(.+)/; $serveruuid = $1; # Untaint
+
+my $minavailp = $argv[1];
+$minavailp = '10' unless ($minavailp);
+$minavailp =~ /(.+)/; $minavailp = $1; # Untaint
+
+my $parts = $argv[2];
+$parts = 'all' unless ($parts);
+$parts =~ /(.+)/; $parts = $1; # Untaint
+
+my $res;
+my $part = 1;
+my @failures;
+my @successes;
+my $START_TIME = time;
+my $END_TIME;
+
+my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
+    [qw(DBI_USER DBI_PASSWD)]);
+
+$dbiuser =  $config->get('DBI_USER') || "irigo";
+$dbipasswd = $config->get('DBI_PASSWD') || "";
+
+unless (tie %domreg,'Tie::DBI', {
+    db=>'mysql:steamregister',
+    table=>'domains',
+    key=>'uuid',
+    autocommit=>0,
+    CLOBBER=>3,
+    user=>$dbiuser,
+    password=>$dbipasswd}) {push (@failures,  "Error connecting to DB")};
+
+my $domstatus = $domreg{$serveruuid}->{'status'};
+my $macip = $domreg{$serveruuid}->{'macip'};
+$macip =~ /(.+)/; $macip = $1; # Untaint
+#my $virtname = $domreg{$serveruuid}->{'name'} . substr($serveruuid,0,8);
+#my $path = $domreg{$serveruuid}->{'image'};
+#my $path2 = $domreg{$serveruuid}->{'image2'};
+#$path2 = '' if ($path2 eq '--');
+
+unless (tie %nodereg,'Tie::DBI', {
+    db=>'mysql:steamregister',
+    table=>'nodes',
+    key=>'mac',
+    autocommit=>0,
+    CLOBBER=>3,
+    user=>$dbiuser,
+    password=>$dbipasswd}) {push (@failures,  "Error connecting to DB")};
+
+my $hypervisor = $nodereg{$domreg{$serveruuid}->{'mac'}}->{'identity'};
+
+untie %nodereg;
+untie %domreg;
+$hypervisor = 'qemu' if (!$hypervisor || $hypervisor eq 'kvm');
+
+if ($macip && $macip ne '' && $serveruuid) {
+
+    if (!$domstatus || $domstatus eq 'inactive' || $domstatus eq 'shutoff' || $domstatus eq 'paused') {
+        push (@failures, "Error - server not running, no disk activity to monitor!");
+    } else {
+        my $sshcmd = "/usr/bin/ssh -q -l irigo -i /var/www/.ssh/id_rsa_mon -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no";
+        my $sudo = ($hypervisor eq 'vbox'?'sudo virt-df':'virt-df');
+        my $cmd = qq{$sshcmd $macip "$sudo --csv -c $hypervisor:///system -d $serveruuid"};
+        #print "$cmd\n";
+        $res .= `$cmd`;
+        #$res .= `$sshcmd $macip "virt-df --csv -c qemu:///system -d $serveruuid"`;
+        #$res .= `$sshcmd $macip "virt-df --csv -a $path2"` if ($path2);
+        foreach $line (split(/\n/, $res)) {
+            if ($line =~ /^(\S+),(\d+),(\d+),(\d+),/) {
+
+                my ($img, $dev, $size, $used, $avail, $usepercent) = split(/,/,$line,6);
+                $usepercent = int(100*$usepercent+0.5)/100;
+                my $availg = int(1000 * $avail / 1024 / 1024 + 0.5)/1000;
+                my $totalg = int(1000 * ($avail+$used) / 1024 / 1024 + 0.5)/1000;
+
+                #if (!($dev =~ /sdc/) && !($dev =~ /sdb/)) { # Exclude cdroms
+                    if (100*$avail/($used + $avail) < $minavailp && ($parts eq 'all' || $parts =~ /$part/)) {
+                        push (@failures, sprintf ("[*$part] %s: %1.2fGB free (%1.0f\%), total %1.2fGB",
+                        $dev, $availg, 100-$usepercent, $totalg));
+                    } else {
+                        push (@successes, sprintf ("[$part] %s: %1.2fGB free (%1.0f\%), total %1.2fGB",
+                        $dev, $availg, 100-$usepercent, $totalg));
+                    }
+                    $part++;
+                #}
+            }
+        }
+        push (@failures, "Error - no partitions found for $serveruuid on $macip!") if ($part==1);
+    }
+
+} else {
+    push (@failures, "Error - Unable to find IP address and path for $serveruuid!");
+}
+
+$END_TIME = time;
+
+print "\nstart time: " . localtime ($START_TIME) . "\n";
+print "end time  : " . localtime ($END_TIME) . "\n";
+print "duration  : " . ($END_TIME - $START_TIME) . " seconds\n";
+print "min.free %: $minavailp\n\n";
+
+if (@failures) {
+    print join("\n", @failures), "\n", join("\n", @successes), "\n";
+    exit 1;
+} else {
+    print join("\n", @successes), "\n";
+    exit 0;
+}

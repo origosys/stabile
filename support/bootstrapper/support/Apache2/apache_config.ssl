@@ -1,0 +1,181 @@
+<VirtualHost *:443>
+    SSLEngine on
+    SSLCertificateFile [%SSLCERTIFICATEFILE%]
+    SSLCertificateKeyFile [%SSLCERTIFICATEKEYFILE%]
+    SSLCACertificateFile [%SSLCACERTIFICATEFILE%]
+    DocumentRoot /var/www/
+    ServerAdmin webmaster@localhost
+
+    AddHandler cgi-script cgi pl py
+    Alias /download /mnt/stabile/images
+
+    RewriteEngine on
+    RewriteRule ^/stabile/(systems|servers|images|networks|users|nodes|stats|ui_update)(/?)(.*) /stabile/cgi/$1.cgi$2$3
+    RewriteRule ^/stabile/auth/(login|logout|autologin)(/?)(.*) /stabile/auth/$1.cgi$2$3
+    RewriteRule ^/stabile/(login|logout|autologin)(/?)(.*) /stabile/auth/$1.cgi$2$3
+
+# Uncomment to redirect all traffic to stabile
+#    RewriteRule ^/?$ /stabile/ [L,R=303]
+
+    SetEnv WEBMIN_CONFIG /etc/webmin
+    SetEnv WEBMIN_VAR /var/webmin
+    SetEnv SERVER_ROOT /usr/share/webmin
+    SetEnv MINISERV_CONFIG /etc/webmin/miniserv.conf
+
+    <Location /stabile/pipe>
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        Require valid-user
+        ProxyPass http://localhost:8082/ disablereuse=on
+        ProxyPassReverse http://localhost:8082/
+        RewriteEngine on
+        RewriteBase /
+        RewriteCond %{REMOTE_USER} !=""
+        RewriteRule .* - [E=E_USER:%{REMOTE_USER}]
+        RequestHeader set STEAM_USER %{E_USER}e
+    </Location>
+
+    <Location /stabile/download>
+        AuthName "Download"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+    	Require valid-user
+    </Location>
+
+    <Location /shellinabox>
+    	AuthType None
+    	TKTAuthLoginURL stabile/login
+    	TKTAuthCookieName authtkt
+    	TKTAuthIgnoreIP on
+    	Require valid-user
+    	RewriteEngine on
+        RewriteRule    favicon\.ico  /stabile/static/gfx/favicon-24.png [P]
+    	RewriteRule /(\d\d\d+)/(.*)  http://127.0.0.1:$1/$2  [P]
+    </Location>
+
+    <Location /guacamole>
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        Require valid-user
+        ProxyPass http://localhost:8080/guacamole
+        RewriteEngine on
+        RewriteBase /
+        RewriteCond %{REMOTE_USER} !=
+        RewriteRule .* - [E=E_USER:%{REMOTE_USER}]
+        RequestHeader set STEAM_USER %{E_USER}e
+    </Location>
+
+    <Directory />
+    	Options FollowSymLinks
+        AllowOverride None
+    </Directory>
+
+    <Directory /var/www/>
+        Options Indexes FollowSymLinks MultiViews
+        AllowOverride All
+    </Directory>
+
+    <Location "/stabile/static">
+        Options FollowSymLinks
+    </Location>
+
+    <Directory "/mnt/stabile/images">
+        AllowOverride All
+	    Options -Indexes
+    </Directory>
+
+    <Location "/stabile/piston">
+        Options ExecCGI FollowSymLinks Includes IncludesNOEXEC
+        AuthName "Services"
+        AuthType Basic
+        AuthBasicProvider file
+        AuthUserFile /etc/apache2/htpasswd-piston
+        <RequireAll>
+            Require ip 10.0.0.0/8
+            Require valid-user
+        </RequireAll>
+    </Location>
+
+    <Location "/stabile/static/html">
+       	Options Indexes FollowSymLinks MultiViews
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        Require valid-user
+    </Location>
+
+    <LocationMatch "/stabile/index">
+       	Options Indexes FollowSymLinks MultiViews
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        Require valid-user
+    </LocationMatch>
+
+    <DirectoryMatch "/stabile/auth">
+        Options ExecCGI FollowSymLinks Includes IncludesNOEXEC
+    </DirectoryMatch>
+
+    <DirectoryMatch "/stabile/cgi">
+        Options ExecCGI FollowSymLinks Includes IncludesNOEXEC
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        Require ip 10.0.0.0/8
+        Require valid-user
+    </DirectoryMatch>
+
+    # bypass python: and server the static files in docs directly.
+    <Location "/stabile/docs/static">
+        Options FollowSymLinks
+    </Location>
+
+    <Location "/stabile/docs">
+        Options ExecCGI FollowSymLinks Includes IncludesNOEXEC
+        order deny,allow
+        AuthName "Services"
+        AuthType None
+        TKTAuthLoginURL stabile/login
+        TKTAuthCookieName authtkt
+        TKTAuthIgnoreIP on
+        RewriteEngine On
+        RewriteRule ^([0-9]+)/(.*)$ docs.py/$1/$2
+        RewriteRule ^new/$ docs.py/new
+        RewriteRule ^search/(.*)$ docs.py/search/$1
+        RewriteRule ^$ docs.py
+    </Location>
+
+	Alias /static/ /usr/share/graphite-web/static/
+	WSGIDaemonProcess _graphite processes=5 threads=5 display-name='%{GROUP}' inactivity-timeout=120 user=_graphite group=_graphite
+	WSGIProcessGroup _graphite
+	WSGIImportScript /usr/share/graphite-web/graphite.wsgi process-group=_graphite application-group=%{GLOBAL}
+	WSGIScriptAlias /graphite/ /usr/share/graphite-web/
+	<Location "/graphite/">
+		DirectoryIndex graphite.wsgi
+		DirectoryIndexRedirect on
+        Require ip 127.0.0.1
+	</Location>
+
+	ErrorLog /var/log/apache2/error.log
+
+	# Possible values include: debug, info, notice, warn, error, crit,
+	# alert, emerg.
+	LogLevel warn
+
+	CustomLog /var/log/apache2/access.log combined
+	AddType application/x-steamgine-image img vmdk qcow2 vdi vhd
+</VirtualHost>

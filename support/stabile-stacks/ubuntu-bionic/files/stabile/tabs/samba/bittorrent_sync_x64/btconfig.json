@@ -1,0 +1,10 @@
+{
+    "device_name": "Origo Sync Service",
+    "webui": {
+        "listen": "127.0.0.1:8888",
+        "api_key": "SBF6WAB7WBXNBS34WFZZ3ALELXB26NK5Y26ZKTDJV7ZKYB4W4KWZ372P33CURICTLHRW4OI76T45NUFYF7KAANU4RSZOAAHNLCF5IACZ7X5Y32EJLFRJHSO23MRC244KXVCKKKA"
+    },
+    "shared_folders" :
+    [
+    ]
+}

@@ -1,0 +1,5 @@
+usr/local
+var/log
+etc/stabile
+initrd.img
+boot/initrd.img-*

@@ -1,0 +1,1775 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+use LWP::Simple;
+use URI::Escape;
+use POSIX;
+use Sys::Syslog qw( :DEFAULT setlogsock);
+use Sys::Virt;
+use XML::Simple;
+use Socket;
+use File::Copy;
+use Data::Dumper;
+use Time::HiRes qw (usleep ualarm gettimeofday tv_interval);
+use ConfigReader::Simple;
+use Config::Simple;
+use File::Basename;
+use Text::ParseWords;
+use Proc::Daemon;
+use Error qw(:try);
+use Proc::Background;
+use Storable;
+use sigtrap 'handler' => \&TERMINATE, 'QUIT', 'INT', 'TERM', 'KILL', 'STOP';
+
+#$SIG{TERM} = TERMINATE;
+#$SIG{KILL} = TERMINATE;
+#$SIG{STOP} = TERMINATE;
+#$SIG{__DIE__} = \&dont_die;  # Won't die now
+#$SIG{__WARN__} = \&dont_die;  # Won't die now
+
+my $cmdline = `cat /proc/cmdline`;
+$cmdline =~ /identity=(\S*)/;
+my $identity = $1;
+
+my $cfg = new Config::Simple("/etc/stabile/nodeconfig.cfg");
+# my $config = ConfigReader::Simple->new("/etc/stabile/nodeconfig.cfg",
+#     [qw(ADMIN_SERVER_ADDRESS STORAGE_SERVERS_ADDRESS_PATHS STORAGE_SERVERS_LOCAL_PATHS ADMIN_NIC DATA_NIC
+#         INITIALIZE_LOCAL_DISK
+#         VM_READ_LIMIT VM_WRITE_LIMIT VM_IOPS_READ_LIMIT VM_IOPS_WRITE_LIMIT
+#         PISTON_READ_LIMIT PISTON_WRITE_LIMIT PISTON_IOPS_READ_LIMIT PISTON_IOPS_WRITE_LIMIT
+#         )]);
+my $mainvalve = $cfg->param('ADMIN_SERVER_ADDRESS');
+my $mainvalvepwd = $cfg->param('ADMIN_SERVER_HTTP_PWD') ||'sunshine';
+
+my $cgset; # Have cgroup values been set?
+
+my $adminnic = $cfg->param('ADMIN_NIC');
+my $datanic = $cfg->param('DATA_NIC');
+my $initdisk = $cfg->param('INITIALIZE_LOCAL_DISK');
+$identity = $identity || $cfg->param('IDENTITY');
+
+if ($identity eq 'local_kvm') {
+    `iptables -D INPUT --in-interface $datanic -d 10.0.0.1 -j DROP 2>/dev/null`; # Disallow outside access to virtual internal network
+    `iptables -A INPUT --in-interface $datanic -d 10.0.0.1 -j DROP`;
+}
+if (!($adminnic) || !(`/bin/cat /proc/net/dev` =~ /$adminnic:/)) { # Make sure device exists
+	# Parse the interface from a line like e.g.:
+	# 10.0.0.0        0.0.0.0         255.255.255.0   U     0      0        0 p0s31f6
+	# The nic name is the last string, preceded by a single space
+	$adminnic = `route -n | grep '10\.0\.0\.0' | sed -n -e 's/.* //p'`;
+	chomp $adminnic;
+}
+if (!($datanic) || !(`/bin/cat /proc/net/dev` =~ /$datanic:/)) { # Make sure device exists
+	my $nics = `ifconfig | grep Link | sed -n -e 's/ .*//p'`;
+	my @anics = split("\n", $nics);
+	foreach my $nic (@anics) {
+		if ($nic =~ /^lo/ || $nic =~ /$adminnic/ || $nic =~ /^br/ || $nic =~ /^virbr/) {next;}
+		elsif ($nic =~ /^en/) {$datanic = $nic; last}
+	}
+}
+$adminnic = "eno1" unless ($adminnic);
+$datanic = $adminnic unless ($datanic); # Make sure device exists
+
+print "Using $adminnic as admin NIC\n";
+print "Using $datanic as data NIC\n";
+
+# Make sure data nic is up...
+print `ifconfig $datanic up`;
+
+my $resolv = `cat /etc/resolv.conf`;
+if ($resolv =~ /nameserver (\S*)/) {
+	$mainvalve = scalar(gethostbyaddr(inet_aton($1), AF_INET)) unless $mainvalve;
+	print "Using admin server $mainvalve ($1)\n";
+} elsif ($mainvalve) {
+	print "Adding nameserver $mainvalve\n";
+	`echo "nameserver $mainvalve" >> /etc/resolv.conf`;
+}
+
+# Make kvm listen for vnc connections on all interfaces
+system("perl -pi -e 's/.*vnc_listen = .+/vnc_listen = \"0.0.0.0\"/' /etc/libvirt/qemu.conf") unless (`grep 'vnc_listen = "0.0.0.0"' /etc/libvirt/qemu.conf`);
+
+my $basedir = "/mnt/stabile/node";
+my %mtimes;
+my %img_sizes;
+my %img_realsizes;
+my %img_virtualsizes;
+my %oldTimes;
+
+my $tenders = $cfg->param('STORAGE_SERVERS_ADDRESS_PATHS') || "$mainvalve:/mnt/stabile/images";
+my @tenderlist = split(/,\s*/, $tenders);
+my $tenderpaths = $cfg->param('STORAGE_SERVERS_LOCAL_PATHS') || "/mnt/stabile/images";
+my @tenderpathslist = split(/,\s*/, $tenderpaths);
+
+unless ($mainvalve && $adminnic) {
+    print "ADMIN_SERVER_ADDRESS and ADMIN_NIC in /etc/stabile/nodeconfig.cfg should contain valid values\n";
+    exit(0);
+}
+
+$processes = `ps ax | grep \/usr\/local\/sbin\/movepiston | wc -l`;
+if (!($ARGV[0] =~ /command=(.+)/) && $processes > 3) {
+    print "Only one movepiston can be running!\n";
+    logit('info', "Only one movepiston can be running!");
+    sleep 1;
+    exit(0);
+}
+
+my $base_url = "http://$mainvalve/stabile/piston/piston.cgi";
+my $stats_url = "http://$mainvalve/stabile/piston/pistonstats.cgi";
+
+
+my $running = 1;
+my $dostats = 1;
+my $status = "shutdown";
+my $virshemu = 'qemu';
+my $naptime = 5; # time  in seconds between piston updates
+my $statsnap = 10; # time in seconds between stats updates - this must be coordinated with values in pistonstats.cgi
+my $stornap = 5; # How often to update storage and local image info
+my $laststatstime = 0;
+my $laststortime = 0;
+#my $laststorfree = 0;
+my $sleepafter = 50*60; # default time to sleep after
+my $drowsiness = 0;
+my %mortuary;
+
+if ($identity eq "vbox") {$virshemu = 'vbox'};
+
+my @domstates = ("nostate", "running", "blocked", "paused", "shutdown", "shutoff", "crashed");
+
+my $browser = LWP::UserAgent->new;
+if ($identity eq 'local_kvm') {
+    $browser->local_address("10.0.0.1");
+}
+$browser->agent('movepiston/1.0b');
+$browser->protocols_allowed( [ 'http','https'] );
+$browser->credentials(
+  "$mainvalve:80",
+  'Services',
+  'irigo', $mainvalvepwd
+);
+
+my $ifinfo;
+if (`ifconfig $adminnic`) {
+    $ifinfo = `ifconfig $adminnic`;
+} else {
+    print "NIC $adminnic is not availaible on this node\n";
+    die;
+}
+my $mac;
+$mac = $1 if ($ifinfo =~ /HWaddr (\S+)(\s*)\n/);
+$mac = $1 if ($ifinfo =~ /ether (\S+)(\s*)/);
+print "Using mac $mac as id for this node\n";
+my $nmac = $mac;
+$nmac =~ tr/://d;
+my $hostname = $mac;
+$mac = uri_escape($mac);
+$hostname =~ tr/://d;
+$hostname = "piston" . $hostname;
+$ifinfo =~ m/inet addr:(\S+) (.*)\n/i;
+my $ip = $1;
+my $glogentry = "--: nodes: $nmac: running: Bringing up $identity piston...";
+my $command;
+
+# Load IPMI modules
+`modprobe ipmi_devintf`;
+my $ipmiip;
+if (`modprobe ipmi_si 2>/dev/null`) {
+    my $ipmiinfo = `/usr/bin/ipmitool lan print 1`;
+    if ($ipmiinfo =~ m/IP Address     .+: (.+)\n/i) {
+        $ipmiip = $1;
+    }
+} else {
+    print "IPMI is not available on this node\n";
+}
+
+# Prevent VM's using Libvirt's default network to reach each other + infrastructure
+`modprobe br_netfilter` unless (`lsmod | grep br_netfilter`);
+`echo 1 > /proc/sys/net/bridge/bridge-nf-call-iptables`;
+`iptables -D FORWARD --in-interface virbr0 -d 192.168.0.0/16 -j DROP 2>/dev/null`;
+`iptables -I FORWARD --in-interface virbr0 -d 192.168.0.0/16 -j DROP`;
+`iptables -D FORWARD --in-interface virbr0 -d 10.0.0.0/8 -j DROP 2>/dev/null`;
+`iptables -I FORWARD --in-interface virbr0 -d 10.0.0.0/8 -j DROP`;
+
+my $stor;
+my $test;
+$debug;
+$debug = 1 if ($ARGV[0] eq 'debug' || $ARGV[0] eq 'stats' || $ARGV[0] eq 'test' || $ARGV[1] eq 'debug' || $ARGV[1] eq 'stats');
+$dostats = 0 if ($ARGV[0] eq 'nostats' || $ARGV[1] eq 'nostats');
+
+my $badstrokes = "/tmp/badstrokes"; # Keeping track of bad, crashing tasks
+my $tombstones = "/tmp/tombstones"; # Keep track of destroyed servers
+
+`rm /tmp/movepiston.out` if (-e "/tmp/movepiston.out");
+
+while ($running) {
+    if ($ARGV[0] eq 'stop') {
+    	TERMINATE();
+    } elsif ($ARGV[0] =~ /^command=(.+)/) {
+        $command = $1;
+        if ($command =~ /(backup\..+)/ && -e "/tmp/$1") {
+            my $backuptasks = $1;
+    #        logit('info', "Performing command $command $ARGV[1] $ARGV[2] $ARGV[3] $ARGV[4] $ARGV[5] $ARGV[6]");
+            my $lines = `cat /tmp/$backuptasks`;
+            chomp $lines;
+            unlink("/tmp/$backuptasks");
+    		my @clines = split /\n/, $lines;
+            foreach my $line (@clines) {
+                logit('info', "Backing up: $line");
+                my @args = shellwords($line);
+                backup($args[0], $args[1], $args[2], $args[3], $args[4],$args[5]);
+            }
+    #            backup($ARGV[1], $ARGV[2], $ARGV[3], $ARGV[4], $ARGV[5], $ARGV[6]);
+        }
+    } elsif ($ARGV[0] eq 'test' && $identity) {
+    	$test = 1;
+        initializeLocalDisk($initdisk) if ($initdisk && $identity ne 'local_kvm');
+    	updatePistonInfo();
+    } elsif ($ARGV[0] eq 'stats' && $identity) {
+    	$test = 1;
+    	updatePistonStats();
+        $running = 0;
+    } elsif ($identity eq "kvm" || $identity eq "local_kvm" || $identity eq "vbox") {
+        $status = "running";
+       	$running = 1;
+        if ($identity ne 'local_kvm') {
+            if ($initdisk) {
+                my $res = initializeLocalDisk($initdisk);
+            }
+            print `/bin/hostname $hostname`;
+            print `/bin/echo "127.0.0.1 localhost\n$ip $hostname" > /etc/hosts`;
+
+            my $mounts = `cat /proc/mounts`;
+            if ($mounts =~ /\mnt\/stabile\/node/) {
+                if ($mounts =~ /volgroup1-lvol1/) {
+                    $stor = 'lvm';
+                } elsif ($mounts =~ /stabile-node/) {
+                    $stor = 'zfs';
+                }
+            }
+            if ($identity eq 'local_kvm') {
+                logit('info', "Local kvm - not initializing cgroups");
+            } elsif (!$cgset) {
+                setCgroups();
+                $cgset = 1;
+            } else {
+                logit('info', "Unable to initialize cgroups!!");
+                print "Unable to initialize cgroups!!\n";
+                $running = 0;
+            }
+            # restart rsyslog to pick up new hostname
+            print `/sbin/restart rsyslog`;
+            print "Setting clock from $mainvalve\n" unless ($debug);
+            print `/usr/sbin/ntpdate $mainvalve` unless ($debug);
+           	print "Known tenders:\n", Dumper(\@tenderlist) if $debug;
+           	print "Known tender paths:\n", Dumper(\@tenderpathslist) if $debug;
+            print "Trying to mount " . (scalar @tenderpathslist) . " tenders\n";
+
+            for (my $i=0; $i<(scalar @tenderpathslist); $i++) {
+               my $path = $tenderpathslist[$i];
+               my $host = $tenderlist[$i];
+               if ($mounts =~ m/$path /i) {
+                   print ("$path already mounted\n") if ($debug);
+               } elsif ($identity ne 'local_kvm' && $host =~ /10\.0\.0\.1/) {
+                   print "Mounting $path from $host\n";
+                   logit('info', "Mounting (1) $path from $host");
+                   # Directory / mount point must exist
+                   `mkdir -p "$path"` unless (-e $path);
+#                   eval {print `mount -o intr,noatime,nfsvers=3 $host $path`; 1;} or do {print $@;};
+                   eval {print `mount -o hard,intr,nolock,noatime,nfsvers=3,tcp,timeo=1200,rsize=1048600,wsize=1048600,bg $host $path`; 1;} or do {print $@;};
+               }
+            }
+        }
+        if ($identity eq "kvm") {
+            logit('info', "Bringing up KVM piston $nmac");
+        } elsif ($identity eq "local_kvm") {
+            logit('info', "Bringing up local KVM piston $nmac");
+        } elsif ($identity eq "vbox") {
+            logit('info', "Bringing up Virtual Box piston $nmac");
+            print `/etc/init.d/vboxdrv start`,"\n";
+        }
+
+
+        my $failedtasks;
+        if (-e $badstrokes && !(-z $badstrokes)) {
+            $failedtasks  = `cat $badstrokes`;
+            logit('info', "A previous attempt at executing tasks failed:\n$failedtasks");
+            print "Trying to execute again.\n";
+            updatePistonInfo($failedtasks) if ($failedtasks =~ m/^\S+=(.*)/ig);
+            unlink($badstrokes);
+        }
+        if (-e $tombstones && !(-z $tombstones)) {
+            my $hashref = retrieve($tombstones);
+            %mortuary = %{$hashref};
+            logit('info', "A list of previously destroyed domains was found: " . Dumper(%mortuary));
+        }
+    	while ($running) {
+            try {
+                $running = updatePistonInfo();
+                if ($dostats && (time() > $laststatstime + $statsnap)) {
+            #        `sync; echo 3 > /proc/sys/vm/drop_caches`; # Clean up
+                    $laststatstime = time();
+                    updatePistonStats();
+                }
+                sleep $naptime;
+                drowse();
+            } catch Error with {
+                my $ex = shift;
+                print "Internal Error: $ex\n";
+            } finally {
+            };
+    	}
+    } elsif ($identity eq "rescue") {
+    	logit('info', "Bringing up rescue piston");
+    	$status = "running";
+    	$running = 1;
+    	while ($running) {
+    		sleep $naptime;
+    	}
+    } else {
+    	logit('info', "No identity: $identity Joining the engine...");
+        updateInterfaces();
+    	$status = "joining";
+    	my $cpuinfo = `cat /proc/cpuinfo`;
+    	$cpuinfo =~ m/model name.*:\s*(.*)\n/i;
+    	my $cpuname = $1;
+    	$cpuname =~ s/( )+//g;
+    	$cpuinfo =~ m/cpu family.*:\s*(.*)\n/i;
+    	my $cpufamily = $1;
+    	$cpuinfo =~ m/model.*:\s*(.*)\n/i;
+    	my $cpumodel = $1;
+    	$cpuinfo =~ m/cpu MHz.*:\s*(.*)\n/i;
+    	my $cpuspeed = $1;
+    	my $cpucores = "1";
+    	if ($cpuinfo =~ m/cpu cores.*:\s*(.+)\n/i) {
+    		$cpucores = $1;
+    	} elsif ($cpuinfo =~ m/siblings.*:\s*(.+)\n/i) {
+    		$cpucores = $1;
+    	}
+    	my $cpucount = 0;
+    	while ($cpuinfo =~ /physical id.*: (.+)\n/gi) {
+    		if ($1 > $cpucount) {
+    			$cpucount = $1;
+    		}
+    	}
+    	$cpucount++;
+    	my $meminfo = `cat /proc/meminfo`;
+    	$meminfo =~ m/MemTotal:\s*(.*) kB\n/i;
+    	my $memtotal = $1;
+    	$meminfo =~ m/MemFree:\s*(.*) kB\n/i;
+    	my $memfree = $1;
+    	$meminfo =~ m/Cached:\s*(.*) kB\n/i;
+    	my $memcached = $1;
+    	$memfree += $memcached; # or `echo 3 > /proc/sys/vm/drop_caches` to free caches
+
+        my $logentry = "--: nodes: $nmac: joining: Trying to join";
+    	my $url = $base_url . "?mac=$mac&ip=$ip&cpucores=$cpucores&cpucount=$cpucount&cpuspeed=$cpuspeed&cpuname=" .
+    	 uri_escape("$cpuname") . "&ipmiip=" . uri_escape($ipmiip) .
+    	 "&cpufamily=$cpufamily&cpumodel=$cpumodel&memtotal=$memtotal&memfree=$memfree&status=joining&logentry=" .
+    	 $logentry;
+
+    	my $assimilated = 0;
+    	my $i = 0;
+    	while ($assimilated == 0) {
+    		my $content = $browser->get($url)->content();
+    		logit('info', "Waiting for assimilation...");
+    		if (defined $content) {
+    			my $assimilation_status = "";
+    			if ($content =~ /Assimilation=(\S*)(.*)/i) {
+    				$assimilation_status = $1;
+    				$assimilation_reason = $2;
+    				if ($assimilation_status eq "OK") {
+    					$assimilated = 1;
+    				} else {
+    					logit('info', "Assimilation not accepted: $assimilation_status$assimilation_reason");
+    					sleep 2;
+    					if ($i>2) {last} else {$i++};
+    				}
+    			} else {
+    				logit('info', "Assimilation answer not received: $content");
+    				sleep 2;
+    				if ($i>2) {last} else {$i++};
+    			}
+    		} else {
+    				logit('info', "Couldn't get $url:");
+    				sleep 2;
+    				if ($i>2) {last} else {$i++};
+    		}
+    	}
+    	if ($assimilated == 1) {
+            if (-e "/etc/stabile/config.cfg") { # We are on valve
+                $identity = 'local_kvm';
+            } else {
+                $identity = 'kvm';
+            }
+            $cfg->param("IDENTITY", $identity);
+            $cfg->save();
+            logit('info', "Assimilation completed...");
+    	}
+    }
+}
+1;
+
+
+sub updatePistonInfo {
+    my $failedtasks = shift;
+	logit('info', "Updating piston info...") if ($debug);
+	$naptime = 5;
+	my $pid;
+
+	my $cpuload = `cat /proc/loadavg`;
+	$cpuload =~ m/(\S*) /i;
+	$cpuload = $1;
+	my $cpucores = "1";
+	my $cpuinfo = `cat /proc/cpuinfo`;
+	if ($cpuinfo =~ m/cpu cores.*:\s*(.+)\n/i) {
+		$cpucores = $1;
+	} elsif ($cpuinfo =~ m/siblings.*:\s*(.+)\n/i) {
+		$cpucores = $1;
+	}
+	my $cpucount = 0;
+	while ($cpuinfo =~ /physical id.*: (.+)\n/gi) {
+		if ($1 > $cpucount) {
+			$cpucount = $1;
+		}
+	}
+	$cpucount++;
+	my $meminfo = `cat /proc/meminfo`;
+	$meminfo =~ m/MemTotal:\s*(.*) kB\n/i;
+	my $memtotal = $1;
+	$meminfo =~ m/MemFree:\s*(.*) kB\n/i;
+	my $memfree = $1;
+	$meminfo =~ m/Cached:\s*(.*) kB\n/i;
+	my $memcached = $1;
+	$memfree += $memcached; # or `echo 3 > /proc/sys/vm/drop_caches` to free caches
+	$status = "shutdown" unless ($running || $status eq "asleep");
+
+    my $nfsroot;
+    $nfsroot = uri_escape($1) if ($cmdline =~ m/ nfsroot=(\S+) /);
+    my $kernel;
+    $kernel = uri_escape($1) if ($cmdline =~ m/BOOT_IMAGE=(\S+) /);
+
+    # Bring up local interfaces if it has been lost because of S3 sleep
+    updateInterfaces();
+
+    #	my $virshlist = `virsh -c $virshemu:///system list`;
+	logit('info', "Initializing libvirt connection: $virshemu:///system") if ($debug);
+	my $vmm = Sys::Virt->new(address => "$virshemu:///system");# unless $vmm;
+	logit('info', "Getting dominfo from: $virshemu:///system") if ($debug);
+
+	# Load domain info into $dinfo
+	my $dinfo = dominfo($vmm);
+
+    # Put node info into $dinfo
+    $dinfo->{'status'} = $status;
+    $dinfo->{'mac'} = $mac;
+    $dinfo->{'memtotal'} = $memtotal;
+    $dinfo->{'memfree'} = $memfree;
+    $dinfo->{'identity'} = $identity;
+    $dinfo->{'nfsroot'} = $nfsroot;
+    $dinfo->{'kernel'} = $kernel;
+    $dinfo->{'cpuload'} = $cpuload;
+    $dinfo->{'cpucount'} = $cpucount;
+    $dinfo->{'cpucores'} = $cpucores;
+    $dinfo->{'cpucores'} = $cpucores;
+    $dinfo->{'ipmiip'} = uri_escape($ipmiip);
+
+    # Local storage info
+    my $stortotal = "0";
+    my $storfree = "0";
+    my $esc_path = ($identity eq 'local_kvm')?$tenderpathslist[0]:'/mnt/stabile/node';
+    my $storinfo = `df -kl $esc_path`;
+    if ($storinfo =~ m/\s+(\d+)\s+(\d+)\s+(\d+).+\n/si) {
+        $stortotal = $1;
+        $storfree = $3;
+    }
+    # Load storage info into $dinfo
+	print "Getting storage info\n" if ($debug);
+    if (time() > $laststortime + $stornap) {
+        $laststortime = time();
+
+        # Local image sizes
+        my @thefiles = recurse($basedir);
+        my $j = 0;
+        foreach my $f (@thefiles) {
+            if ($f =~ /(s\d\d\d\.vmdk$)|(-flat\.vmdk$)/) {
+                ;
+            } elsif($f =~ /(\.vmdk$)|(\.img$)|(\.vhd$)|(\.qcow$)|(\.qcow2$)|(\.vdi$)|(\.iso$)/i) {
+                $j++;
+                my($fname, $dirpath, $suffix) = fileparse($f, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
+				$dirpath =~ /$basedir\/([^\/]+)/;
+				my $user = $1;
+        # Deal with sizes
+                ($newsize, $newrealsize, $newvirtualsize, $newmtime) = getSizes($f, $mtimes{$f});
+                if ($newmtime) {
+                    $mtimes{$f} = $newmtime;
+                    $img_sizes{$f} = $newsize;
+                    $img_realsizes{$f} = $newrealsize;
+                    $img_virtualsizes{$f} = $newvirtualsize;
+                }
+                $dinfo->{"img$j"} = uri_escape($f);
+                $dinfo->{"size$j"} = $img_sizes{$f};
+                $dinfo->{"realsize$j"} = $img_realsizes{$f};
+                $dinfo->{"virtualsize$j"} = $img_virtualsizes{$f};
+
+				if (-e "$f.meta" && `grep backingup "$f.meta"` && !(`pgrep "$f.meta"`)) {
+					unlink "$f.meta";
+					$mes = "Backup aborted ($fname)";
+					logit('err', "Backup of $f aborted for user $user");
+					my $logentry = "$user: images: $f: unused: $mes";
+
+					# Update the client UI
+					my $url = $base_url . "?mac=$mac&status=updateui&logentry="  . uri_escape($logentry);
+					print "Updating image registry: $url\n" if ($debug);
+					my $content = $browser->get($url)->content();
+					print $content;
+				}
+
+            }
+        }
+        $dinfo->{"stortotal"} = $stortotal;
+        $dinfo->{"storfree"} = $storfree;
+        $dinfo->{"stor"} = $stor;
+    }
+
+    if($failedtasks) {
+    	logit('info', "Not posting node status - we have failed tasks: " . Dumper($dinfo)) if ($debug);
+        $content = $failedtasks; # content restored from previous crash was supplied
+        $glogentry = "--: nodes: $nmac: $status: Brought up piston with failed tasks...";
+	} else {
+        $dinfo->{'logentry'} = uri_escape($glogentry) if ($glogentry);
+    	logit('info', "Posting node status to URL: $base_url: " . Dumper($dinfo)) if ($debug);
+	    $content = $browser->post($base_url, $dinfo)->content();
+        $glogentry = '';
+	}
+
+	if ($test || $debug) {
+		print pretty_time(), ": ", $content if ($debug);
+	};
+#	my $debugline = pretty_time() . ": " . $content;
+#	open TEMP3, ">>/tmp/movepiston.out";
+#	print TEMP3 $debugline;
+#	close TEMP3;
+
+	my $task_1 = '';
+	my $task_2 = '';
+	my $task_3 = '';
+
+	if (defined $content) {
+    	my @receiveuuids;
+		my @clines = split /\n/, $content;
+		my @lines;
+        foreach my $line (@clines) {
+            if ($line =~ m/^\S+=SLEEPAFTER (\d+)/ig) {
+                $sleepafter = int($1);
+            } elsif ($line =~ m/^\S+=.+/ig) {
+                push(@lines, $line);
+            }
+        }
+        while (my $line = shift @lines) {
+			$url = $base_url . "?mac=$mac&identity=$identity";
+
+            my $rcontent = join("\n", @lines);
+            `echo "$rcontent" > $badstrokes` if (@lines);
+            $line =~ m/^\S+=(.*)/ig;
+            @tasks = shellwords($1);
+            $task_1 = $tasks[0]; #$1;
+            $task_2 = $tasks[1]; #$2;
+            $task_3 = $tasks[2]; #$3;
+            if ($task_1 eq "REBOOT" && $identity ne 'local_kvm') {
+                $status = "reboot";
+                my $logentry = "$task_2: nodes: $nmac: $status: Reboot request received - rebooting";
+                logit('info', $logentry);
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+                print `/sbin/reboot`;
+                chop $@; $logentry .= "\n$@" if $@;
+                if ($@) {
+                    chop $@; $logentry .= "\n$@";
+                    $newcontent = $browser->get($url)->content();
+                }
+            }
+            elsif ($task_1 eq "HALT" && $identity ne 'local_kvm') {
+                $status = "shutdown";
+                my $logentry = "$task_2: nodes: $nmac: $status: Halt request received - shutting down";
+                logit('info', $logentry);
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+                sleep 5;
+                print `/sbin/initctl --no-wait stop movepiston`;
+                `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
+                print `poweroff`;
+                if ($@) {
+                    chop $@; $logentry .= "\n$@";
+                    $newcontent = $browser->get($url)->content();
+                }
+            }
+            elsif ($task_1 eq "SLEEP" && $identity ne 'local_kvm') {
+                if ($identity eq "kvm") {
+                    logit('info', "Taking down KVM piston");
+                    print `/etc/init.d/qemu-kvm stop`,"\n";
+                } elsif ($identity eq "vbox") {
+                    logit('info', "Taking down Virtual Box piston");
+                    print `/etc/init.d/vboxdrv stop`,"\n";
+                }
+                $status = "asleep";
+                my $logentry = "$task_2: nodes: $nmac: $status: Sleep request received - putting node to sleep";
+                logit('info', $logentry);
+                $running = 0;
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+                sleep 5;
+#					my $meminfo = `cat /proc/acpi/sleep`;
+#					my $s3sleep = ($meminfo =~ m/S3/);
+
+                my $meminfo = `cat /sys/power/state`;
+                my $s3sleep = ($meminfo =~ m/mem/);
+
+                if (0 && $s3sleep) {
+                    print `/etc/init.d/libvirt-bin stop`,"\n" if ($identity eq "vbox");
+                    #print `/etc/acpi/sleep.sh`;
+                    print `/bin/echo -n "mem" > /sys/power/state`;
+                } else {
+                    print `/sbin/initctl --no-wait stop movepiston`;
+                    `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
+                    print `poweroff`;
+#                    print `/sbin/shutdown -P now`;
+                }
+            }
+            elsif ($task_1 eq "WAKE" && $identity ne 'local_kvm') {
+                $status = "awake";
+                my $logentry = "$task_2: nodes: $nmac: $status: Wake request received - now awake";
+                logit('info', $logentry);
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "WIPE" && $identity ne 'local_kvm') {
+                my $logentry = "$task_2: nodes: $nmac: $status: Wipe request received";
+                logit('info', $logentry);
+                my $url2 = "$url&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url2)->content();
+                my $res = initializeLocalDisk($initdisk, 1);
+                $logentry = "$task_2: nodes: $nmac: $status: $res";
+                logit('info', $logentry);
+                $url2 = "$url&status=$status&logentry=" . uri_escape($logentry);
+                $newcontent = $browser->get($url2)->content();
+            }
+            elsif ($task_1 eq "UNJOIN") {
+                $status = "unjoin";
+                my $logentry = "$task_2: nodes: $nmac: $status: Unjoin request received";
+                logit('info', $logentry);
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+                print `/sbin/reboot`;
+            }
+            elsif ($task_1 eq "RELOAD") {
+                $status = "reload";
+                my $logentry = "$task_2: nodes: $nmac: $status: Reload request received";
+                logit('info', $logentry);
+                $url .= "&status=$status&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+                $running = 0;
+                `/bin/systemctl restart movepiston`;
+            }
+            # Reload cgroups
+            elsif ($task_1 eq "CGLOAD") {
+                setCgroups();
+                $cgset = 1;
+            }
+            elsif ($task_1 eq "SLEEPAFTER") {
+                $sleepafter = int($task_2);
+            }
+            elsif ($task_1 eq "PERMITOPEN") {
+                if ($task_2) {
+                    my $logentry = "$task_2: servers: : : Permitopen request received - updating allowed ssh forwards";
+                    logit('info', $logentry);
+                    # Ask piston.cgi to allow port forwards for user
+                    my $newurl = $url . "&status=permitopen&user=$task_2";
+                    my $newcontent = $browser->get($newurl)->content();
+                    # Clear tasks list
+                    #$newurl = $url ."&status=$status";
+                    #$newcontent = $browser->get($newurl)->content();
+                }
+            }
+            elsif ($task_1 eq "DESTROY") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                # uuid ~ $task_2, user ~ $task_3
+                my $logentry = "$task_3: servers: $task_2: destroying: Destroy request received";
+                logit('info', $logentry);
+                my $dom;
+                eval {$dom = $vmm->get_domain_by_uuid($task_2);} or do {print $@;};
+#                   $dom->destroy();
+                my $virshcmd = "virsh -c $virshemu:///system destroy $task_2";
+                # status is set to -- to prevent redundant UI update from piston.cgi
+                my $nurl = $url . "&status=--&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($nurl)->content();
+                $mortuary{$task_2} = 'destroying';
+                store \%mortuary, $tombstones;
+                run_in_bg($virshcmd) if ($dom);
+                # status is set to -- to prevent redundant UI update from piston.cgi
+                $url .= "&status=--";
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "SHUTDOWN") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                my $logentry = "$task_3: servers: $task_2: shuttingdown: Shutdown request received";
+                logit('info', $logentry);
+                #my $virshcmd = `echo 'qemu-monitor-command --hmp $task_2 "system_powerdown"' | virsh -c $virshemu:///system`;
+                #print $virshcmd,"\n";
+                #my $virshcmd = "/usr/bin/sudo -u irigo /usr/bin/ssh localhost virsh -c $virshemu:///system shutdown $task_2";
+                my $dom;
+                eval {$dom = $vmm->get_domain_by_uuid($task_2);} or do {print $@;};
+                #$dom->shutdown();
+                #sleep 2;
+
+                my $virshcmd = "virsh -c $virshemu:///system shutdown $task_2";
+                my $nurl = $url . "&status=--&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($nurl)->content();
+                $mortuary{$task_2} = 'shuttingdown';
+                store \%mortuary, $tombstones;
+                run_in_bg($virshcmd) if ($dom);
+                $url .= "&status=--";
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "SUSPEND") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                my $logentry = "$task_3: servers: $task_2: suspending: Suspend request received";
+                logit('info', $logentry);
+                my $virshcmd = "virsh -c $virshemu:///system suspend $task_2";
+                run_in_bg($virshcmd);
+                $url .= "&status=--&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "RESUME") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                my $logentry = "$task_3: servers: $task_2: resuming: Resume request received";
+                logit('info', $logentry);
+                my $virshcmd = "virsh -c $virshemu:///system resume $task_2";
+                run_in_bg($virshcmd);
+                $url .= "&status=--&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "MOUNT") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                my $user = $task_3;
+                my $cdrom = $tasks[3];
+                my $logentry ="$user: servers: $task_2: mounting: Mount request received - $cdrom" .
+                ($cdrom eq "--"?"unmounting cdrom":"mounting $cdrom");
+                logit('info', $logentry);
+                if ($cdrom eq "--") {
+                    $pid = fork();
+                    unless ($pid) {
+                        eval {
+                            if ($identity eq "vbox") {
+                                my $vboxcmd = qq|VBoxManage storageattach $task_2 --storagectl "IDE Controller" --port 1 --device 0 --type dvddrive --medium emptydrive --forceunmount|;
+                                print `$virshcmd`,"\n";
+                                1;
+                            } else {
+        #						my $dom = $vmm->get_domain_by_uuid($muuid);
+        #						$dom->attach_device();
+                                my $virshcmd = `virsh -c $virshemu:///system attach-device $task_2 $tenderpathslist[0]/ejectcdrom.xml`;
+                                print `$virshcmd`,"\n";
+                                1;
+                            }
+                        } or do {print $@;};
+                    }
+                } elsif ($cdrom eq "virtio") {
+                    $pid = fork();
+                    unless ($pid) {
+                        eval {
+                            my $virshcmd = qq|virsh -c $virshemu:///system attach-device $task_2 $tenderpathslist[0]/mountvirtio.xml|;
+                            print `$virshcmd`,"\n";
+                            1;
+                        } or do {print $@;};
+                    }
+                } else {
+                    $pid = fork();
+                    unless ($pid) {
+                        eval {
+                            if ($identity eq "vbox") {
+                                my $vboxcmd = qq|VBoxManage storageattach $task_2 --storagectl "IDE Controller" --port 1 --device 0 --type dvddrive --medium "$cdrom" --forceunmount|;
+                                print `$virshcmd`,"\n";
+                                1;
+                            } else {
+        #						my $dom = $vmm->get_domain_by_uuid($muuid);
+        #						$dom->attach_disk();
+                                my $virshcmd = qq{echo 'attach-disk $task_2 "$cdrom" hdd --mode readonly --driver file --type cdrom' | virsh -c $virshemu:///system};
+                                print `$virshcmd`,"\n";
+                                1;
+                            }
+                        } or do {print $@;};
+                    }
+                }
+                chop $@; $logentry .= "\n$@" if $@;
+                $url .= "&status=--";
+                my $newcontent = $browser->get($url)->content();
+            }
+            elsif ($task_1 eq "BACKUP") {
+                my $user = $task_2;
+                my $uistatus = $task_3;
+                my $status = $tasks[3];
+                my $path = $tasks[4];
+                my $backupdir = $tasks[5];
+                my $remolder = $tasks[6];
+                my $targetdir = "$mainvalve\:\:$backupdir";
+                logit("info", "Backup request received $user $uistatus $status \"$path\" \"$targetdir\" $remolder");
+                eval {
+                    #`/usr/local/sbin/movepiston command=backup $user $uistatus $status "$path" "$targetdir" &`;
+
+                    # my $pid = exec(qq{/usr/local/sbin/movepiston command=backup $user $uistatus $status "$path" "$targetdir" &});
+
+                    #my $daemon = Proc::Daemon->new(
+                    #        child_STDOUT => STDOUT,
+                    #        child_STDERR => STDERR,
+                    #        work_dir => '/usr/local/sbin',
+                    #        exec_command => "/usr/local/sbin/movepiston command=backup $user $uistatus $status \"$path\" \"$targetdir\""
+                    #    ) or do {logit("info", "ERROR doing backup of $path $@")};
+                    #my $pid = $daemon->Init() or do {logit("info", "ERROR performing backup of $path $@")};
+
+                    # Line below is the only variant that does not terminate movepiston - not sure why...
+                    # my $backupcmd = qq{/usr/local/sbin/movepiston command=backup $user $uistatus $status "$path" "$targetdir" $remolder &};
+                    # my $pid = system($backupcmd);
+                    my $backupcmd = qq{$user $uistatus $status "$path" "$targetdir" $remolder};
+                    my $backuptasks = "backup." . time;
+                    `echo '$backupcmd' >> /tmp/$backuptasks`;
+                    sleep 1;
+                    my $pid = system(qq{/usr/local/sbin/movepiston command=$backuptasks &});
+                    1;
+                } or do {print "Error! ", $@;};
+                logit("info", "Backup of \"$path\" running...");
+            }
+            elsif ($task_1 eq "MOVE") {
+                my $vm = $task_2;
+                my $targethost = $task_3;
+                my $targetmac = $tasks[3];
+                my $user = $tasks[4];
+                my $logentry = "$nmac: servers: $task_2: moving: Now moving to $targethost...";
+                logit('info', $logentry);
+                my $newurl = $url . "&status=--&logentry=" . uri_escape($logentry);
+                my $newcontent = $browser->get($newurl)->content();
+
+                if ($identity eq "vbox") {
+                    changeHosts($targethost, "piston$targetmac") or
+                        $logentry = "$user: servers: /etc/hosts could not be updated\n".$@."\n"; # probably only needed for KVM but...
+                    eval {
+                        my $cmd = "/usr/bin/VBoxManage controlvm $vm teleport --host $targethost --port 6000";
+                        run_in_bg($cmd);
+                        1;
+                    } or do {$logentry = "$user: Servers: " . "\n".$@."\n";};
+                } else {
+                    changeHosts($targethost, "piston$targetmac") or
+                        $logentry = "$user: servers: /etc/hosts could not be updated\n".$@."\n"; # probably only needed for KVM but...
+                    my $uriport = 15900 + int(rand(200)); # Choose a random port for live migration
+                    my $cmd = "sudo -u irigo virsh -c qemu:///system migrate --migrateuri tcp://$targethost:$uriport --live $vm qemu+ssh://$targethost/system";
+                    logit('info', $cmd);
+                    run_in_bg($cmd);
+                }
+                #eval { # We do not want the same domain reported in different states from two different nodes
+                #    my $dom = $vmm->get_domain_by_uuid($vm);
+                #    if ($dom) {$dom->undefine()};
+                #    1;
+                #} or do {print $@;};
+            }
+            elsif ($task_1 eq "RECEIVE") {
+                my $uuid = $task_2; my $user = $task_3;
+                my $logentry = "$user: servers: $task_2: receiving: Receive domain request received";
+                logit('info', $logentry);
+                my $mounts = `cat /proc/mounts`;
+                for (my $i=0; $i<=$#tenderpathslist; $i++
+                    )
+                {
+                    my $path = $tenderpathslist[$i];
+                    my $host = $tenderlist[$i];
+                    # Directory / mount point must exist
+                    unless (-d $path) {
+                        mkdir "$path" or {print ("Error $path could not be created\n")};
+                    };
+                    unless ($mounts =~ m/$path/i || ($identity eq 'local_kvm' && $host =~ /10\.0\.0\.1/)) {
+                        logit('info', "Mounting (2) $path from $host");
+                        eval {print `mount -o intr,noatime,nfsvers=3 $host $path`; 1;} or do {print $@;};
+                    }
+                }
+
+                my $xml = $browser->get($base_url . "?status=listxml&uuid=$uuid&mac=$mac")->content();
+                if ($xml =~ /<domain /i) {
+                    print "Adding $uuid to move list\n" if ($debug);
+                    push (@receiveuuids, $uuid);
+                    eval { # Undefine domain in case it has been running here before
+                        my $dom = $vmm->get_domain_by_uuid($task_2);
+                        if ($dom) {$dom->undefine()};
+                        1;
+                    } or do {print $@;};
+                    logit('info', "Defining $task_2");
+                    # print $xml if ($debug);
+
+                    # Add bridge interfaces
+                    eval {print `modprobe 8021q`; 1;} or do {print $@;};
+                    eval {print `ifconfig $datanic up`; 1;} or do {print $@;};
+                    if ($xml =~ /<interface type=\'bridge\'/i
+                        )
+                    {
+                        my $char = "<source bridge=";
+                        my $offset = 0;
+                        my $result = index($xml, $char, $offset);
+                        while ($result != -1) {
+                            my $br = substr($xml, $result+18, 5);
+                            if ($br =~ /(\d+)/) {
+                                $br = $1;
+                                $logentry .= " - bringing up bridge br $br on $datanic";
+                                eval {print `vconfig add $datanic $br`; 1;} or do {print $@;};
+                                eval {print `brctl addbr br$br`; 1;} or do {print $@;};
+                                eval {print `brctl stp br$br on`; 1;} or do {print $@;};
+                                eval {print `brctl addif br$br $datanic.$br`; 1;} or do {print $@;};
+                                eval {print `ifconfig $datanic.$br up`; 1;} or do {print $@;};
+                                eval {print `ifconfig br$br up`; 1;} or do {print $@;};
+                            }
+                            $offset = $result + 1;
+                            $result = index($xml, $char, $offset);
+                        }
+                    }
+
+                    chop $@; $logentry .= "\n$br : $@" if $@;
+                    if ($identity eq "vbox") { # vbox domains need to be defined on the receiving end
+                        eval {
+                            my $dom = $vmm->define_domain($xml);
+                            logit ('info', "Defined: " + $dom);
+                            1;
+                        } or do {print $@;};
+                        if ($@) {chop $@; $logentry .= "\n$@";}
+                        # $logentry .= $dom;
+                        my $res;
+                        eval {$res = `/usr/bin/VBoxManage modifyvm $task_2 --teleporter on --teleporterport 6000`; 1;} or
+                        do {$logentry .= "\n$user: servers: ".$res."\n".$@;};
+                        eval {$res = `/usr/bin/VBoxManage startvm $task_2 --type vrdp`; 1;} or
+                        do {$logentry .= "\n$user: servers: ".$res."\n".$@;};
+                    } else {
+                        ;
+                    }
+                } else {
+                    $logentry .= "\n$user: servers: Invalid domain xml...";
+                }
+            }
+            elsif ($task_1 eq "BCLONE") {
+                my $user = $task_3;
+                my $image = uri_unescape($task_2);
+                my $logentry = "$user: images: $image: cloning: Clone request received";
+                logit('info', $logentry);
+                my $master = $browser->get($base_url . "?status=listimagemaster&image=$task_2")->content();
+                if ($master) {
+                    $master = uri_unescape($master);
+                    $logentry = "Cloning $image from $master ";
+                    $image =~ /(.+)\/.*/;
+                    my $dir = $1;
+                    `/bin/mkdir -p "$dir"` unless (-e $dir);
+                    my $cmd = qq|/usr/bin/qemu-img create -f qcow2 -b "$master" "$image"|;
+                    $logentry .= `$cmd`;
+                    $logentry =~ tr/\n/ /;
+                    logit('info', $logentry);
+                } else {
+                    logit('info', "Master for $image not found $master");
+                }
+            }
+            elsif ($task_1 eq "DROWSE") {
+                drowse('', 1);
+            }
+            elsif ($task_1 eq "REMOVE") {
+                my $user = $task_3;
+                my $image = uri_unescape($task_2);
+                my $logentry = "$user: images: $image: removing: Remove image request received";
+                logit('info', $logentry);
+                $logengry = "Removed image $image " . unlink($image);
+                logit('info', $logentry);
+            }
+            elsif ($task_1 eq "PREMOVE") { # preserve backup
+                my $user = $task_3;
+                my $image = uri_unescape($task_2);
+                my $logentry = "$user: images: $image: removing: Premove image request received";
+                logit('info', $logentry);
+                $logengry = "Removed image $image (preserved) " . `mv "$image" "$image.bak"`;
+                logit('info', $logentry);
+            }
+            elsif ($task_1 eq "START") {
+            	$naptime = 1; # Temporarily speed up in order to report back promptly
+                my $user = $task_3;
+                my $logentry = "$user: servers: $task_2: starting: Start request received";
+                logit('info', $logentry);
+
+                my $mounts = `cat /proc/mounts`;
+                for (my $i=0; $i<=$#tenderpathslist; $i++
+                    )
+                {
+                    my $path = $tenderpathslist[$i];
+                    my $host = $tenderlist[$i];
+                    # Directory / mount point must exist
+                    unless (-d $path) {
+                        mkdir "$path" or {print ("Error $path could not be created\n")};
+                    };
+                    if ($mounts =~ m/$path /i || ($identity eq 'local_kvm' && $host =~ /10\.0\.0\.1/)) {
+                        print ("$path already mounted\n") if ($debug);
+                    } else {
+                        logit('info', "Mounting (3) $path from $host");
+                        eval {print `mount -o intr,noatime,nfsvers=3 $host $path`; 1;} or do {print $@;};
+                    }
+                }
+                my $xml = $browser->get($base_url . "?status=listxml&uuid=$task_2&mac=$mac")->content();
+                if ($xml =~ /<domain /i) {
+                    logit('info', "Creating $task_2");
+                    unless ($identity eq "local_kvm") {
+                        # Add bridge interfaces
+                        eval {print `modprobe 8021q`; 1;} or do {print $@;};
+                        eval {print `ifconfig $datanic up`; 1;} or do {print $@;};
+                        if ($xml =~ /<interface type=\'bridge\'/i) {
+                            my $char = "<source bridge=";
+                            my $offset = 0;
+                            my $result = index($xml, $char, $offset);
+                            while ($result != -1) {
+                                my $br = substr($xml, $result+18, 5);
+                                if ($br =~ /(\d+)/) {
+                                    $br = $1;
+                                    $logentry .= " - bringing up bridge br$br on $datanic ";
+                                    eval {print `vconfig add $datanic $br`; 1;} or do {print $@;};
+                                    eval {print `brctl addbr br$br`; 1;} or do {print $@;};
+                                    eval {print `brctl stp br$br on`; 1;} or do {print $@;};
+                                    eval {print `brctl addif br$br $datanic.$br`; 1;} or do {print $@;};
+                                    eval {print `ifconfig $datanic.$br up`; 1;} or do {print $@;};
+                                    eval {print `ifconfig br$br up`; 1;} or do {print $@;};
+                                }
+                                print $logentry if ($debug);
+                                $offset = $result + 1;
+                                $result = index($xml, $char, $offset);
+                            }
+                        }
+                        chop $@; $logentry .= " -- $br : $@" if $@;
+                    }
+
+                    eval {
+                        my $domid = `virsh -c $virshemu:///system domid $task_2`;
+                        my $virshcmd = "virsh -c $virshemu:///system undefine $domid";
+                        print  `$virshcmd` if ($domid);
+                        1;
+                    } or do {
+                      ;#  print $@;
+                    };
+
+                    if ($xml=~/<source file=\'(.+)\'/i
+                        && -s $1)
+                    {
+                        eval {
+							if ($xml =~ /<hostdev /i) {
+#								`modprobe pci_stub`;
+#								`echo "10de 1b81" > /sys/bus/pci/drivers/pci-stub/new_id`;
+#								`echo "0000:01:00.0" > /sys/bus/pci/devices/0000:01:00.0/driver/unbind; echo "0000:01:00.0" > /sys/bus/pci/drivers/pci-stub/bind`;
+#								`echo "0000:02:00.0" > /sys/bus/pci/devices/0000:02:00.0/driver/unbind; echo "0000:02:00.0" > /sys/bus/pci/drivers/pci-stub/bind`;
+#								`echo 1 > /sys/bus/pci/devices/0000:01:00.1/remove`;
+#								`echo 1 > /sys/bus/pci/devices/0000:02:00.1/remove`;
+
+							#	`echo "0000:01:00.1" > /sys/bus/pci/devices/0000:01:00.1/driver/unbind; echo "0000:01:00.1" > /sys/bus/pci/drivers/pci-stub/bind`;
+							#	`echo "0000:02:00.1" > /sys/bus/pci/devices/0000:02:00.1/driver/unbind; echo "0000:02:00.1" > /sys/bus/pci/drivers/pci-stub/bind`;
+							}
+							print "Defining domain from:\n$xml\n" if ($debug);
+                            print `echo "$xml" > /tmp/$task_2.xml`;
+                            my $virshcmd = "virsh -c $virshemu:///system create /tmp/$task_2.xml";
+                            run_in_bg( $virshcmd );
+                            logit ('info', "Created: $task_2");
+                            $logentry .= " - Created: $task_2" ;
+                            1;
+                        } or do {print "Error: " . $@;};
+                        if ($@) {
+                            chop $@; $logentry .= "\n$@";
+                            # $returntasks = uri_escape("START $task_2 $user"); # START did not succeed - return it to try again
+                        }
+                    } else {
+                        logit ('info', "Image $1 not found creating: $task_2");
+                        $logentry .= " - Image $1 not found creating: $task_2" ;
+                    }
+                } else {
+                    $logentry .= " - $user: servers: Invalid domain xml...";
+                }
+                my $rtasks = $returntasks?"returntasks=$returntasks":'';
+                my $newurl = $url . "&status=--&logentry=". uri_escape($logentry) . $rtasks;
+                my $newcontent = $browser->get($newurl)->content();
+            } elsif ($task_1 ne "OK") {
+                my $logentry = "--: --: Info not accepted: $task_1 - $task_2 - $task_3";
+                logit('debug', $logentry);
+            }
+		}
+        if (@receiveuuids) {
+            $url .= "&receive=" . uri_escape(join(',', @receiveuuids)) . "&status=--";
+            logit('info', "Asking to send me: " . join(',', @receiveuuids) . " $url ") if ($debug);
+            my $newcontent = $browser->get($url)->content();
+        }
+	} else {
+        logit('info', "Couldn't get: $url");
+	}
+	if ($pid) {return "";}
+	else {return $running;}
+}
+
+sub logit {
+	my ($priority, $msg) = @_;
+	if ($priority =~ /info|err/ || $debug) {print pretty_time(), ": ", $priority, ": ", $msg, "\n"};
+
+	setlogsock('unix');
+	# Log the PID and to CONSole if there's a problem.  Use facility 'user'.
+    openlog(basename($0), 'pid,cons', 'user');
+    syslog($priority, "$nmac: $msg");
+    closelog();
+}
+
+sub dominfo {
+    my $vmm = shift;
+	my $domreq = ();
+	$domreq->{'dominfo'} = 1;
+	my @domains = $vmm->list_domains();
+	my %activedoms;
+	my $i = 0;
+    if (!$cgset) {
+        setCgroups();
+        $cgset = 1;
+    }
+
+    print "Looking at " . scalar @domains . " domains\n" if ($debug);
+	foreach my $dom (@domains) {
+	    eval {
+            my $xml = $dom->get_xml_description();
+            my $domxml = XMLin($xml);
+            my $display = $domxml->{devices}->{graphics}->{type};
+            my $port = $domxml->{devices}->{graphics}->{port};
+            my $domstate = $domstates[$dom->get_info->{ 'state' }];
+            my $domuuid = $dom->get_uuid_string;
+            $i++;
+            $activedoms{$domuuid} = $domstate;
+        #    $dominfo .= "&dom$i=$domuuid&domstate$i=$domstate&domdisplay$i=" . $display . "&domport$i=" . $port;
+            $domreq->{"dom$i"} = $domuuid;
+            $domreq->{"domstate$i"} = $domstate;
+            $domreq->{"domdisplay$i"} = $display;
+            $domreq->{"domport$i"} = $port;
+
+            if (-e "/tmp/$domuuid.xml") {
+                unlink "/tmp/$domuuid.xml";
+            }
+
+            # If cgroups are enabled, put in values
+            # We put in values in /mnt/cgroup/libvirt/qemu/ instead of for individual domains
+    #        if (-d '/mnt/' && -e '/proc/cgroups') {
+    #            if ($xml=~/<name>(.+)<\/name>/) {
+    #                my $domname = $1;
+    #                if (-e "/tmp/$domuuid.xml" && -d "/mnt/cgroup/libvirt/qemu/$domname/") {
+    #                    logit('info', "Setting cgroups limits $readlimit/$writelimit, $iopsreadlimit/$iopswritelimit for $domuuid ($domname)");
+    #                    `echo "8:0 $readlimit" > "/mnt/cgroup/libvirt/qemu/$domname/blkio.throttle.read_bps_device"`;
+    #                    `echo "8:0 $writelimit" > "/mnt/cgroup/libvirt/qemu/$domname/blkio.throttle.write_bps_device"`;
+    #                    `echo "8:0 $iopsreadlimit" > "/mnt/cgroup/libvirt/qemu/$domname/blkio.throttle.read_iops_device"`;
+    #                    `echo "8:0 $iopswritelimit" > "/mnt/cgroup/libvirt/qemu/$domname/blkio.throttle.write_iops_device"`;
+    #                    unlink "/tmp/$domuuid.xml";
+    #                }
+    #            } else {
+    #                logit('info', "Not setting cgroup limits for " . $dom->get_name() ) if ($debug);
+    #            }
+    #        }
+            1;
+	    } or do {print $@;};
+
+	}
+	@domains = $vmm->list_defined_domains();
+	print "Looking at " . scalar @domains . " defined domains\n" if ($debug);
+	foreach my $dom (@domains) {
+	    eval {
+            my $domstate = $domstates[$dom->get_info->{ 'state' }];
+            my $domuuid = $dom->get_uuid_string;
+            if ($domstate ne "running") {
+                $i++;
+                $activedoms{$domuuid} = $domstate;
+                $domreq->{"dom$i"} = $domuuid;
+                $domreq->{"domstate$i"} = $domstate;
+            }
+            eval {
+                if ($domstate eq "shutoff") {$dom->undefine()};
+                1;
+            } or do {print $@;};
+	    } or do {print $@;};
+	}
+	foreach my $domuuid (keys %mortuary) {
+	    unless ($activedoms{$domuuid}) {
+            $i++;
+            $domreq->{"dom$i"} = $domuuid;
+            $domreq->{"domstate$i"} = 'shutoff';
+			delete $mortuary{$domuuid};
+	    }
+    }
+    if (%mortuary) {
+        store \%mortuary, $tombstones;
+    } else {
+        `> $tombstones` if (-e $tombstones && !(-z $tombstones));
+    }
+	return $domreq;
+}
+
+sub drowse {
+    my $vmm = shift;
+    $vmm = Sys::Virt->new(address => "$virshemu:///system") unless $vmm;
+    my $drowsenow = shift;
+
+	my @domains = $vmm->list_domains();
+	my $i = 0;
+	foreach my $dom (@domains) {
+		if ($domstates[$dom->get_info->{ 'state' }] eq "running" || $domstates[$dom->get_info->{ 'state' }] eq "paused") {
+			$i++;
+			last;
+		}
+	}
+	if ($i==0) {$drowsiness += $naptime} else {$drowsiness = 0};
+	if (($sleepafter > 0 && $drowsiness > $sleepafter) || $drowsenow) {
+        if ($identity eq "vbox") {
+            logit('info', "Taking down Virtual Box piston");
+            print `/etc/init.d/vboxdrv stop`,"\n";
+        } else {
+            logit('info', "Taking down KVM piston");
+            print `/etc/init.d/kvm stop`,"\n";
+        }
+        $status = "drowsing";
+        my $logentry = "--: nodes: $mac: $status: Feeling drowsy ($drowsiness >  $sleepafter) - putting node to sleep";
+        logit('info', $logentry);
+        $running = 0;
+
+		my $meminfo = `cat /proc/meminfo`;
+		$meminfo =~ m/MemTotal:\s*(.*) kB\n/i;
+		my $memtotal = $1;
+		$meminfo =~ m/MemFree:\s*(.*) kB\n/i;
+		my $memfree = $1;
+
+		my $url = $base_url . "?mac=" . uri_escape($mac);
+		$url .= "&status=$status&logentry=" . uri_escape($logentry) ."&memtotal=$memtotal&memfree=$memfree&identity=$identity";
+		`umount -a`;
+		my $newcontent = $browser->get($url)->content();
+		my @clines = split /\n/, $newcontent;
+        foreach my $line (@clines) {
+            if ($line =~ m/^\S+=SWEETDREAMS/ig) {
+        		print "Awating power off...\n";
+                return;
+            }
+        }
+
+        $meminfo = `cat /proc/acpi/sleep`;
+        my $s3sleep = ($meminfo =~ m/S3/);
+        if ($s3sleep) {
+            print `/etc/init.d/libvirt-bin stop`,"\n" if ($identity eq "vbox");
+            print `/etc/acpi/sleep.sh`;
+        } else {
+            print `/sbin/initctl --no-wait stop movepiston`;
+           `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
+            print `poweroff`;
+#            print `/sbin/shutdown -P +1`;
+        }
+	};
+}
+
+sub changeHosts {
+    my $hosts = "/etc/hosts";
+	my $targetip = $_[0];
+	my $targetname = $_[1];
+	return 0 unless ($targetip && $targetname);
+	copy($hosts, "$hosts.bak") or return 0;
+
+	my $newfile = "";
+	my $match;
+	open (FILE, $hosts);
+	while (<FILE>) {
+		chomp;
+		my $line = $_;
+		$newfile .= "$line\n" unless ($line =~ /^$targetip/);
+	}
+   	$newfile .= "$targetip $targetname";
+	close (FILE);
+	open( FILE, ">$hosts" ) or return 0;
+	print FILE $newfile;
+	close(FILE);
+	return "$hosts updated\n";
+}
+
+sub pretty_time {
+	my $current_time = time;
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($current_time);
+	my $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year+1900,$mon+1,$mday,$hour,$min,$sec;
+	return $pretty_time;
+}
+
+sub recurse {
+	my($path) = shift; # @_;
+	my @files;
+	## append a trailing / if it's not there
+	$path .= '/' if($path !~ /\/$/);
+	## loop through the files contained in the directory
+	for my $eachFile (glob($path.'*')) {
+		## if the file is a directory
+		if( -d $eachFile) {
+			## pass the directory to the routine ( recursion )
+			push(@files,recurse($eachFile));
+		} else {
+			push(@files,$eachFile);
+		}
+	}
+	return @files;
+}
+
+sub getSizes {
+    my $f = shift;
+    my $lmtime = shift;
+
+    #print "$f :";
+    my @stat = stat($f);
+    my $size = $stat[7];
+    my $realsize = $stat[12] * 512;
+    my $virtualsize = $size;
+    my $mtime = $stat[9];
+# Only fire up qemu-img etc. if image has been modified
+    #print " $lmtime : $mtime\n";
+    if ($mtime ne $lmtime) {
+        my($fname, $dirpath, $suffix) = fileparse($f, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
+# Special handling of vmdk's
+        if ($suffix eq ".vmdk") {
+            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
+            $virtualsize = int($1);
+            if ( -s ($dirpath . $fname . "-flat" . $suffix)) {
+                my @fstatus = stat($dirpath . $fname . "-flat" . $suffix);
+                my $fsize = $fstatus[7];
+                my $frealsize = $fstatus[12] * 512;
+                $size += $fsize;
+                $virtualsize += $fsize;
+                $realsize += $frealsize;
+            }
+            my $i = 1;
+            while (@fstatus = stat($dirpath . $fname . "-s00$i" . $suffix)) {
+                $fsize = $fstatus[7];
+                $frealsize = $fstatus[12] * 512;
+                $size += $fsize;
+                $virtualsize += $fsize;
+                $realsize += $frealsize;
+                $i++;
+            }
+# Get virtual size of qcow2 auto-grow volumes
+        } elsif ($suffix eq ".qcow2") {
+            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
+            $virtualsize = int($1);
+# Get virtual size of vdi auto-grow volumes
+        } elsif ($suffix eq ".vdi") {
+            my $qinfo = `/usr/bin/VBoxManage showhdinfo "$f"`;
+            $qinfo =~ /Logical size:\s*(\d+) MBytes/g;
+            $virtualsize = int($1) * 1024 * 1024;
+        }
+# Actual used blocks times block size on disk, i.e. $realsize may be bigger than the
+# logical size of the image file $virtualsize and the logical provisioned size of the disk $virtualsize
+# in order to minimize confusion, we set $realsize to $size if this is the case
+        $realsize = $size if ($realsize > $size);
+        return ($size, $realsize, $virtualsize, $mtime);
+    } else {
+        return 0;
+    }
+
+}
+
+sub updatePistonStats {
+    my $vmm = shift;
+	logit('info', "Updating domain statistics...") if $debug == 1;
+
+	# Connect to libvirt...
+	$vmm = Sys::Virt->new(address => "$virshemu:///system") unless $vmm;
+	my @domains = $vmm->list_domains();
+	my $postreq = ();
+	my $i = 0;
+	# Loop through all local domains...
+	foreach my $dom (@domains) {
+		$i++;
+		print "\tProcessing '",$dom->get_name(),"' [",$dom->get_uuid_string(),"]...\n" if $debug;
+#		my ($timestamp_seconds, $timestamp_microseconds_decimals) = gettimeofday();
+        my $timestamp_useconds = Time::HiRes::time();
+        my $timestamp_seconds = floor($timestamp_useconds);
+        my $uuid = $dom->get_uuid_string();
+		$postreq->{"$i.uuid"} = $uuid;
+#		$postreq->{"$i.timestamp"} = sprintf("%.0f%06.0f", $timestamp_seconds, $timestamp_microseconds_decimals);
+		$postreq->{"$i.timestamp"} = $timestamp_seconds;
+
+		# Fetch basic node/domain information (cpu, memory, cputime etc)...
+		my $dom_info = $dom->get_info();
+		while (my($key, $value) = each(%$dom_info)) {
+			$postreq->{"$i.domain.$key"} = $value;
+		};
+
+        my $t2 = $timestamp_useconds;
+        my $t1 =  $oldTimes{$uuid}->{timestamp_useconds};
+        my $c2 = $dom_info->{cpuTime};
+        my $c1 = $oldTimes{$uuid}->{cpuTime};
+        my $delta = $t2-$t1;
+
+        if ($t1 && $c2>$c1) { # Work across reboots
+            $postreq->{"$i.domain.cpuLoad"} = sprintf("%.4f",  (($c2 - $c1)/1000000000) / $delta );
+            $postreq->{"$i.delta"} = floor($delta);
+        }
+        $oldTimes{$uuid}->{cpuTime} = $dom_info->{cpuTime};
+        $oldTimes{$uuid}->{timestamp_useconds} = $timestamp_useconds;
+        $oldTimes{$uuid}->{timestamp} = $timestamp_seconds;
+		# Fetch the xml description of the specific domain...
+		my $domxml = XMLin($dom->get_xml_description());
+
+		# Process block devices...
+		my @devices;
+		# Collect statistics for several block devices...
+		if (ref($domxml->{devices}->{disk}) eq 'ARRAY') {@devices = @{$domxml->{devices}->{disk}};}
+		# Collect statistics for a single block device...
+		else {push @devices, $domxml->{devices}->{disk};}
+
+        my $wr2;
+        my $wr1 = $oldTimes{$uuid}->{"wr_kbytes_s"};
+        my $rd2;
+        my $rd1 = $oldTimes{$uuid}->{"rd_kbytes_s"};
+        foreach my $device (@devices) {
+            if ($device->{device} eq 'disk') {
+                my $blockdev = $device->{target}->{dev};
+                eval {
+                    my $blockstats = $dom->block_stats($blockdev);
+                    while (my($key, $value) = each(%$blockstats)) {
+                        $postreq->{"$i.blk.$blockdev.$key"} = $value;
+                    #    $postreq->{"$i.blk.hd.$key"} += $value; # We report collected traffic under hd
+                        $wr2 += $value if ($key eq 'wr_bytes');
+                        $rd2 += $value if ($key eq 'rd_bytes');
+                    }
+                };
+
+                print("\tFailed while requesting block device statistics for $blockdev, skipping...") if $@;
+            }
+        }
+        $postreq->{"$i.blk.hd.wr_bytes"} = $wr2;
+        $postreq->{"$i.blk.hd.rd_bytes"} = $rd2;
+        if ($t1 && $c2>$c1) {
+            $postreq->{"$i.blk.hd.wr_kbytes_s"} = sprintf("%.2f",  (($wr2 - $wr1)/1024) / $delta );
+            $postreq->{"$i.blk.hd.rd_kbytes_s"} = sprintf("%.2f",  (($rd2 - $rd1)/1024) / $delta );
+            $postreq->{"$i.blk.hd.wr_kbytes_s"} = 0 if ($postreq->{"$i.blk.hd.wr_kbytes_s"} eq '0.00');
+            $postreq->{"$i.blk.hd.rd_kbytes_s"} = 0 if ($postreq->{"$i.blk.hd.rd_kbytes_s"} eq '0.00');
+        }
+        $oldTimes{$uuid}->{wr_kbytes_s} = $wr2;
+        $oldTimes{$uuid}->{rd_kbytes_s} = $rd2;
+
+		# Collect statistics for network interfaces...
+		my @netdevices;
+		if (ref($domxml->{devices}->{interface}) eq 'ARRAY') {@netdevices = @{$domxml->{devices}->{interface}};}
+		else {push @netdevices, $domxml->{devices}->{interface};}
+
+        my $rx2;
+        my $rx1 = $oldTimes{$uuid}->{"rx_kbytes_s"};
+        my $tx2;
+        my $tx1 = $oldTimes{$uuid}->{"tx_kbytes_s"};
+        foreach my $device (@netdevices) {
+            my $interface = $device->{target}->{dev};
+            if ($interface) {
+                eval {
+                    my $ifstats = $dom->interface_stats($interface);
+                    while (my($key, $value) = each(%$ifstats)) {
+    					$postreq->{"$i.if.$interface.$key"} = $value;
+                        $postreq->{"$i.if.vnet.$key"} += $value; # We report collected traffic under vnet
+                        $rx2 += $value if ($key eq 'rx_bytes');
+                        $tx2 += $value if ($key eq 'tx_bytes');
+                    }
+                };
+                print("\tFailed while requesting interface statistics ('"+$@+"'), skipping...") if $@;
+            }
+		}
+        if ($t1 && $c2>$c1) {
+            $postreq->{"$i.if.vnet.rx_kbytes_s"} = sprintf("%.2f",  (($rx2 - $rx1)/1024) / $delta );
+            $postreq->{"$i.if.vnet.tx_kbytes_s"} = sprintf("%.2f",  (($tx2 - $tx1)/1024) / $delta );
+            $postreq->{"$i.if.vnet.rx_kbytes_s"} = 0 if ($postreq->{"$i.if.vnet.rx_kbytes_s"} eq '0.00');
+            $postreq->{"$i.if.vnet.tx_kbytes_s"} = 0 if ($postreq->{"$i.if.vnet.tx_kbytes_s"} eq '0.00');
+        }
+        $oldTimes{$uuid}->{rx_kbytes_s} = $rx2;
+        $oldTimes{$uuid}->{tx_kbytes_s} = $tx2;
+	}
+    if ($postreq) {
+        # POST request to admin server...
+       	logit('info', "Posting stats to: $stats_url") if $debug;
+       	print("POSTREQ:\n".Dumper($postreq)) if $debug;
+       	$content = $browser->post($stats_url, $postreq)->content();
+        print "$content\n" if $debug;
+    }
+}
+
+sub backup {
+	my $user = $_[0];
+    my $uistatus =  $_[1];
+    my $status =$_[2];
+    my $path = $_[3];
+	my $targetdir = $_[4];
+	my $remolder = $_[5];
+	my $pool = "/mnt/stabile/node";
+    my $image;
+    my $subdir; # 1 level of subdirs supported
+    my $res;
+	return 0 unless ($path && $targetdir && $user);
+    # $image is the image to back up (including potential subdir), $pool the source dir (storage pool) and $targetdir the target dir (general backup dir)
+
+    #mkdir "$targetdir/$user" unless -d "$targetdir/$user"; # Create the target dirs which will contain the backup
+    $path =~ /\/$user\/(.+)/;
+    my $imagepath = $1;
+    if ($path =~ /\/$user\/(.+)\/(.+)/) {
+        $subdir = $1;
+        $image = $2;
+    } else {
+        $path =~ /\/$user\/(.+)/;
+        $image = $1;
+    }
+    if ($subdir) { # Creation of $targetdir/$user is done when user logs in
+        #mkdir "$targetdir/$user/$subdir" unless -d "$targetdir/$user/$subdir";
+        #mkdir "$targetdir/$user/$subdir/$image" unless -d "$targetdir/$user/$subdir/$image";
+        my $dironly = $1 if ($targetdir =~ /.+::(.+)/);
+        eval {$res .= `/usr/bin/sudo -u irigo /usr/bin/ssh $mainvalve mkdir "$dironly/$user/$subdir"`; 1;}
+    } else { # Image subdir is created by rdiff-backup
+        #mkdir "$targetdir/$user/$image" unless -d "$targetdir/$user/$image";
+    }
+    $res .= `/bin/echo $status > "$pool/$user/$imagepath.meta"`;
+
+    if (-d "/mnt/$user-$image") {
+        $res .= "Image is already being backed up";
+    } else {
+        my $snapname;
+        my $snappath;
+        my $snapsrcdir;
+        if ($status eq "lbackingup") { # Do a local lvm snapshot before backing up
+            $res .= `/sbin/modprobe dm-snapshot`; # Make sure we can make lvm snapshots
+            $snapname = "$user-$image";
+            $snapname =~ tr/ /-/; #No spaces allowed in snapshot names...
+            $snapname =~ tr/@/+/; #No spaces allowed in snapshot names...
+            $snappath = "/mnt/$snapname"; # The path to mount our snapshot on
+            mkdir $snappath;
+
+            my $q = `/bin/cat /proc/mounts | grep $pool`; # Find the lvm volume mounted on /mnt/images
+            $q =~ /\/dev\/mapper\/(\S+)-(\S+) $pool .+/;
+            my $lvolgroup = $1;
+            my $lvol = $2;
+
+            $res .= `/sbin/lvcreate -L1024M -s -n $snapname /dev/$lvolgroup/$lvol`; # Take a snapshot
+            $res .= changeFstab($snapname, $pool); # Change fstab to allow mount
+            $res .= `/bin/mount "$snappath"`; # Mount the snapshot
+            $snapsrcdir = "$snappath/$user"; # Change source dir to our new snapshot
+        } else {
+            $snapsrcdir = "$pool/$user";
+        }
+
+        # Do the backup
+        eval {$res .= `/usr/bin/sudo -u irigo /usr/bin/rdiff-backup --print-statistics --include "$snapsrcdir/$imagepath" --exclude '**' "$snapsrcdir" "$targetdir/$user/$imagepath"`; 1;}
+        or do {$res .= "Problem executing backup";};
+        if ($remolder) {
+            eval {$res .= `/usr/bin/sudo -u irigo /usr/bin/rdiff-backup --print-statistics --force --remove-older-than $remolder "$targetdir/$user/$imagepath"`; 1;}
+            or do {$res .= "Problem cleaning up old backups";};
+        }
+        $res .= qq{/usr/bin/sudo -u irigo /usr/bin/rdiff-backup --print-statistics --include "$snapsrcdir/$imagepath" --exclude '**' "$snapsrcdir" "$targetdir/$user/$imagepath"};
+        # Clean up
+        if ($status eq "lbackingup") {
+            $res .= `/bin/umount "$snappath"`;
+            $res .= changeFstab($snapname, $pool, 1);
+            $res .= `/bin/rm -r "$snappath"` unless (-d "$snappath/$user");
+            $res .= `/sbin/lvremove -f /dev/$lvolgroup/$snapname`;
+        }
+        logit("info", "Backed up $snapsrcdir/$imagepath to $targetdir/$user/$imagepath");
+    }
+	unlink "$pool/$user/$imagepath.meta";
+    print "$res\n" if ($debug);
+
+
+    my $mes = "";
+    if ($res =~ /TotalDestinationSizeChange (\d+)(.+\))/) {
+        if ($1 eq "0") {
+            $mes = "No changes to back up ($imagepath)";
+        } else {
+            $mes = "Backed up $1$2 ($imagepath)";
+        }
+    } elsif ($res =~ /(Image is already being backed up)/) {
+        $mes = "$1 ($imagepath)";
+    } else {
+        my $hres = $res;
+        $hres =~ s/\n/<br>/g;
+        $hres =~ s/\"/\\"/g;
+        $mes = "Backup failed ($imagepath)";
+        logit('err', "Backup of $imagepath failed - $hres");
+    }
+    my $logentry = "$user: images: $path: $status: $mes";
+
+    # Update the client UI
+    my $url = $base_url . "?mac=$mac&status=updateui&logentry="  . uri_escape($logentry);
+    $content = $browser->get($url);
+}
+
+sub changeFstab {
+	my $image = $_[0];
+	my $pool = $_[1];
+	my $remove = 1 if $_[2];
+	return 0 unless ($image);
+	return 0 unless (index($image, " ")==-1);
+	copy($fstab, "$fstab.steam.bak") or return 0;
+
+	my $q = `/bin/cat /proc/mounts | grep $pool`; # Find the lvm volume mounted on /mnt/images
+    $q =~ /\/dev\/mapper\/(\S+)-(\S+) $pool .+/;
+    my $lvolgroup = $1;
+    my $lvol = $2;
+
+	my $newfile = "";
+	my $match;
+	open (FILE, $fstab);
+	while (<FILE>) {
+		chomp;
+		my $line = $_;
+		if ($line =~ /^\/dev\/$lvolgroup\/$image/) {
+			$newfile .= "$line\n" unless ($remove);
+			$match = 1;
+		} else {
+			$newfile .= "$line\n";
+		}
+	}
+	$newfile .= "/dev/$lvolgroup/$image /mnt/$image ext3 users,ro 0 0\n" unless ($match || $remove);
+	close (FILE);
+	open( FILE, ">$fstab" );
+	print FILE $newfile;
+	close(FILE);
+	return "fstab updated $remove\n";
+}
+
+sub initializeLocalDisk {
+    my $initld = shift;
+    my $force = shift;
+    my $res;
+    if ((-e "/dev/sda" || -e "/dev/vda")&& -e '/sbin/sfdisk') {
+        my $dev = "sda";
+        $dev = "vda" if (-e "/dev/vda");
+        my $part = $dev . "1";
+        `chmod 666 /dev/zfs` if (-e '/dev/zfs'); # TODO: This should be removed once we upgrade to Bionic and zfs allow is supported
+        my $partinfo = `/sbin/sfdisk -q -d /dev/$dev`;
+        my $zlist = `zpool list`;
+
+        if (!$force) {
+            my $mounts = `/bin/cat /proc/mounts`;
+            if ($mounts =~ /volgroup1-lvol1/ || $mounts =~ /\mnt\/stabile\/node/) {
+                $res = "Local disk is already mounted.";
+                print "$res\n";
+                return $res;
+            } else {
+                if (( $partinfo =~ /\/dev\/$part.+size=.*(\d+),/i && $1>0 ) || $zlist =~ /stabile-node/) {
+                    $res = "Local disk is already partitioned. Trying to mount.";
+                    if ($initld eq 'zfs') {
+                        $res .= " ZFS specified.";
+                        `zpool import stabile-node`;
+                        `zfs mount stabile-node/node`;
+                    } else {
+                        $res .= " LVM specified.";
+                        `/bin/mount /dev/volgroup1/lvol1 /mnt/stabile/node`;
+                    }
+                    print "$res\n";
+                }
+                `/bin/chmod 777 /mnt/stabile/node`;
+                return $res;
+            }
+        }
+
+        if ($force) {
+            if (`ls -l /mnt/stabile/node/*/*.qcow2`) {
+                $res = "Node storage dir not empty";
+                print "$res\n";
+                return $res;
+            }
+            print `umount /mnt/stabile/node`;
+            print `umount /stabile-node`;
+            my $mounts = `cat /proc/mounts`;
+            if ($mounts =~ /stabile-node/ || $mounts =~ /\/mnt\/stabile\/node/) {
+                $res = "Unable to unmount node storage\n";
+                print "$res\n";
+                return $res;
+            }
+            print `zpool destroy stabile-node`;
+            print `vgremove -f volgroup1`;
+        }
+        if ($initld eq 'zfs') { # ZFS was specified
+            $res = "Initializing local disk with ZFS...";
+            print "$res\n";
+            print `rmdir /mnt/stabile/node` if (-e "/mnt/stabile/node" && !(`ls /mnt/stabile/node`));
+            print `parted -s /dev/$dev mklabel GPT`;
+            print `zpool create stabile-node /dev/$dev`;
+            print `zfs create stabile-node/node`;
+            print `zfs set mountpoint=/mnt/stabile/node stabile-node/node`;
+            print `zfs set atime=off stabile-node/node`;
+        } else { # Assume LVM
+            $res = "Initializing local disk with LVM...";
+            print "$res\n";
+            `/sbin/sfdisk -d /dev/$dev > /root/$dev-partition-sectors.save`;
+            `sfdisk /dev/$dev << EOF\n;\nEOF`;
+            `/sbin/vgcreate -f volgroup1 /dev/$part`;
+            `/sbin/vgchange -a y volgroup1`;
+            my $totalpe =`/sbin/vgdisplay volgroup1 | grep "Total PE"`;
+            $totalpe =~ /Total PE\s+(\d+)/;
+            my $size = $1 -2000;
+            `/sbin/lvcreate -l $size volgroup1 -n lvol1`;
+            `/sbin/mkfs.ext3 /dev/volgroup1/lvol1`;
+            `/bin/mount /dev/volgroup1/lvol1 /mnt/stabile/node`;
+            `/bin/chmod 777 /mnt/stabile/node`;
+        }
+        my $lsistatus = `/usr/local/bin/lsi.sh status`;
+        if ($lsistatus =~ /Adapter 0/) {
+            #unless (-e "/etc/cron.hourly/lsicheck.sh") {
+            print "Adding hourly cron check of LSI raid\n";
+            my $alertemail = `cat /etc/stabile/nodeconfig.cfg | grep ALERT_EMAIL | cut -f2 -d "="`;
+            `/bin/echo "#!/bin/bash\n\n/usr/local/bin/lsi.sh checkNemail $alertemail" > /etc/cron.hourly/lsicheck.sh`;
+            $res .= "Adding hourly cron check of LSI raid";
+            print "$res\n";
+            `/bin/echo "#!/bin/bash\n\n/usr/local/bin/lsi.sh status | mail -s \\"$hostname LSI status\\" $alertemail" > /etc/cron.weekly/lsistatus.sh`;
+            #}
+        }
+    } else {
+        $res = "No local disk";
+        print "$res\n";
+    }
+    return $res;
+}
+
+sub dont_die {
+    print "We trudge along\n";
+}
+
+sub run_in_bg {
+    my ($cmd) = @_;
+    my $proc1 = Proc::Background->new($cmd);
+}
+
+sub setCgroups {
+    if (-d "/sys/fs/cgroup") {
+        print `cgconfigparser -l /etc/cgconfig.conf`;
+    } else {
+        print "cgroups are not enabled!!\n";
+    }
+}
+
+sub updateInterfaces {
+    if ($identity eq 'local_kvm' || -e "/etc/stabile/config.cfg") {
+        unless (`ifconfig | grep "inet 10\.0\.0\.1"`) {
+            print "Adding 10.0.0.1 as to $datanic\n";
+            `ifconfig $datanic:1 10.0.0.1/24 up`;
+            `steamExec post-wake`;
+        }
+    }
+}
+
+sub TERMINATE {
+	$running = 0;
+	$status = "shutdown" unless ($status eq "asleep");
+    $glogentry = "--: nodes: $nmac: $status: Shutting down $identity piston...";
+	updatePistonInfo();
+	logit("debug", "Shutting down");
+	if ($identity eq "vbox") {
+        logit('info', "Shutting down Virtual Box piston");
+        print `/etc/init.d/vboxdrv stop`,"\n";
+	} else {
+        logit('info', "Shutting down KVM piston");
+        print `/etc/init.d/kvm stop`,"\n";
+	}
+	##logit("debug", `killall movepiston`);
+	##exit(0);
+}
+
+##

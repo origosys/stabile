@@ -1,0 +1,9 @@
+Main function calling system:
+	1 Never change the names, the name unless you know what you're doing.
+	  It's used as an index to where the last install reached.
+
+	2 All errors must be caught, 0 (zero) must be returned if everything went okay.
+
+	3 Subroutines MUST be reentrant!
+
+	4 It is adviseable to print the command run using print()

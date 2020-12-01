@@ -1,0 +1,29 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+$ENV{PATH} = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
+my $PING = "arping -c2 -w4 -C1";
+my $if = $ARGV[0];
+$if = $1 if ($if =~ /(.+)/);
+my $host = $ARGV[1];
+$host = $1 if ($host =~ /(.+)/);
+
+# Setting real UID: $< to UID: $>
+$< = $>;
+
+my $cmd = "$PING -I $if $host"; # >/dev/null 2>/dev/null
+my $res = `$cmd`;
+#if ($res =~ /0 response/) {
+print $res;
+if ($?) {
+    print "FAIL\n";
+    exit 1;
+} else {
+    print "SUCCESS\n";
+    exit 0;
+}

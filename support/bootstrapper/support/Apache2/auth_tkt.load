@@ -1,0 +1,1 @@
+LoadModule auth_tkt_module /usr/lib/apache2/modules/mod_auth_tkt.so

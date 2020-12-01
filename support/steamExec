@@ -1,0 +1,1301 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+package Stabile::Steamexec;
+
+use Tie::DBI;
+use URI::Escape;
+use File::Basename;
+use File::Copy;
+use File::Rsync;
+use Proc::ProcessTable;
+use Sys::Syslog qw( :DEFAULT setlogsock);
+use ConfigReader::Simple;
+use Time::Local;
+use XML::Simple;
+use Data::Dumper;
+use Data::UUID;
+use lib '/var/www/stabile/cgi';
+use Stabile;
+
+my $arg1 = shift if $ARGV[0];
+my $status = shift if $ARGV[0];
+my $oldstatus = shift if $ARGV[0];
+my $path1 = shift if $ARGV[0];
+my $path2 = shift if $ARGV[0];
+my $cmd1 =  shift if $ARGV[0];
+my $cmd2 =  shift if $ARGV[0];
+#my $cmd = join(" ", @ARGV); # The rest
+my $res;
+my $dsnap1;
+my $fstab = "/etc/fstab";
+my $debugfile = "/var/log/stabile/steamExec.out";
+my $localpath;
+my $localpath2;
+my $localstatus;
+my $localstatus2;
+my $newvirtualsize;
+my $newbackupsize;
+my $newvirtualsize2;
+my $newbackupsize2;
+
+my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
+    [qw(RDIFF-BACKUP_ENABLED STORAGE_BACKUPDIR
+    STORAGE_POOLS_ADDRESS_PATHS STORAGE_POOLS_LOCAL_PATHS
+    STORAGE_POOLS_NAMES STORAGE_POOLS_DEFAULTS STORAGE_POOLS_RDIFF-BACKUP_ENABLED
+    RDIFF-BACKUP_USERS DBI_USER DBI_PASSWD ENGINE_LINKED
+    ENGINE_DATA_NIC)]);
+
+$base = "/var/www/stabile";
+$base = `cat /etc/stabile/basedir` if -e "/etc/stabile/basedir";
+chomp $base;
+my $logfile = "/var/log/stabile/steam.log";
+my $dbiuser =  $config->get('DBI_USER') || "irigo";
+my $dbipasswd = $config->get('DBI_PASSWD') || "";
+
+my $backupdir = $config->get('STORAGE_BACKUPDIR') || "/mnt/stabile/backups";
+my $tenders = $config->get('STORAGE_POOLS_ADDRESS_PATHS');
+my @tenderlist = split(/,\s*/, $tenders);
+my $tenderpaths = $config->get('STORAGE_POOLS_LOCAL_PATHS') || "/mnt/stabile/images";
+my @tenderpathslist = split(/,\s*/, $tenderpaths);
+my $tendernames = $config->get('STORAGE_POOLS_NAMES') || "Standard storage";
+my @tendernameslist = split(/,\s*/, $tendernames);
+
+$sshcmd = "ssh -l irigo -i /var/www/.ssh/id_rsa_www -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no";
+
+$current_time = time;
+($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($current_time);
+$year += 1900;
+$month = substr("0" . ($mon+1), -2);
+$pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
+
+if (lc($arg1) eq "backupallimages" ) {
+     debuglog("Backing up all images...");
+     backupAllImages();
+} elsif (lc($arg1) eq "backupengine" ) {
+     if ($config->get('ENGINE_LINKED')) {
+         debuglog("Backing up engine configuragion...");
+         print `echo users/backupengine | stash`;
+     } else {
+         print "Engine not linked. Not backing up configuration.\n";
+     }
+} elsif (lc($arg1) eq "billengine" ) {
+#     debuglog("Updating billing data on origo.io...");
+     print `echo users/billengine | stash`;
+} elsif (lc($arg1) eq "updatenetworkbilling" ) {
+#     debuglog("Updating billing for all networks...");
+     updateBillingAllNetworks();
+} elsif (lc($arg1) eq "updateimagebilling" ) {
+#     debuglog("Updating billing for all images...");
+     updateBillingAllImages();
+
+} elsif (lc($arg1) eq "updatedownloads" ) {
+    print `REMOTE_USER=irigo $base/cgi/images.cgi -a updatedownloads`;
+
+} elsif (lc($arg1) eq "releaseolddhcpleases" ) {
+    releaseOldDhcpLeases();
+} elsif (lc($arg1) eq "updateimagestatus" ) {
+    # Incoming params: $status $oldstatus $path1 $path2
+    # Function params: $localpath, $localstatus, $newvirtualsize, $newbackupsize
+    updateImageStatus($status, $oldstatus, $path1, $path2);
+} elsif (lc($arg1) eq "updatebackingfile" ) {
+    # Incoming params: $status $oldstatus $path1 $path2
+    # Function params: $localpath, $localstatus, $newvirtualsize, $newbackupsize
+    updateBackingFile($status);
+} elsif (lc($arg1) eq "unmountallimages" ) {
+    debuglog("Unmounting all images...");
+    print "Unmounting all images - hang on...\n";
+    unmountAllImages();
+} elsif (lc($arg1) eq "post-wake") {
+    debuglog("Running post-wake routines...");
+    print `REMOTE_USER=irigo $base/cgi/networks.cgi -a gear_restoreall`;
+} elsif (lc($arg1) eq "post-boot") {
+    if (`pgrep pressurecontrol`) {
+        debuglog("Running post-boot routines...");
+        print `REMOTE_USER=irigo $base/cgi/networks.cgi -a restoreall`;
+        print `REMOTE_USER=irigo $base/cgi/servers.cgi -a autostartall`;
+        print `REMOTE_USER=irigo $base/cgi/images.cgi -a updatedownloads`;
+    } else {
+        debuglog("Not running post-boot routines...");
+    }
+} elsif (lc($arg1) eq "pre-shutdown") {
+    debuglog("Running pre-shutdown routine...");
+    unmountAllImages();
+    # TODO: if we ever mount images writable, uncomment the next line
+    #updateBillingAllNetworks();
+} elsif (lc($arg1) eq "daily") {
+    debuglog("Running daily maintenance routine...");
+    backupAllImages();
+    updateBillingAllNetworks();
+    unmountAllImages();
+} elsif (lc($arg1) eq "restoreallnetworks" ) {
+    debuglog("Restoring all networks...");
+    print "Restoring all networks - hang on...\n";
+    print `REMOTE_USER=irigo $base/cgi/networks.cgi -a gear_restoreall`;
+} elsif (lc($arg1) eq "showautostart" ) {
+    print "Showing autostart servers - hang on...\n";
+    print `REMOTE_USER=irigo $base/cgi/servers.cgi -a showautostart`;
+} elsif (lc($arg1) eq "autostartservers" ) {
+    debuglog("Autostarting servers...");
+    print "Autostarting servers - hang on...\n";
+    print `REMOTE_USER=irigo $base/cgi/servers.cgi -a autostartall`;
+} elsif (lc($arg1) eq "resetmonitoring" ) {
+    debuglog("Resetting monitoring...");
+    print "Resetting monitoring - hang on...\n";
+    print `REMOTE_USER=irigo $base/cgi/systems.cgi -a resetmonitoring`;
+} elsif ($arg1 && $status && $path1) {
+    debuglog("$arg1 : $status : $oldstatus : $path1 : $path2 : $cmd1 : $cmd2");
+    if ($status eq "snapshotting") {
+        # $res .= `/bin/echo "$status" > "$path1.meta"`;
+        my $macip;
+        $localpath = $path1;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            $res .= `$sshcmd $macip "sudo /usr/bin/qemu-img snapshot -c snap1 $esc_localpath"`;
+        } else {
+            $res .= `/usr/bin/qemu-img snapshot -c snap1 "$path1"`;
+        }
+        $dsnap1 = $path2;
+        $localstatus = $oldstatus;
+    } elsif ($status eq "unsnapping") {
+        my $macip;
+        $localpath = $path1;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            $res .= `$sshcmd $macip "sudo /usr/bin/qemu-img snapshot -d snap1 $esc_localpath"`;
+        } else {
+            $res .= `/usr/bin/qemu-img snapshot -d snap1 "$path1"`;
+        }
+        $dsnap1 = "--";
+        $localstatus = $oldstatus;
+    } elsif ($status eq "reverting") {
+        my $macip;
+        $localpath = $path1;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            $res .= `$sshcmd $macip "sudo /usr/bin/qemu-img snapshot -a snap1 $esc_localpath"`;
+        } else {
+            $res .= `/usr/bin/qemu-img snapshot -a snap1 "$path1"`;
+        }
+        $localstatus = $oldstatus;
+    } elsif ($status eq "injecting") {
+        $localpath = $path1;
+        $localpath2 = $path2;
+        my $esc_localpath = shell_esc_chars($localpath);
+
+        # Find out if we are dealing with a Windows image
+        my $xml = `bash -c '/usr/bin/virt-inspector -a "$esc_localpath"'`;
+        #my $xml = `bash -c '/usr/bin/virt-inspector -a "$esc_localpath"' 2>&1`;
+        # $res .= $xml . "\n";
+        my $xmlref;
+        my $osname;
+        $xmlref = XMLin($xml) if ($xml =~ /^<\?xml/);
+        $osname = $xmlref->{operatingsystem}->{name} if ($xmlref);
+        if ($xmlref && $osname eq 'windows') {
+            $res .= "We are dealing with a Windows image - trying to fix registry\n";
+            my $upath = $esc_localpath;
+            # We need write privileges
+            $res .= `chmod 666 "$upath"`;
+            # First try to merge storage registry keys into Windows registry. If not a windows vm it simply fails.
+            $res .= `bash -c 'cat /usr/share/stabile/mergeide.reg | /usr/bin/virt-win-reg --merge "$upath"' 2>&1`;
+            # Then try to merge the critical device keys. This has been removed in win8 and 2012, so will simply fail for these.
+            $res .= `bash -c 'cat /usr/share/stabile/mergeide-CDDB.reg | /usr/bin/virt-win-reg --merge "$upath"' 2>&1`;
+            if ($res) { debuglog($res); $res = ''; }
+
+            # Try to copy viostor.sys into image
+            my @winpaths = (
+                '/Windows/System32/drivers',
+                '/WINDOWS/system32/drivers/viostor.sys',
+                '/WINDOWS/System32/drivers/viostor.sys',
+                '/WINNT/system32/drivers/viostor.sys'
+            );
+            foreach my $winpath (@winpaths) {
+                $res .= "Trying $winpath\n";
+                my $lscmd = qq|bash -c 'virt-ls -a "$upath" "$winpath"'|;
+                debuglog("$res"); $res = '';
+                my $drivers = `$lscmd`;
+                if ($drivers =~ /viostor/i) {
+                    $res .= "OK: viostor already installed in $winpath in $upath\n";
+                    debuglog($res); $res = '';
+                    syslogit('info', "viostor already installed in $winpath in $upath");
+                    last;
+                } elsif ($drivers) {
+                    my $cmd = qq|bash -c 'guestfish -i -a "$upath" upload /usr/share/stabile/VIOSTOR.SYS $winpath/viostor.sys' 2>&1|;
+                    my $error = `$cmd`;
+                    if ($error) {
+                        $res .= "Error injecting virtio drivers into $upath: $error\n";
+                        debuglog($res); $res = '';
+                        syslogit('info', "Error injecting virtio drivers into $upath: $error");
+                    } else {
+                        $res .= "Injected virtio drivers into $upath";
+                        debuglog($res); $res = '';
+                        syslogit('info', "Injected virtio drivers into $upath");
+                    }
+                    last;
+                } else {
+                    $res .= "No drivers found in $winpath\n";
+                    debuglog($res); $res = '';
+                }
+            }
+
+        } else {
+            $res .= "No Windows OS found ($osname) in image, not injecting drivers: $esc_localpath\n";
+            syslogit('info', "No Windows OS found ($osname) in image, not injecting drivers: $esc_localpath");
+        }
+        $localstatus = $oldstatus;
+    } elsif ($status eq "converting") {
+        $localpath = $path1;
+        $localpath2 = $path2;
+        my $esc_localpath2 = shell_esc_chars($localpath2);
+        my $upath = $esc_localpath2;
+
+        my $macip;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_localpath2 = shell_esc_chars($localpath2);
+            $res .= `$sshcmd $macip "/usr/bin/qemu-img convert $esc_localpath -O qcow2 $esc_localpath2"`;
+        } else {
+            my $mpath;
+            my $type;
+            if (substr($path1,-5) eq '.vmdk' && ( -s (substr($path1,0,-5) . "-flat.vmdk") ) ) {
+                my $pathname = substr($path1,0,-5);
+                $mpath .= "\"$pathname-flat.vmdk\" ";
+            } elsif (substr($path1,-5) eq '.vmdk' && ( -s (substr($path1,0,-5) . "-s001.vmdk")) ) {
+                my $pathname = substr($path1,0,-5);
+                my $i = 1;
+                my $num = '001';
+                while (-e "$pathname-s$num.vmdk") {
+                    $mpath .= "\"$pathname-s$num.vmdk\" ";
+                    $i++;
+                	$num = substr("00$i", -3);
+                }
+            } else {
+                $mpath = "\"$path1\"";
+            }
+
+            $res .= qq|Firing /usr/bin/qemu-img convert $mpath -O qcow2 "$path2"\n|;
+            $res .= `/usr/bin/qemu-img convert $mpath -O qcow2 "$path2"`;
+
+            # Setting real UID: $< to UID: $>
+            # $< = $>;
+
+            # Find out if we are dealing with a Windows image
+            my $xml = `bash -c '/usr/bin/virt-inspector -a "$esc_localpath2"'`;
+            # my $xml = `bash -c '/usr/bin/virt-inspector -a "$esc_localpath2"' 2>&1`;
+            # $res .= $xml . "\n";
+            my $xmlref;
+            my $osname;
+            $xmlref = XMLin($xml) if ($xml =~ /^<\?xml/);
+            $osname = $xmlref->{operatingsystem}->{name} if ($xmlref);
+            if ($xmlref && $osname eq 'windows') {
+                $res .= "We are converting a Windows image - trying to fix registry\n";
+                # We need write privileges
+                $res .= `chmod 666 "$upath"`;
+                # First try to merge storage registry keys into Windows registry. If not a windows vm it simply fails.
+                $res .= `bash -c 'cat /usr/share/stabile/mergeide.reg | /usr/bin/virt-win-reg --merge "$upath"' 2>&1`;
+                # Then try to merge the critical device keys. This has been removed in win8 and 2012, so will simply fail for these.
+                $res .= `bash -c 'cat /usr/share/stabile/mergeide-CDDB.reg | /usr/bin/virt-win-reg --merge "$upath"' 2>&1`;
+                if ($res) { debuglog($res); $res = ''; }
+
+                # Try to copy viostor.sys into image
+                my @winpaths = (
+                    '/Windows/System32/drivers/viostor.sys',
+                    '/WINDOWS/system32/drivers/viostor.sys',
+                    '/WINDOWS/System32/drivers/viostor.sys',
+                    '/WINNT/system32/drivers/viostor.sys'
+                );
+                foreach my $winpath (@winpaths) {
+                    $res .= "Trying $winpath\n";
+                    my $lscmd = qq|bash -c 'virt-ls -a "$upath" "$winpath"'|;
+                    debuglog("$res"); $res = '';
+                    my $drivers = `$lscmd`;
+                    if ($drivers =~ /viostor/i) {
+                        $res .= "OK: viostor already installed in $winpath in $upath\n";
+                        debuglog($res); $res = '';
+                        syslogit('info', "viostor already installed in $winpath in $upath");
+                        last;
+                    } elsif ($drivers) {
+                        my $cmd = qq|bash -c 'guestfish -i -a "$upath" upload /usr/share/stabile/VIOSTOR.SYS $winpath/viostor.sys' 2>&1|;
+                        my $error = `$cmd`;
+                        if ($error) {
+                            $res .= "Error injecting virtio drivers into $upath: $error\n";
+                            debuglog($res); $res = '';
+                            syslogit('info', "Error injecting virtio drivers into $upath: $error");
+                        } else {
+                            $res .= "Injected virtio drivers into $upath";
+                            debuglog($res); $res = '';
+                            syslogit('info', "Injected virtio drivers into $upath");
+                        }
+                        last;
+                    } else {
+                        $res .= "No drivers found in $winpath\n";
+                        debuglog($res); $res = '';
+                    }
+                }
+
+            } else {
+                $res .= "No Windows OS found ($osname) in converted image, not injecting drivers: $esc_localpath2\n";
+                syslogit('info', "No Windows OS found ($osname) in image, not injecting drivers: $esc_localpath2");
+            }
+
+            if (-e "$path2") {
+                syslogit('info', "Converted image to: $path2");
+            } else {
+                syslogit('info', "Unable to convert image to: $path2");
+            }
+        }
+        $localstatus = $oldstatus;
+        $localstatus2 = "unused";
+    } elsif ($status eq "rebasing") {
+        $localpath = $path1;
+        $localpath2 = $path2;
+        my $macip;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_localpath2 = shell_esc_chars($localpath2);
+            $res .= `$sshcmd $macip "/usr/bin/qemu-img convert $esc_localpath -O qcow2 $esc_localpath2"`;
+            $res .= `$sshcmd $macip "if [ -f $esc_localpath2 ]; then /bin/mv -v $esc_localpath2 $esc_localpath; fi"`;
+        } else {
+            $res .= `/usr/bin/qemu-img convert -O qcow2 "$path1" "$path2"`;
+            $res .= `if [ -f "$path2" ]; then /bin/mv -v "$path2" "$path1"; fi`;
+        }
+        $localstatus = $oldstatus;
+
+        # Release master image if not used by other images
+        unless (tie %imagereg,'Tie::DBI', {
+            db=>'mysql:steamregister',
+            table=>'images',
+            key=>'path',
+            autocommit=>0,
+            CLOBBER=>3,
+            user=>$dbiuser,
+            password=>$dbipasswd}) {syslogit('info', "Image register could not be accessed")};
+
+        my $master = ($imagereg{$path1}->{'master'} && $imagereg{$path1}->{'master'} ne '--')?$imagereg{$path1}->{'master'}:'';
+        my $usedmaster = '';
+        my @regvalues = values %imagereg;
+        if ($master) {
+            foreach my $valref (@regvalues) {
+                $usedmaster = 1 if ($valref->{'master'} eq $master && $valref->{'path'} ne $path1); # Check if another image is also using this master
+            }
+        }
+        if ($master && !$usedmaster) {
+            $imagereg{$master}->{'status'} = 'unused';
+        }
+        $imagereg{$path1}->{'master'} = '';
+        syslogit->('info', "Freeing master $master");
+        untie %imagereg;
+
+    } elsif ($status eq "cloning" || $status eq "copying" || $status eq "vcloning" || $status eq "bcloning") {
+        $localpath = $path1;
+        $localpath2 = $path2;
+        my $macip;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) { # Target is on a node
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_localpath2 = shell_esc_chars($localpath2);
+
+            $esc_localpath =~ /(.+)\/.*/;
+            my $sdir = $1;
+            $esc_localpath2 =~ /(.+)\/.*/;
+            my $dir = $1;
+
+        # Creating target directory in case it doesn't exist
+            `$sshcmd $macip /bin/mkdir -p "$dir"`;
+
+        # Mounting remote share on node in case it isn't
+            for (my $i=0; $i<=$#tenderpathslist; $i++
+                )
+            {
+                my $path = $tenderpathslist[$i];
+                my $host = $tenderlist[$i];
+                $host = "10.0.0.1:$path" if ($host eq 'local');
+                if ($sdir =~ /$path\//) {
+                    my $cmd = qq/$sshcmd $macip "mountpoint -q $path || sudo mount -o intr,noatime,nfsvers=3 $host $path"/;
+                    $res .= `$cmd`;
+                    last;
+                }
+            }
+
+            if ($status eq "cloning" || $status eq "bcloning") {
+                my $cmd = qq|$sshcmd $macip "/usr/bin/qemu-img create -f qcow2 -b $esc_localpath $esc_localpath2 2>\&1"|;
+                $res .= "$cmd\n";
+                $res .= `$cmd`;
+            } elsif ($status eq "copying") {
+#                $res .= `ssh -l irigo -i /var/www/.ssh/id_rsa_www $macip "/usr/bin/rsync -uv --inplace $esc_localpath $esc_localpath2"`;
+                $res .= `$sshcmd $macip "/bin/cp -vn $esc_localpath $esc_localpath2"`;
+            } elsif ($status eq "vcloning") {
+                $res .= `$sshcmd $macip "/usr/bin/VBoxManage clonehd $esc_localpath $esc_localpath2"`;
+                $res .= `$sshcmd $macip "/bin/chmod 666 $esc_localpath2"`;
+            }
+        } else {
+            $path2 =~ /(.+)\/.*/;
+            my $dir = $1;
+            `/bin/mkdir "$dir"` unless -e $dir;
+            if ($status eq "cloning" || $status eq "bcloning") {
+                $res .= `/usr/bin/qemu-img create -f qcow2 -b "$path1" "$path2" 2>\&1`;
+                debuglog($res) if ($res);
+            } elsif ($status eq "copying") {
+#                $res .= `/usr/bin/ionice -c3 /usr/bin/rsync -uv --inplace "$path1" "$path2"`;
+                $res .= `/usr/bin/ionice -c3 /bin/cp -vn "$path1" "$path2"`;
+            } elsif ($status eq "vcloning") {
+                $res .= `/usr/bin/ionice -c3 /usr/bin/VBoxManage clonehd "$path1" "$path2"`;
+                $res .= `/bin/chmod 666 "$path2"`;
+            }
+        }
+        $newvirtualsize2 = getVirtualSize($path2, $macip); # report size of new image for billing purposes
+        $localstatus = ($status eq "bcloning" || $status eq "cloning")?"used": $oldstatus;
+        $localstatus2 = ($status eq "bcloning")?"unused":"unused"; # bcloning = building a system
+
+    } elsif ($status eq "urluploading") {
+        $localpath = $path1;
+        $imageurl = $path2;
+#        $res .= `/bin/dd if=/dev/zero of="$localpath"  bs=1M  count=2; /bin/rm -f "$localpath.meta"`;
+        $res .= `/usr/bin/wget --no-check-certificate -O "$localpath" "$imageurl"; /bin/rm -f "$localpath.meta"`;
+
+        my $qinfo = `/usr/bin/qemu-img info "$localpath"`;
+        $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
+        $newvirtualsize = int($1);
+        unless ($newvirtualsize) {
+            my @stat = stat($localpath);
+            $newvirtualsize = $stat[7];
+        }
+        $localstatus = $oldstatus;
+    } elsif ($status eq "qcreating") {
+        $status = "creating";
+        $localpath = $path1;
+        # $path2 contains the size in k
+        my $size = ($path2 / 1024)."M";
+        my $format = "qcow2";
+        $format = "vmdk" if ($path1 =~ /\.vmdk$/);
+        $res .= `/usr/bin/qemu-img create -f $format "$path1" "$size"`;
+		if(($? >> 8) != 0) { # Report if there was an error creating the image.
+			syslogit('err', "An error was reported creating the qcow2/raw image.");
+		}
+		$res .= `/bin/chmod 666 "$path1"`;
+		$res .= "$size";
+		$newvirtualsize = $path2 * 1024;
+		$localstatus = "unused";
+    } elsif ($status eq "icreating") {
+        $status = "creating";
+        $localpath = $path1;
+        # $path2 contains the size in k
+        my $size = ($path2 / 1024)."M";
+        $res .= `/usr/bin/qemu-img create -f raw "$path1" "$size"`;
+		$res .= `/bin/chmod 666 "$path1"`;
+		$newvirtualsize = $path2 * 1024;
+		$localstatus = "unused";
+    } elsif ($status eq "vcreating") {
+        $status = "creating";
+        $localpath = $path1;
+        # $path2 contains the size in k
+        $res .= `/usr/bin/VBoxManage createhd --filename "$path1" --size "$path2" --format VDI`;
+		$res .= `/bin/chmod 666 "$path1"`;
+		$newvirtualsize = $path2 * 1024;
+		$localstatus = "unused";
+    } elsif ($status eq "resizing") {
+        $localpath = $path1;
+        # $path2 contains the size in k
+        my $size = int($path2 / 1024)."M";
+        my $macip;
+        if ($localpath =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) { # We are dealing with an image on a node
+            $macip = $1;
+            $localpath = $2;
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $cmd = qq|$sshcmd $macip "sudo /usr/bin/qemu-img resize $esc_localpath $size" 2>&1|;
+            $res .= "COMMAND: $cmd\n";
+            $res .= `$cmd`;
+        } else {
+            $res .= `/usr/bin/qemu-img resize "$path1" "$size"`;
+        }
+        $newvirtualsize = $path2 * 1024;
+        $localstatus = $oldstatus;
+    } elsif ($status eq "moving") {
+    # On node
+        if ($path2 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/ && $path1 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            my $macip = $1;
+            $localpath = $2;
+            $path2 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/;
+            $localpath2 = $2;
+
+            my $esc_path1 = shell_esc_chars($path1);
+            my $esc_path2 = shell_esc_chars($path2);
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_localpath2 = shell_esc_chars($localpath2);
+
+            $newvirtualsize = getVirtualSize($esc_localpath, $macip);
+            $newvirtualsize2 = 0;
+
+            $localpath2 =~ /(.+)\/.+/;
+            my $localdir2 = $1;
+            $res .= qq[Moving: $sshcmd $macip /bin/mv -n "$localpath" "$localpath2"\n];
+            $res .= `$sshcmd $macip /bin/mv -n "$localpath" "$localpath2"`;
+
+            $localstatus2 = $oldstatus;
+            $localstatus = "";
+
+    # To node
+        } elsif ($path2 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+        # Update billing
+            $newvirtualsize = getVirtualSize($path1);
+            $newvirtualsize2 = 0;
+            my $macip = $1;
+            $localpath = $2;
+            $localpath2 = $path1;
+            my $md5sum;
+            my $md5sum2;
+
+            my $esc_path1 = shell_esc_chars($path1);
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_path2 = "$macip:$esc_localpath";
+
+            $res .= qq[Moving: /usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"\n];
+            $md5sum = (split(" ", `/usr/bin/md5sum "$path1"`))[0];
+            $res .= "MD5: $md5sum\n";
+            $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"`;
+            $res .= `$sshcmd $macip "/bin/chmod 666 $esc_localpath"`;
+            $md5sum2 = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath"`))[0];
+            $res .= "MD5: $md5sum2\n";
+            $localstatus = $oldstatus;
+            $localstatus2 = "unused";
+            if ($md5sum && ($md5sum eq $md5sum2)) {
+                unlink $path1;
+                $localstatus2 = ""; # The image being left behind is removed from db after moving to new location
+            }
+    # From node
+        } elsif ($path1 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
+            my $macip = $1;
+            $localpath2 = $2;
+            $localpath = $path2;
+            my $md5sum;
+            my $md5sum2;
+
+            my $esc_localpath = shell_esc_chars($localpath);
+            my $esc_localpath2 = shell_esc_chars($localpath2);
+            my $esc_path1 = "$macip:$esc_localpath2";
+            my $esc_path2 = shell_esc_chars($path2);
+
+            $md5sum = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath2"`))[0];
+            $res .= "MD5: $md5sum\n";
+            $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" "$esc_path1" $esc_path2`;
+            $md5sum2 = (split(" ", `/usr/bin/md5sum "$path2"`))[0];
+            $res .= "MD5: $md5sum2\n";
+            $localstatus = $oldstatus;
+            $localstatus2 = "unused";
+            if ($md5sum && ($md5sum eq $md5sum2)) {
+                `$sshcmd $macip "/usr/bin/unlink $esc_localpath2"`;
+                $localstatus2 = ""; # The image being left behind is removed from db after moving to new location
+            }
+        # Update billing
+            $newvirtualsize = getVirtualSize($path2);
+            $newvirtualsize2 = 0;
+        } else {
+            $localpath = $path2;
+            $localpath2 = $path1;
+            $res .= `/bin/mv -v "$path1" "$path2"`;
+            $res .= `/bin/mv -v "$path1.meta" "$path2.meta"` if (-e "$path1.meta");
+            $localstatus2 = "unused";
+            $localstatus = $oldstatus;
+        # Update billing
+            $newvirtualsize = getVirtualSize($path2);
+            $newvirtualsize2 = 0;
+        }
+    } elsif ($status eq "backingup" || $status eq "lbackingup") {
+        $user = $arg1;
+        # $path1 is the image to back up (including potential subdir), $path2 the source dir (storage pool) and $cmd1 the target dir (general backup dir)
+        $localpath = "$path2/$user/$path1";
+        mkdir "$cmd1/$user" unless -d "$cmd1/$user"; # Create the target dirs which will contain the backup
+        my $pool = $path2;
+        my $image = $path1;
+        my $subdir; # 1 level of subdirs supported
+        if ($path1 =~ /(.+)\/(.+)/) {
+            $subdir = $1;
+            $image = $2;
+        }
+        if ($subdir) {
+            mkdir "$cmd1/$user/$subdir" unless -d "$cmd1/$user/$subdir";
+            mkdir "$cmd1/$user/$subdir/$image" unless -d "$cmd1/$user/$subdir/$image";
+        } else {
+            mkdir "$cmd1/$user/$image" unless -d "$cmd1/$user/$image";
+        }
+
+        if (-d "/mnt/$user-$image") {
+            $res .= "Image is already being backed up";
+        } else {
+            my $snapname;
+            my $snappath;
+            my $snapsrcdir;
+            my $lvolgroup;
+            if ($status eq "lbackingup") { # Do a local lvm snapshot before backing up
+                `/sbin/modprobe dm-snapshot`; # Make sure we can make lvm snapshots
+                $snapname = "$user-$image";
+                $snapname =~ tr/ /-/; #No spaces allowed in snapshot names...
+                $snapname =~ tr/@/_/; #No funny chars allowed in snapshot names...
+                $snappath = "/mnt/$snapname"; # The path to mount our snapshot on
+                mkdir $snappath;
+
+                my $q = `/bin/cat /proc/mounts | grep "$pool"`; # Find the lvm volume mounted on /mnt/images
+                ($q =~ m/\/dev\/mapper\/(\S+)-(\S+) $pool.+/g)[-1]; # Select last match
+                $lvolgroup = $1;
+                my $lvol = $2;
+
+                $res .= `/sbin/lvcreate -L1024M -s -n $snapname /dev/$lvolgroup/$lvol`; # Take a snapshot
+
+                debuglog("$oldstatus $pool /dev/$lvolgroup/$lvol $snapname \"$snappath\"");
+
+                $res .= changeFstab($snapname, $pool); # Change fstab to allow mount
+                $res .= `/bin/mount "$snappath" 2>&1`; # Mount the snapshot
+                $res .= `ls -l $snappath/$user` . "\n";
+                $snapsrcdir = "$snappath/$user"; # Change source dir to our new snapshot
+            } else {
+                $snapsrcdir = "$pool/$user";
+            }
+
+            # Do the backup
+            $res .= `/usr/bin/rdiff-backup --print-statistics --include "$snapsrcdir/$path1" --exclude '**' "$snapsrcdir" "$cmd1/$user/$path1"`;
+            $res .= `/usr/bin/rdiff-backup --print-statistics --force --remove-older-than $cmd2  "$cmd1/$user/$path1"` if ($cmd2);
+            `/bin/chown -R irigo:irigo "$cmd1/$user/$path1"`;
+            # Clean up
+            if ($status eq "lbackingup") {
+                $res .= `/bin/umount "$snappath"`;
+                $res .= changeFstab($snapname, $pool, 1);
+                $res .= `/bin/rm -r "$snappath"` unless (-d "$snappath/$user"); # Sanity check - don't delete mount dir if snapshot still mounted
+                debuglog("removing logical volume /dev/$lvolgroup/$snapname");
+                $res .= `/sbin/lvremove -f /dev/$lvolgroup/$snapname`;
+            }
+            if (-d "$cmd1/$user/$path1") {
+                my $bdu = `/usr/bin/du -bs "$cmd1/$user/$path1"`;
+                $bdu =~ /(\d+)\s+/;
+                $newbackupsize = $1; # Report new backup size for billing
+            }
+        # Update btime
+            $localpath =~ /(.+)/;
+            my $buser = $user;
+            $buser = 'irigo' if ($user eq 'common');
+            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a updatebtime -i " . uri_escape($1);
+            my $scmd = "/usr/bin/$sshcmd 127.0.0.1";
+            $res .= "$scmd $bcmd\n";
+            $res .= `$scmd $bcmd`;
+            $res .= "Updating btime: for $localpath\n\n";
+        }
+        $localstatus = $oldstatus;
+
+    } elsif ($status eq "frestoring") {
+        $user = $arg1;
+        my($bname, $dirpath, $suffix) = fileparse($path1, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
+        my $mountpath = "$dirpath.$bname$suffix";
+        my $mounts = `/bin/cat /proc/mounts`;
+        my $mmounts = `/bin/df`;
+        my $mounted = ($mounts =~ /$mountpath/ && $mmounts =~ /$mountpath/);
+        my $restorepath = "$dirpath$bname.iso";
+        if (-e $restorepath) {
+            my $i = 1;
+            while (-e "$dirpath$bname.$i.iso") {$i++;}
+            $restorepath = "$dirpath$bname.$i.iso";
+        }
+        if ($mounted) {
+            $res .= "Restoring files to: /tmp/restore/$user/$bname$suffix -> $restorepath\n";
+            $res .= `/bin/echo $status > "$restorepath.meta"`;
+
+            `/bin/mkdir -p "/tmp/restore/$user/$bname$suffix"` unless (-e "/tmp/restore/$user/$bname$suffix");
+            my @files = split(/:/, uri_unescape($path2));
+            foreach $f (@files) {
+                if (-e "$mountpath$f" && chdir($mountpath)) {
+                    $f = substr($f,1) if ($f =~ /^\//);
+                    eval {`/usr/bin/rsync -aR --sparse "$f" /tmp/restore/$user/$bname$suffix`; 1;}
+                        or do {$e=1; $res .= "ERROR Problem restoring files $@\n";};
+                } else {
+                    $res .= "ERROR $f not found in $mountpath\n";
+                }
+            }
+            if (chdir "/tmp/restore/$user/$bname$suffix") {
+                eval {$res .= `/usr/bin/genisoimage -o "$restorepath" -iso-level 4 .`; 1;}
+                    or do {$e=1; $res .= "Stream=ERROR Problem restoring files $@\n";};
+                $res .= `/bin/rm -rf /tmp/restore/$user/$bname$suffix`;
+                $res .= "OK Restored files from /tmp/restore/$user/$bname$suffix to $restorepath\n";
+            } else {
+                $res .= "ERROR Unable to chdir to /tmp/restore/$user/$bname$suffix\n";
+            }
+
+            #$res .= `/bin/fusermount -u "$mountpath"`;
+            #$res .= `/bin/umount "$mountpath"`;
+            #my $bcmd = "REMOTE_USER=$user $base/cgi/images.cgi " . $postdata;
+            #$res .= "Unmounting $path1 " . `$bcmd` . "\n";
+
+            $localpath = $path1;
+            $localstatus = $oldstatus;
+            $localpath2 = $restorepath;
+            $localstatus2 = "unused";
+        # Update billing
+            $newvirtualsize = getVirtualSize($restorepath);
+            unlink "$restorepath.meta";
+
+            my $postdata = "-a unmount -i " . uri_escape($path1);
+            $res .= "Unmounted $path1 " . `REMOTE_USER=$user $base/cgi/images.cgi $postdata`;
+    #        `/usr/bin/$sshcmd 127.0.0.1 REMOTE_USER=$user $base/cgi/images.cgi $postdata`;
+        } else {
+            $res .= "ERROR You must mount image on $mountpath before restoring\n";
+        }
+
+    } elsif ($status eq "restoring") {
+        $user = $arg1;
+        # $path1 is the image path, $path2 backup dir, $cmd1 the increment, $cmd2 is the restore path
+        my $subdir; # 1 level of subdirs supported
+        if ($path1 =~ /\/$user\/(.+\/)/) {
+            $subdir = $1;
+        }
+        my($bname, $dirpath, $suffix) = fileparse($path1, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
+        my $incfile;
+        my $restorepath = $cmd2;
+
+        if ($cmd1 eq "mirror") {
+            my $mir = `/bin/ls "$path2/$user/$subdir$bname$suffix/rdiff-backup-data" | grep current_mirror`;
+            if ($mir =~ /current_mirror\.(\S+)\.data/) {
+                $incfile = "$path2/$user/$subdir$bname$suffix/$bname$suffix";
+            }
+        } else {
+            if ($cmd1 =~ /^SNAPSHOT-/) { # Z-restore
+                $incfile = "$path2/$user/$subdir$bname$suffix";
+            } else { # Not a Z-restore
+                $incfile = "$path2/$user/$subdir$bname$suffix/rdiff-backup-data/increments/$bname$suffix.$cmd1.diff.gz";
+            }
+        }
+
+        $res .= `/bin/echo $status > "$restorepath.meta"`;
+
+        $res .= "Restoring: $incfile -> $restorepath ";
+        if ($cmd1 eq "mirror" || $cmd1 =~ /^SNAPSHOT-/) {
+            $res .= `/usr/bin/ionice -c3 /bin/cp -vn "$incfile" "$restorepath"`;
+        } else {
+            $res .= `/usr/bin/rdiff-backup "$incfile" "$restorepath"`;
+        }
+
+        $localpath = $path1;
+        $localstatus = $oldstatus;
+        $localpath2 = $restorepath;
+        $localstatus2 = 'unused';
+        $res .= `/bin/rm -f "$restorepath.meta"`;
+    # Update billing
+        $newvirtualsize = getVirtualSize($restorepath);
+        unlink "$restorepath.meta";
+    } else {
+        debuglog("$arg1 : $status : $oldstatus : $path1 : $path2 : $cmd1 : $cmd2 : $res");
+        print "No action $status\n";
+    }
+
+    sleep 1;
+    updateImageStatus($localpath, $localstatus, $newvirtualsize, $newbackupsize) if ($localpath);
+    updateImageStatus($localpath2, $localstatus2, $newvirtualsize2, $newbackupsize2) if ($localpath2);
+
+    updateClientUI($arg1, $localpath, $localstatus, $dsnap1);
+    my $uires = $main::updateUI->({user=>$arg1, tab=>"images", path=>$localpath, status=>$localstatus, snap1=>$dsnap1, type=>"update"});
+#    debuglog("Updating UI with user=>$arg1 path=>$localpath, status=>$localstatus, $uires");
+
+    if ($localpath2 && ($status =~ /cloning|copying|converting|moving|restoring/)) {
+#        updateClientUI($arg1, $localpath2, $localstatus2);
+        $uires = $main::updateUI->({user=>$arg1, tab=>"images", path=>$localpath2, status=>$localstatus, type=>"update"});
+#        debuglog("Updating UI with user=>$arg1 path=>$localpath2, status=>$localstatus, $uires");
+    }
+
+    print $res if ($res);
+    debuglog($res) if ($res);
+} else {
+    print "No valid input...\n";
+}
+
+exit 0;
+
+sub updateClientUI {
+    my ($username, $dpath, $dstatus, $snap1) = @_;
+    if ($username) {
+
+        unless (tie %imagereg,'Tie::DBI', {
+            db=>'mysql:steamregister',
+            table=>'images',
+            key=>'path',
+            autocommit=>0,
+            CLOBBER=>3,
+            user=>$dbiuser,
+            password=>$dbipasswd}) {syslogit('info', "Image register could not be accessed")};
+
+        my $duuid;
+        my $dname;
+        if ($dpath && $imagereg{$dpath}) {
+            $duuid = $imagereg{$dpath}->{'uuid'} ;
+            $dname = $imagereg{$dpath}->{'name'};
+        }
+        untie %imagereg;
+        #$duuid = $dpath unless ($duuid);
+        #$duuid = 'none' unless ($duuid);
+
+        my $bmes;
+        if ($status eq "backingup" || $status eq "lbackingup") {
+            $bmes;
+            if ($res =~ /TotalDestinationSizeChange (\d)(.+\))/) {
+                if ($1 eq "0") {
+                    $bmes = "No changes to back up ($dname)";
+                } else {
+                    $bmes = "Backed up $1$2";
+                #    $bmes .= " in $1$2" if ($res =~ /ElapsedTime (\d)(.+\))/);
+                }
+            } elsif ($res =~ /(Image is already being backed up)/) {
+                $bmes = $1;
+            } else {
+                my $hres = $res;
+                $hres =~ s/\n/<br>/g;
+                $hres =~ s/\"/\\"/g;
+                $bmess = "Backup failed: $hres";
+            }
+            #$newtasks .= "{\"type\":\"message\",\"id\":\"images\"" .
+            #",\"message\":\"$bmes\", \"backup\":\"$path1\"" .
+            #"}, ";
+        }
+        syslogit('info', "$bmes: $path1") if ($bmes);
+        my $newtasks = "{\"type\":\"update\",\"tab\":\"images\",\"timestamp\":$current_time" .
+        ($duuid?",\"uuid\":\"$duuid\"":"") .
+        ($dstatus?",\"status\":\"$dstatus\"":"") .
+        ($snap1?",\"snap1\":\"$snap1\"":"") .
+        ($status eq "backingup"?",\"backup\":\"$path1\"":"") .
+        ($bmes?",\"message\":\"$bmes\", \"backup\":\"$path1\"":"") .
+        ",\"sender\":\"steamExec\"" .
+        "}, ";
+
+        opendir my($dh), '/tmp' or die "Couldn't open '/tmp': $!";
+        my @files;
+        if ($username eq 'common') {
+            # write tasks to all admin user's session task pipes
+            @files = grep { /.*~A-.*\.tasks$/ } readdir $dh;
+        } else {
+            # write tasks to all the user's session task pipes
+            @files = grep { /^$username~.*\.tasks$/ } readdir $dh;
+        }
+        closedir $dh;
+        my @pfiles;
+        foreach my $f (@files) {
+            push @pfiles, "/tmp/$f" if (`pgrep -f "$f"`); # Only include pipes with active listeners
+        };
+        my $tasksfiles = join(' ', @pfiles);
+        $tasksfiles = $1 if ($tasksfiles =~ /(.+)/); #untaint
+        # Write to users named pipes if user is logged in
+        if ($tasksfiles) {
+            $res = `/bin/echo \'$newtasks\' | /usr/bin/tee  $tasksfiles \&`;
+        }
+    }
+}
+
+sub changeFstab {
+	my $image = $_[0];
+	my $pool = $_[1];
+	my $remove = $_[2];
+	return 0 unless ($image);
+	return 0 unless (index($image, " ")==-1);
+	copy($fstab, "$fstab.steam.bak") or return 0;
+
+	my $q = `/bin/cat /proc/mounts | grep "$pool"`; # Find the lvm volume mounted on /mnt/images
+    # $q =~ /\/dev\/mapper\/(\S+)-(\S+) $pool.+/;
+    ($q =~ m/\/dev\/mapper\/(\S+)-(\S+) $pool.+/g)[-1]; # Select last match
+    my $lvolgroup = $1;
+    my $lvol = $2;
+
+	my $newfile = "";
+	my $match;
+	open (FILE, $fstab);
+	while (<FILE>) {
+		chomp;
+		my $line = $_;
+		if ($line =~ /^\/dev\/$lvolgroup\/$image/) {
+			$newfile .= "$line\n" unless ($remove);
+			$match = 1;
+		} else {
+			$newfile .= "$line\n";
+		}
+	}
+    $newfile .= "/dev/$lvolgroup/$image /mnt/$image ext4 users,ro 0 0\n" unless ($remove || $match);
+	close (FILE);
+	open( FILE2, ">$fstab" );
+	#open( FILE2, ">/tmp/fstab.new" );
+	print FILE2 $newfile;
+	close(FILE2);
+	#copy("/tmp/fstab.new", $fstab) or return 0;
+	return "$fstab updated with /dev/$lvolgroup/$image /mnt/$image $match : $remove\n";
+}
+
+sub updateBackingFile {
+    my $imagepath = $_[0];
+    unless (-e $imagepath) {
+        print "Not updating backing file for image (not found) $imagepath\n";
+        return;
+    }
+    $imagepath = uri_escape($imagepath);
+    my $bcmd = qq|REMOTE_USER=irigo $base/cgi/images.cgi -a updatebackingfile -i "$imagepath"|;
+    print `$bcmd`;
+}
+
+sub updateImageStatus {
+	my $imagepath = $_[0];
+	my $imagestatus = $_[1];
+	my $newvsize = $_[2]; # Size of image has changed
+	my $newbsize = $_[3]; # Size of image's backup has changed
+	return unless ($imagepath);
+    if (-e $imagepath) {
+        print "Updating image $imagepath, $imagestatus, $newvsize, $newbsize\n";
+    } else {
+        print "Not updating image (not found) $imagepath, $imagestatus, $newvsize, $newbsize\n";
+        return;
+    }
+
+    unless (tie %imagereg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'images',
+        key=>'path',
+        autocommit=>0,
+        CLOBBER=>3,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {syslogit('info', "Image register could not be accessed")};
+
+    my $imageuser = $arg1;
+    my $imagename;
+    if ($imagestatus eq 'uploading' && !$imagereg{$imagepath}) {
+        # An image is being uploaded
+        my $ug = new Data::UUID;
+        my $newuuid = $ug->create_str();
+        $imagename = $imagepath;
+        if ($imagename =~ /.+\/(.+)\/(.+)\.(.+)/) {
+            $imageuser = $1;
+            $imagename = $2;
+            my $imagetype = $3;
+            $imagereg{$imagepath} = {
+                uuid => $newuuid,
+                path => $imagepath,
+                name => $imagename,
+                user => $imageuser,
+                type => $imagetype,
+                virtualsize => $newvsize,
+                size => $newvsize,
+                status => 'uploading'
+            };
+            $arg1 = $imageuser;
+        }
+    } elsif ($imagestatus) {
+        if ($imagestatus eq 'installable') {
+            $imagestatus = 'unused';
+            $imagename = $imagereg{$imagepath}->{'name'} if ($imagereg{$imagepath});
+            $imagereg{$imagepath}->{'installable'} = 'true';
+            $main::updateUI->(
+                {user=>"irigo", tab=>"images", path=>"$imagepath", status=>"$imagestatus", message=>"Image $imagename downloaded and ready to install", type=>"update"}
+            );
+            $arg1 = 'irigo';
+            syslogit('info', "Downloaded $imagepath from registry");
+        } elsif ($imagestatus eq 'downloaded') {
+            $imagestatus = 'unused';
+            $imagename = $imagereg{$imagepath}->{'name'} if ($imagereg{$imagepath});
+            $main::updateUI->(
+                {user=>"irigo", tab=>"images", path=>"$imagepath", status=>"$imagestatus", message=>"Image $imagename downloaded", type=>"update"}
+            );
+            $arg1 = 'irigo';
+            syslogit('info', "Downloaded $imagepath from registry");
+        }
+        $imagereg{$imagepath}->{'status'} = $imagestatus;
+        $imagereg{$imagepath}->{'virtualsize'} = $newvsize if ($newvsize);
+    } else {
+        syslogit('info', "Deleting $imagepath from DB (no status)");
+        delete $imagereg{$imagepath};
+    }
+    untie %imagereg;
+    if ((defined $newvsize) || (defined $newbsize)) {
+        updateBilling($imageuser) if ($arg1 !~ /\//);
+    }
+}
+
+sub updateBillingAllNetworks {
+    my $t = new Proc::ProcessTable;
+    my $i = 0;
+    foreach $p ( @{$t->table} ){
+        my $pcmd = $p->cmndline;
+        if ($pcmd =~ /(.*steamExec updatenetworkbilling)/) { # || $pcmd =~ /(.*apache2 -k start)/) {
+            $i++;
+        }
+    }
+    if ($i>1) {
+        print "Already updating network billing! ($i)\n";
+        return;
+    }
+    print "Updating network billing for all users...\n";
+
+    unless (tie %userreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'users',
+        key=>'username',
+        autocommit=>0,
+        CLOBBER=>1,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return 0};
+
+    my @regvalues = values %userreg;
+    foreach my $valref (@regvalues) {
+        my $buser = $valref->{'username'};
+        print "Updating billing for $buser\n";
+        my $bcmd = "REMOTE_USER=$buser $base/cgi/networks.cgi -a updatebilling";
+    # Actually do the update
+        print `$bcmd`;
+
+    }
+    untie %userreg;
+}
+
+sub updateBillingAllImages {
+    my $t = new Proc::ProcessTable;
+    my $i = 0;
+    foreach $p ( @{$t->table} ){
+        my $pcmd = $p->cmndline;
+        if ($pcmd =~ /(.*steamExec updateimagebilling)/) { # || $pcmd =~ /(.*apache2 -k start)/) {
+            $i++;
+        }
+    }
+    if ($i>1) {
+        print "Already updating image billing! ($i)\n";
+        return;
+    }
+    print "Updating image billing for all users...\n";
+
+    unless (tie %userreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'users',
+        key=>'username',
+        autocommit=>0,
+        CLOBBER=>1,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return 0};
+
+    my @regvalues = values %userreg;
+    foreach my $valref (@regvalues) {
+        my $buser = $valref->{'username'};
+        print "Updating billing for $buser\n";
+        my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a updatebilling";
+    # Actually do the update
+        print `$bcmd`;
+
+    }
+    untie %userreg;
+}
+
+sub markMonitoredServers {
+    print "Marking monitored servers in /var/log/stabile...\n";
+
+}
+
+sub releaseOldDhcpLeases {
+    print "Releasing DHCP leases logged as old leases in syslog...\n";
+    my $datanic = $config->get('ENGINE_DATA_NIC');
+	unless (tie %networkreg,'Tie::DBI', {
+		db=>'mysql:steamregister',
+		table=>'networks',
+		key=>'uuid',
+		autocommit=>0,
+		CLOBBER=>3,
+		user=>$dbiuser,
+		password=>$dbipasswd}) {throw Error::Simple("Stroke=Error Register could not be accessed")};
+    my %leases;
+    $cmd = qq[tail -n 500 /var/log/syslog | grep -oP " not using configured address .+ because it is leased to .+\$" | sort |  uniq];
+    my @loglines = split("\n", `$cmd`);
+    foreach my $line (@loglines) {
+        $line =~ /not using configured address (.+) because it is leased to (\S+)/;
+        my $relip = $1;
+        my $relmac = $2;
+        $leases{$relip} = {
+            ip=>$relip,
+            mac=>$relmac
+        };
+        my $relid;
+        if ($relip =~ /10\.(\d+)\.(\d+)\.\d+/) {
+            $relid = (0 + "$1$2");
+        } else {
+            foreach my $net (values %networkreg) {
+                if ($net->{'externalip'} eq $relip) {
+                    $relid = $net->{'id'};
+                    last
+                }
+            }
+        }
+        print "Releasing $datanic.$relid $relip $relmac\n";
+        print `/usr/bin/dhcp_release $datanic.$relid $relip $relmac`;
+        print `perl -i -ne 'print if !/$relip/' /var/lib/misc/dnsmasq.leases`;
+        print `pkill -HUP -f interface=$datanic.$relid`;
+    }
+    untie %networkreg;
+}
+
+sub unmountAllImages {
+    unless (tie %userreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'users',
+        key=>'username',
+        autocommit=>0,
+        CLOBBER=>1,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return 0};
+
+    my @regvalues = values %userreg;
+    foreach my $valref (@regvalues) {
+        my $buser = $valref->{'username'};
+        my $privileges = $valref->{'privileges'};
+        my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a unmountall" unless (index($privileges,"d")!=-1);
+    # Actually do the update
+        print `$bcmd`;
+    }
+    untie %userreg;
+}
+
+sub backupAllImages {
+    my $t = new Proc::ProcessTable;
+    my $i = 0;
+    foreach $p ( @{$t->table} ){
+        my $pcmd = $p->cmndline;
+        if ($pcmd =~ /(.*steamExec backupallimages)/) { # || $pcmd =~ /(.*apache2 -k start)/) {
+            $i++;
+        }
+    }
+    if ($i>1) {
+        print "Already backing up Stabile! ($i)\n";
+        return;
+    }
+    print "Backing up all images...\n";
+
+    unless (tie %imagereg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'images',
+        key=>'path',
+        autocommit=>0,
+        CLOBBER=>3,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {syslogit('info', "Image register could not be accessed")};
+
+    my @regvalues = values %imagereg;
+    foreach my $valref (@regvalues) {
+        my $uuid = $valref->{'uuid'};
+        my $buser = $valref->{'user'};
+        my $bschedule = $valref->{'bschedule'};
+        if ($bschedule =~ /daily/) {
+            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a backup -u $uuid";
+            print "Backing up ($bschedule): $valref->{'name'} ($uuid)\n";
+        # Actually do the backup
+            print `$bcmd`;
+        # If more than 4 jobs running, wait for some to finish
+            while (runningBackups()>4) {
+                print ".";
+                sleep 30;
+            }
+        } else {
+            print "Not backing up (" . ($bschedule?bschedule:'no schedule') . "): $valref->{'name'} ($uuid)\n";
+        # Update btime - this is done by zbackup below
+        #    my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a updatebtime -u $uuid";
+        #    print `$bcmd`;
+        }
+    }
+    untie %imagereg;
+    # Finally back up all ZFS volumes
+    my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a zbackup";
+    print `$bcmd`;
+
+    sub runningBackups {
+        my $j = 0;
+        foreach my $valref (@regvalues) {
+            $j++ if ($valref->{'status'} =~ /backingup/);
+        }
+        return $j;
+    }
+}
+
+sub syslogit {
+	my ($priority, $msg) = @_;
+
+    my $current_time = time;
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($current_time);
+    $year += 1900;
+    my $month = substr("0" . ($mon+1), -2);
+    my $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
+
+	if ($msg && $msg ne '') {
+		unless (open(TEMP3, ">>$logfile")) {print "SError log file \"$logfile\" could not be written\n";}
+		print TEMP3 $pretty_time, " : $arg1 : $msg\n";
+		close(TEMP3);
+	}
+	return 0 unless ($priority =~ /err|debug/);
+	setlogsock('unix');
+	# $programname is assumed to be a global.  Also log the PID
+	# and to CONSole if there's a problem.  Use facility 'user'.
+	openlog($programname, 'pid,cons', 'user');
+	syslog($priority, $msg);
+	closelog();
+	return 1;
+}
+
+sub getVirtualSize {
+    my $vpath = shift;
+    my $macip = shift;
+    my $qinfo;
+    my($bname, $dirpath, $suffix) = fileparse($vpath, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
+    if ($suffix eq ".qcow2") {
+        if ($macip) {
+            $qinfo = `$sshcmd $macip /usr/bin/qemu-img info "$vpath"`;
+        } else {
+            $qinfo = `/usr/bin/qemu-img info "$vpath"`;
+        }
+        $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
+        return(int($1)); # report size of new image for billing purposes
+    } elsif ($status eq ".vdi") {
+        if ($macip) {
+            $qinfo = `$sshcmd $macip /usr/bin/VBoxManage showhdinfo "$vpath"`;
+        } else {
+            $qinfo = `/usr/bin/VBoxManage showhdinfo "$vpath"`;
+        }
+        $qinfo =~ /Logical size:\s*(\d+) MBytes/g;
+        return(int($1) * 1024 * 1024); # report size of new image for billing purposes
+    } else {
+        if ($macip) {
+            return `$sshcmd $macip perl -e 'my @stat=stat("$vpath"); print $stat[7];'`;
+        } else {
+            my @stat = stat($vpath);
+            return($stat[7]); # report size of new image for billing purposes
+        }
+    }
+}
+
+sub updateBilling {
+    my $imageuser = shift;
+    if ($imageuser && $imageuser ne 'common') {
+        my $bcmd = "/usr/bin/$sshcmd 127.0.0.1 REMOTE_USER=$imageuser $base/cgi/images.cgi -a updatebilling";
+        my $ures = `$bcmd`;
+        debuglog("updating billing for $imageuser: $ures");
+    }
+}
+
+sub debuglog {
+    my $msg = shift;
+    chomp $msg;
+
+    open(my $fd, ">>", $debugfile);
+    print $fd "[$pretty_time] $msg\n";
+    close($fd);
+}
+
+sub shell_esc_chars {
+	my $str = shift;
+	$str =~ s/([;<>\*\|`&\$!#\(\)\[\]\{\}:'" ])/\\$1/g;
+	return $str;
+}

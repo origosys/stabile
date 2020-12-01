@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+
+use LWP;
+#use URI::Escape;
+#use Socket;
+use Sys::Syslog qw( :DEFAULT setlogsock);
+use ConfigReader::Simple;
+
+# Untaint in order to avoid filling Apache error log with warnings
+$ENV{'PATH'} = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+#my $base = "/var/www/stabile";
+#$base = `cat /etc/stabile/basedir` if -e "/etc/stabile/basedir";
+#chomp $base;
+
+my $baseurl = "http://localhost/stabile";
+#$baseurl = `cat /etc/stabile/baseurl` if -e "/etc/stabile/baseurl";
+#$baseurl =~ s/https/http/;
+chomp $baseurl;
+
+#my $line = `cat /etc/resolv.conf`;
+#$line =~ /nameserver (\S*)/;
+#my $mainvalve = scalar(gethostbyaddr(inet_aton($1), AF_INET));
+
+#my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg", [qw(DBI_USER DBI_PASSWD)]);
+#my $dbiuser =  $config->get('DBI_USER') || "irigo";
+#my $dbipasswd = $config->get('DBI_PASSWD') || "";
+
+my $url = "$baseurl/piston/piston.cgi";
+$baseurl =~ /http\w*:\/\/(.*)\//;
+my $mainvalve = $1;
+
+my $browser = LWP::UserAgent->new;
+$browser->agent('movepiston/1.0b');
+$browser->protocols_allowed( [ 'http','https'] );
+$browser->credentials(
+  "$mainvalve:80",
+  'Services',
+  "irigo", "sunshine"
+);
+
+my $user = $ARGV[0];
+my $var = $ARGV[1];
+if (!$user) {print "No user...\n"; exit;}
+
+#`REMOTE_USER=irigo $base/piston/piston.cgi status=permitopen user=$user`;
+my $content = $browser->get($url . "?status=permitopen&user=$user")->content();
+print "$content\n";
+# print $url . "?status=permitopen&user=$user", "\n$content\n$mainvalve / $dbiuser / $dbipasswd\n";
+if ($var) {
+    while (1) {
+        print scalar localtime() . "\n";
+        sleep 30;
+    }
+}
+
+
+sub syslogit {
+	my ($priority, $msg) = @_;
+	print $priority, ": ", $msg, "\n";
+#	return 0 unless ($priority =~ /info|err|debug/);
+	return 0 unless ($priority =~ /info|err/);
+
+	setlogsock('unix');
+	# $programname is assumed to be a global.  Also log the PID
+	# and to CONSole if there's a problem.  Use facility 'user'.
+	openlog($programname, 'pid,cons', 'user');
+	syslog($priority, $msg);
+	closelog();
+	return 1;
+}

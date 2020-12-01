@@ -1,0 +1,9 @@
+PROMPT 0
+TIMEOUT 30
+DISPLAY boot.msg
+DEFAULT menu.c32
+MENU TITLE Stabile Boot Menu
+
+LABEL Stabile Bionic
+KERNEL vmlinuz
+APPEND initrd=initrd.img ro nomodeset root=/dev/nfs nfsroot=10.0.0.1:/mnt/stabile/tftp/bionic netboot=nfs union=aufs boot=casper ip=dhcp console=ttyS1,115200n81 console=ttyS4,115200n81 console=tty0 hostname=piston acpi=force ipv6.disable=1 intel_iommu=on disable_mtrr_cleanup

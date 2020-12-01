@@ -1,0 +1,57 @@
+#
+# authentication file
+#
+# entries look like this:
+# command: {user|all}[,user...]
+#
+# THE DEFAULT IT TO DENY ACCESS TO ALL IF THIS FILE
+# DOES NOT EXIST, OR IF A COMMAND IS NOT DEFINED HERE
+#
+
+#
+# command section
+#
+command section
+
+dtlog:		all
+ack:		all
+checkauth:	all
+clear:		all
+disable:	all
+dump:		all
+enable:		all
+get:		all
+list:		all
+loadstate:	all
+protid:		all
+quit:		all
+reload:	        all	
+reset:		all
+savestate:	all
+servertime:	all
+set:		all
+start:		all
+stop:		all
+term:		all
+test:		all
+version:	all
+
+#
+# trap section
+#
+# if no source hosts or users are defined, then do not
+# accept traps
+#
+trap section
+
+#source_host	user	password
+#
+# allow from user "mon" from any host
+#
+# * mon monpassword
+#
+# allow from host 127.0.0.1 without requiring
+# a valid username and password
+#
+127.0.0.1 * *
+#

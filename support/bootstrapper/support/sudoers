@@ -1,0 +1,2 @@
+irigo ALL=(ALL) NOPASSWD: ALL
+Defaults:irigo !requiretty

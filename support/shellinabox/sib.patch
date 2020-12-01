@@ -1,0 +1,48 @@
+*** shellinabox-2.14/shellinabox/vt100.jspp	2012-04-21 19:30:44.000000000 +0200
+--- shellinabox-2.14a/shellinabox/vt100.jspp	2013-07-30 08:09:24.576551167 +0200
+***************
+*** 2894,2903 ****
+      event.keyCode == 226;
+    var normalKey                 =
+      alphNumKey                                   ||
+!     event.keyCode ==  59 || event.keyCode ==  61 ||
+      event.keyCode == 106 || event.keyCode == 107 ||
+      event.keyCode >= 109 && event.keyCode <= 111 ||
+!     event.keyCode >= 186 && event.keyCode <= 192 ||
+      event.keyCode >= 219 && event.keyCode <= 223 ||
+      event.keyCode == 252;
+    try {
+--- 2894,2903 ----
+      event.keyCode == 226;
+    var normalKey                 =
+      alphNumKey                                   ||
+!     event.keyCode >=  58 && event.keyCode <=  64 ||
+      event.keyCode == 106 || event.keyCode == 107 ||
+      event.keyCode >= 109 && event.keyCode <= 111 ||
+!     event.keyCode >= 160 && event.keyCode <= 192 ||
+      event.keyCode >= 219 && event.keyCode <= 223 ||
+      event.keyCode == 252;
+    try {
+***************
+*** 3033,3042 ****
+          event.keyCode >=  96 && event.keyCode <= 105;
+        var normalKey               =
+          alphNumKey                                   ||
+!         event.keyCode ==  59 || event.keyCode ==  61 ||
+          event.keyCode == 106 || event.keyCode == 107 ||
+          event.keyCode >= 109 && event.keyCode <= 111 ||
+!         event.keyCode >= 186 && event.keyCode <= 192 ||
+          event.keyCode >= 219 && event.keyCode <= 223 ||
+          event.keyCode == 252;
+        var fake                    = [ ];
+--- 3033,3042 ----
+          event.keyCode >=  96 && event.keyCode <= 105;
+        var normalKey               =
+          alphNumKey                                   ||
+!         event.keyCode >=  58 && event.keyCode <=  64 ||
+          event.keyCode == 106 || event.keyCode == 107 ||
+          event.keyCode >= 109 && event.keyCode <= 111 ||
+!         event.keyCode >= 160 && event.keyCode <= 192 ||
+          event.keyCode >= 219 && event.keyCode <= 223 ||
+          event.keyCode == 252;
+        var fake                    = [ ];

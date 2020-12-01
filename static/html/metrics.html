@@ -1,0 +1,153 @@
+<html>
+<head>
+    <title>Metrics</title>
+</head>
+<body>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<div id="chartCpuLoad"></div>
+<div id="chartIO"></div>
+<div id="chartNetworkActivity"></div>
+
+<script>
+$(document).ready(function() {
+  initApexCharts();
+  updateApexCharts("4922c983-7788-47bc-82f2-8ed8de25e9aa");
+//  window.setInterval(function () {
+//    updateApexCharts();
+//  }, 10000)
+});
+
+function initApexCharts() {
+    var options = {
+      chart: {
+          height: 200,
+          type: 'area',
+          nogroup: 'metrics',
+          animations: {
+            enabled: false,
+            easing: 'linear',
+            dynamicAnimation: {
+              speed: 1000
+            }
+          }
+      },
+      markers: {
+        size: 3
+      },
+      colors: ['#008FFB'],
+      dataLabels: {enabled: false},
+      series: [],
+      noData: {text: 'Loading...'},
+      xaxis: {
+          type: 'datetime',
+          labels: {
+          formatter: function (value, timestamp) {
+            if (timestamp > 100000) {
+              var d = new Date(timestamp * 1000);
+              var h = ("0" + d.getHours()).substr(-2);
+              var m = ("0" + d.getMinutes()).substr(-2);
+              var s = ("0" + d.getSeconds()).substr(-2);
+              var dstring = d.getDate() + "/" + (1+d.getMonth()) + "/" + d.getFullYear() + " " + h + ":" + m + ":" + s;
+              return dstring;
+            }
+          }
+        }
+      },
+      yaxis: {
+          labels: {
+            minWidth: "100px"
+          },
+          forceNiceScale: true,
+          decimalsInFloat: 2
+      }
+    }
+
+    var cpu_options = options;
+    cpu_options.title = {text: 'CPU Load'};
+    cpu_options.chart.id = 'cpu';
+    chart_cpu = new ApexCharts(document.querySelector("#chartCpuLoad"), cpu_options);
+
+    var disk_options = options;
+    disk_options.title = {text: 'Disk I/O (kbytes/s)'};
+    disk_options.yaxis.decimalsInFloat = 0;
+    disk_options.chart.id = 'disk';
+    disk_options.colors = ['#2980b9', '#e74c3c'];
+    chart_disk = new ApexCharts(document.querySelector("#chartIO"), disk_options);
+
+    var net_options = options;
+    net_options.title = {text: 'Network traffic (kbytes/s)'};
+    net_options.chart.id = 'network';
+    net_options.colors = ['#f39c12', '#9b59b6'];
+    chart_net = new ApexCharts(document.querySelector("#chartNetworkActivity"), net_options);
+
+    chart_cpu.render();
+    chart_disk.render();
+    chart_net.render();
+}
+
+function updateApexCharts(uuid) {
+  var until = Math.round((new Date()).getTime() / 1000);
+  var from = until - 60*30;
+  var url = "/graphite/graphite.wsgi/render?format=json&from=" + from + "&until=" + until + "&target=domains." + uuid + ".cpuLoad";
+  $.getJSON(url, function(response) {
+    var rawdata = response[0].datapoints;
+    chart_cpu.updateSeries([{
+      name: 'CPU load',
+      data: prepApexData(rawdata)
+    }])
+  });
+
+  url = "/graphite/graphite.wsgi/render?format=json&from=" + from + "&until=" + until + "&target=domains." + uuid + ".wr_kbytes_s";
+  $.getJSON(url, function(response) {
+    var rawdata_1 = response[0].datapoints;
+    url = "/graphite/graphite.wsgi/render?format=json&from=" + from + "&until=" + until + "&target=domains." + uuid + ".rd_kbytes_s";
+    $.getJSON(url, function(response) {
+      var rawdata_2 = response[0].datapoints;
+      chart_disk.updateSeries([
+        {
+          name: 'Disk writes',
+          data: prepApexData(rawdata_1)
+        },
+        {
+          name: 'Disk reads',
+          data: prepApexData(rawdata_2)
+        }
+      ])
+    });
+  });
+
+  url = "/graphite/graphite.wsgi/render?format=json&from=" + from + "&until=" + until + "&target=domains." + uuid + ".rx_kbytes_s";
+  $.getJSON(url, function(response) {
+    var rawdata_1 = response[0].datapoints;
+    url = "/graphite/graphite.wsgi/render?format=json&from=" + from + "&until=" + until + "&target=domains." + uuid + ".tx_kbytes_s";
+    $.getJSON(url, function(response) {
+      var rawdata_2 = response[0].datapoints;
+      chart_net.updateSeries([
+        {
+          name: 'Traffic in',
+          data: prepApexData(rawdata_1)
+        },
+        {
+          name: 'Traffic out',
+          data: prepApexData(rawdata_2)
+        }
+      ])
+    });
+  });
+}
+
+function prepApexData(rdata) {
+  var data = [];
+  rdata.forEach(
+    function(item, index) {
+      data.push({"x": item[1], "y": item[0]})
+    }
+  )
+  return data;
+};
+
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>Stabile</title>
+      <link rel="stylesheet" href="/stabile/static/css/style.css" />
+      <link rel="stylesheet" href="/stabile/static/css/plupload.queue.css" />
+
+      <script type="text/javascript">
+      var dojoConfig = {
+          async:1,
+          packages: [{
+            name: 'fileTree',
+            location: '/stabile/static/js/fileTree'
+          },{
+            name: 'steam2',
+            location: '/stabile/static/js/steam2'
+          },{
+            name: 'stabile',
+            location: '/stabile/static/js/stabile'
+          },{
+            name: 'evd',
+            location: '/stabile/static/js/evd'
+          },{
+            name: 'java',
+            location: '/stabile/static/js/java'
+          },{
+            name: 'ssh',
+            location: '/stabile/static/js/ssh'
+          },{
+            name: 'vnc',
+            location: '/stabile/static/js/vnc'
+          },{
+            name: 'rdp',
+            location: '/stabile/static/js/rdp'
+          },{
+            name: 'helpers',
+            location: '/stabile/static/js/helpers'
+          },
+          {
+            name: 'plupload',
+            location: '/stabile/static/js/plupload'
+          }
+      ]};
+    </script>
+      <!-- script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script -->
+      <script type="text/javascript" src="/stabile/static/js/jquery/1.10.2/jquery.min.js"></script>
+      <script type="text/javascript" src="/stabile/static/js/toastr.js"></script>
+      <script type="text/javascript" src="/stabile/static/js/js.cookie.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+      <!-- script src="//ajax.googleapis.com/ajax/libs/dojo/1.7.5/dojo/dojo.js"></script -->
+      <script src="/stabile/static/js/dojo/1.7.12/dojo/dojo.js"></script>
+      <link rel="icon" href="/stabile/static/img/logo-icon.png" sizes="192x192" />
+      <link rel="icon" href="/stabile/static/img/logo-icon-32.png" sizes="32x32" />
+
+  </head>
+
+<body class="tundra inframe" onresize="home.bodyResize();" onbeforeunload="return home.logout();">
+<div id="toaster" style="font-size: 14px;"></div>
+<div class="modal-body">
+    <ul id="steamtabs" class="nav nav-tabs">
+              <span class="navbar-brand navbar-right" style="white-space: nowrap; margin-right:-10px; margin-top: -12px;">
+                  <span id="engines_span" style="display:none; margin-right:12px">
+                      <span class="glyphicon glyphicon-cloud" aria-hidden="true" style="font-size:15px; vertical-align:top; margin-top:9px; margin-left:10px; color:#3c3c3c;" title=""></span>
+                      <span id="engines"></span>
+                  </span>
+                  <span class="glyphicon glyphicon-user" aria-hidden="true" style="font-size:15px; vertical-align:top; margin-top:7px; margin-left:10px; color:#3c3c3c;" title=""></span>
+                  <span id="account" style="display:none;"></span>
+                  <span style="margin-left:14px;" class="logo"><a href="https://www.origo.io"><img alt="Origo" src="static/img/logo-icon.png" style="height:28px;"></a></span>
+              </span>
+              <li role="presentation" id="hometab" class="active" title="Click to manage your apps">
+                  <a data-toggle="tab" href="#homecontent" id="hometab_a" onclick="fixInfoWidth();">
+                      Dashboard
+                  </a>
+              </li>
+              <li role="presentation" id="serverstab" title="Click to manage the servers that run your apps"><a data-toggle="tab" href="#serverscontent" onclick="">Servers</a></li>
+              <li role="presentation" id="imagestab" title="Click to manage the images your servers run off"><a data-toggle="tab" href="#imagescontent" onclick="">Images</a></li>
+              <li role="presentation" id="networkstab" title="Click to manage the connections your servers connect to the network  through"><a data-toggle="tab" href="#networkscontent" onclick="">Network</a></li>
+              <li role="presentation" id="userstab" title="Click to manage users on this engine" style="display:none"><a data-toggle="tab" href="#userscontent" onclick="">Users</a></li>
+              <li role="presentation" id="nodestab" title="Click to manage the nodes that your servers run on" style="display:none"><a data-toggle="tab" href="#nodescontent" onclick="">Nodes</a></li>
+    </ul>
+
+    <div id="tabs-content" class="tab-content" style="margin:0; background-color:white;">
+        <div id="homecontent" class="tab-pane fade in active grid-tab">
+        </div>
+        <div id="serverscontent" class="tab-pane fade grid-tab">
+        </div>
+        <div id="imagescontent" class="tab-pane fade grid-tab">
+        </div>
+        <div id="networkscontent" class="tab-pane fade grid-tab">
+        </div>
+        <div id="userscontent" class="tab-pane grid-tab">
+        </div>
+        <div id="nodescontent" class="tab-pane fade grid-tab">
+        </div>
+    </div>
+
+    <div class="panel-group" role="tablist" style="margin-botton: 0;">
+        <div class="panel panel-default" id="activityPanel" style="border-radius:0;">
+            <div class="panel-heading" role="tab" id="activityHeading1">
+                <h4 class="panel-title" id="-collapsible-list-group-">
+                    <a class="collapsed" data-toggle="collapse" href="#activity-collapse" aria-expanded="false" aria-controls="collapseListGroup1">
+                        Activity log
+                    </a>
+                    <a class="anchorjs-link" href="#-collapsible-list-group-"><span class="anchorjs-icon"></span></a>
+                </h4>
+            </div>
+            <div id="activity-collapse" class="panel-collapse collapse" role="tabpanel" aria-expanded="false" style="height: 0px;">
+                      <pre style="height:140px; overflow-y:auto; overflow-x:hidden; padding:6px; margin:0; border-radius: 0; background-color: white; border-left:0; border-right:0;" class="small" id="activity-panel">
+                      </pre>
+                <div class="panel-footer" style="padding:4px;"><button class="btn btn-success btn-sm" id="refresh_activity_button">Refresh</button> <button class="btn btn-danger btn-sm" id="clear_activity_button" style="display:none">Clear</button></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    require([
+              "dojo/domReady!",
+              'dojo/io/script',
+              'dojo/ready',
+              'dojo/parser',
+              'dojo/cookie',
+              'dojo/dom',
+              'dojo/hash',
+              'dojo/topic',
+              'dojo/require',
+              'dijit/form/Select',
+              'dojox/widget/Toaster',
+              'java/applet',
+              'stabile/ui_update',
+              'steam2/user',
+              '/stabile/static/docs/embed.js',
+
+              'dojo/_base/declare',
+              'dijit/layout/TabContainer',
+              'dijit/layout/ContentPane',
+
+              'stabile/home',
+              'stabile/servers',
+              'stabile/images',
+              'stabile/networks',
+              'stabile/users',
+              'stabile/nodes',
+
+              'stabile/ClearTextBox',
+              'stabile/home',
+              '/stabile/static/js/plupload/moxie.js',
+              'steam2/xhrDecorator',
+
+              'dojo/aspect',
+              'dojo/on',
+              'dojo/Evented',
+              'dojo/_base/connect'
+
+    ], function(
+                  domReady,
+                  ioScript,
+                  ready,
+                  parser,
+                  cookie,
+                  dom,
+                  hash,
+                  topic,
+                  require,
+                  Select,
+                  Toaster,
+                  applet,
+                  ui_update,
+                  user,
+                  embed,
+                  declare,
+                  TabContainer,
+                  ContentPane
+            ) {
+        ready(function(){
+
+            dojo.connect(window, 'onkeypress', function(evt) {
+                key = evt.keyCode;
+                if (key == dojo.keys.ESCAPE) {
+                    console.debug("Escape trapped !!");
+                    dojo.stopEvent(evt);
+                } else if (key == dojo.keys.BACKSPACE) {
+                    if (evt.target.nodeName != "INPUT" && evt.target.nodeName != "TEXTAREA") {
+                        dojo.stopEvent(evt);
+                        console.debug("Backspace trapped !!", evt);
+                    }
+                }
+            });
+                  //new Toaster({
+                  //    id:'toaster',
+                  //    positionDirection:"tr-down",
+                  //    messageTopic: 'message'
+                  //}, dom.byId('toaster'));
+
+              IRIGO.toast = function(message) {
+                  IRIGO.toaster("message", [{
+                      message: message,
+                      type: "message",
+                      duration: 3000
+                  }]);
+              }
+
+              IRIGO.toaster = function(type, toast) {
+                  var priority = toast.priority || 'info'; // success
+                  toastr.options.timeOut = toast.duration || 3000;
+                  toastr.options.preventDuplicates = true;
+                  toastr.options.progressBar = false;
+                  var message = toast[0].message;
+                  if (toastr[priority]) {
+                      toastr[priority](message);
+                  } else {
+                      toastr.info(message);
+                  }
+              }
+
+                  dojo.subscribe('message', function(obj){
+                     if (obj.message) IRIGO.toaster("message", [{message: obj.message}]);
+                  });
+
+                  homepane = new ContentPane({id: 'homepane', title: 'Dashboard', href: "static/html/home.html", style:"min-height: 450px; height:80vh;",
+                onLoad: function(){home.init();}
+            });
+                  serverspane = new ContentPane({id: 'serverspane', title: 'Servers', href: "static/html/servers.html", style:"height:80vh;",
+                onLoad: function(){servers.init();}
+            });
+                  imagespane = new ContentPane({id: 'imagespane', title: 'Images', href: "static/html/images.html", style:"height:80vh;",
+                onLoad: function(){images.init();}
+            });
+                  networkspane = new ContentPane({id: 'networkspane', Networks: 'Servers', href: "static/html/networks.html", style:"height:80vh;",
+                onLoad: function(){networks.init();}
+            });
+
+            $('#homecontent').empty().append(homepane.domNode);
+            homepane.startup();
+            $('#serverscontent').empty().append(serverspane.domNode);
+            serverspane.startup();
+            $('#imagescontent').empty().append(imagespane.domNode);
+            imagespane.startup();
+            $('#networkscontent').empty().append(networkspane.domNode);
+            networkspane.startup();
+
+            $('#serverstab').on('shown.bs.tab', function(e){
+                servers.grid.handleSelectTab();
+                if (!user.is_readonly) $("#serversNewButton").show();
+            });
+            $('#imagestab').on('shown.bs.tab', function(e){
+                images.grid.handleSelectTab();
+                if (!user.is_readonly) {
+                    $("#imagesNewButton").show();
+                    $("#imagesUploadButton").show();
+                      };
+                      images.updateMissingBackups();
+            });
+            $('#networkstab').on('shown.bs.tab', function(e){
+                networks.grid.handleSelectTab();
+                if (!user.is_readonly) {
+                    $("#networksNewButton").show();
+                }
+            });
+            $('#hometab').on('shown.bs.tab', function(e){
+                if (home.grid.updatePending) {
+                    home.grid.refresh();
+                    home.grid.updatePending = false;
+                }
+            });
+
+            if(user.is_admin) {
+                nodespane = new ContentPane({id: 'nodespane', title: 'Nodes', href: "static/html/nodes.html", style:"height:80vh;",
+                    onLoad: function(){nodes.init();}
+                });
+                $('#nodescontent').empty().append(nodespane.domNode);
+                nodespane.startup();
+                $('#nodestab').on('shown.bs.tab', function(e){
+                    nodes.grid.handleSelectTab();
+                });
+
+                      userspane = new ContentPane({id: 'userspane', title: 'Users', href: "static/html/users.html", style:"height:80vh;",
+                          onLoad: function(){users.init();}
+                      });
+                      $('#userscontent').empty().append(userspane.domNode);
+                      userspane.startup();
+                      $('#userstab').on('shown.bs.tab', function(e){
+                          users.grid.handleSelectTab();
+                      });
+
+            }
+
+            function getActivity() {
+                $('#activity-panel').load("/stabile/cgi/nodes.cgi?action=listlog", function(){
+                        setTimeout(function(){
+                    $('#activity-panel').scrollTop($('#activity-panel')[0].scrollHeight);
+                        }, 200);
+                })
+            }
+            function clearActivity() {
+                $.get("/stabile/cgi/nodes.cgi?action=clearlog", function() {
+                    $('#activity-panel').text("--");
+                });
+            }
+              $('#activity-collapse').on('show.bs.collapse', function () {
+                  getActivity();
+              });
+              $('#activity-collapse').on('shown.bs.collapse', function () {
+                      $(".border_container_south").css("bottom","270px");
+                      window.scrollTo(0,document.body.scrollHeight);
+              });
+              $('#activity-collapse').on('hide.bs.collapse', function () {
+                      $(".border_container_south").css("bottom","90px");
+              });
+            $('#refresh_activity_button').on('click', function () {
+                getActivity();
+            });
+            $('#clear_activity_button').on('click', function () {
+                clearActivity();
+            });
+        });
+    });
+
+    // For some reason dijit_layout_BorderContainer_0 get's reset to width 0 sometimes, this ugly hack fixes it
+    function fixInfoWidth() {
+        if ($("#dijit_layout_BorderContainer_0").width() == 0)
+            $("#dijit_layout_BorderContainer_0").css("width","");
+    }
+</script>
+      <!-- script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/jquery-ui.min.js"></script>
+      <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script -->
+      <script type="text/javascript" src="/stabile/static/js/jqueryui/1.8.23/jquery-ui.min.js"></script>
+      <script type="text/javascript" src="/stabile/static/js/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+</body>
+</html>

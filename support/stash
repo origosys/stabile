@@ -1,0 +1,465 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+use Getopt::Std;
+use URI::Escape;
+use Error qw(:try);
+use Data::Dumper;
+use Text::SimpleTable;
+use sigtrap 'handler' => \&cleanup, 'QUIT', 'INT', 'TERM', 'KILL', 'STOP';
+use Term::ReadLine;
+
+my %options=();
+getopts("a:hi:du:", \%options); # -a action -h help -i image -d debug
+
+my $action = $options{a};
+my $cmduser = $options{u};
+my $debug = $options{d};
+
+my $uuser = scalar getpwuid $<;
+my $isadmin;
+
+my $user;
+if ($uuser eq "root" || $uuser eq "irigo" || $uuser eq "mon") {
+    $isadmin = 1;
+    if ($cmduser) {$user = $cmduser;}
+    else {$user = 'irigo';};
+} elsif ($uuser =~ /irigo-(.+)/) {
+    $user = $1;
+} else {
+    print "You don't have privileges to access this Stabile installation\n";
+    exit 0;
+}
+inithelp();
+
+$ENV{PATH} = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
+
+$ENV{'REMOTE_USER'} = $user;
+
+my $cmdpath = '/';
+my $cmdobj = '/';
+my $oldpath;
+my $oldobj;
+my $basedir = "/var/www/stabile";
+$basedir = `cat /etc/stabile/basedir` if -e "/etc/stabile/basedir";
+chomp $basedir;
+my $cgi = "$basedir/cgi";
+
+my $term;
+if (-t STDIN) { # We are talking to a tty
+    print "Welcome to stash!". ($debug?" (debug)":'') ."\nType \"help\" to list your commands.\n";
+    $term = new Term::ReadLine 'stash';
+}
+
+try {
+    while (!$halt) {
+        my $cmdaction;
+        if ($oldpath) {
+            $cmdpath = $oldpath;
+            $oldpath = '';
+        }
+        if ($oldobj) {
+            $cmdobj = $oldobj;
+            $oldobj = '';
+        }
+
+        chomp $cmdobj;
+        my $prompt = "$user\@stash:" . "$cmdpath" . (($cmdobj ne '/')?"$cmdobj":"") . "\$";
+        if ($term) {
+    # Interactive session
+            $input = $term->readline($prompt);
+        } else {
+            $input =  <STDIN>;
+        }
+        unless (defined $input) {
+            exit;
+        }
+        chomp ($input);
+        next unless ($input || $input eq '0');
+        next if ($input eq '.');
+
+        # Handle composite commands
+        my @pathelements;
+        my @params;
+        my $paramstxt;
+        if ($input =~ /^(\w+=.+)/) {
+            $paramstxt = $input;
+        } elsif ($input =~ /(.+)\/(\w+=.+)/) {
+            @pathelements = split('/', $1);
+            $paramstxt = $2;
+        } elsif ($input =~ /(\S+)\s?(.*)/)  {
+            @pathelements = split('/', $1);
+            $paramstxt = $2;
+        } else {
+            "stash does not understand: $input\n";
+            next;
+        }
+        @params = split(/,\s?/, $paramstxt);
+        if (!$pathelements[0] && $pathelements[1]) { # $input starts with "/"
+            $oldpath = $cmdpath;
+            if ($pathelements[1] eq '..'){next;}
+            elsif ('servers' =~ /^$pathelements[1]/) {$cmdpath = '/servers'}
+            elsif ('images' =~ /^$pathelements[1]/) {$cmdpath = '/images'}
+            elsif ('networks' =~ /^$pathelements[1]/) {$cmdpath = '/networks'}
+            elsif ('nodes' =~ /^$pathelements[1]/ && $isadmin) {$cmdpath = '/nodes'}
+            elsif ('users' =~ /^$pathelements[1]/ && $isadmin) {$cmdpath = '/users'}
+            elsif ('systems' =~ /^$pathelements[1]/ && $isadmin) {$cmdpath = '/systems'}
+            else {next;};
+
+            if ($pathelements[2] =~ /^\w{8}-/ || ($cmdpath eq '/users' && $pathelements[2])) {
+                $oldobj = $cmdobj;
+                $cmdobj = "/$pathelements[2]";
+                $cmdaction = $pathelements[3];
+            } else {
+                $cmdaction = $pathelements[2];
+            }
+            if (!$cmdaction && !@params) {
+                $oldpath = '';
+            }
+
+        } elsif ($cmdpath ne '/') { # && $user) { # A path has been selected
+            if ($cmdobj ne '/') { # An object has previously been selected
+                $cmdaction = $pathelements[0];
+            } elsif ($pathelements[0] =~ /^\w{8}-/ && $pathelements[1]) {
+                $oldobj = $cmdobj;
+                $cmdobj = "/$pathelements[0]";
+                $cmdaction = $pathelements[1];
+            } else {
+                $cmdaction = $pathelements[0];
+            }
+        } else { # No path has been selected
+            if ($pathelements[0] eq '..'){;}
+            elsif ('servers' =~ /^$pathelements[0]/) {$cmdpath = '/servers';}
+            elsif ('images' =~ /^$pathelements[0]/) {$cmdpath = '/images';}
+            elsif ('networks' =~ /^$pathelements[0]/) {$cmdpath = '/networks';}
+            elsif ('nodes' =~ /^$pathelements[0]/ && $isadmin) {$cmdpath = '/nodes';}
+            elsif ('users' =~ /^$pathelements[0]/ && $isadmin) {$cmdpath = '/users';}
+            elsif ('systems' =~ /^$pathelements[0]/ && $isadmin) {$cmdpath = '/systems';}
+            else {$cmdpath = '/'; $cmdobj = '/';};
+
+            if ($cmdpath ne '/') {
+                if ($pathelements[1] =~ /^\w{8}-/ && $pathelements[2]) {
+                    $oldpath = '/';
+                    $oldobj = $cmdobj;
+                    $cmdobj = "/$pathelements[1]";
+                    $cmdaction = $pathelements[2];
+                } else {
+                    $cmdaction = $pathelements[1];
+                }
+            } else {
+                $cmdaction = $pathelements[0];
+            }
+        }
+
+#        my @commands = split(' ', $cmdaction);
+#        print "Got command $cmdaction, with path $cmdpath and object $cmdobj ($oldpath and $oldobj)\n";
+
+    ## General commands
+        if ($cmdaction eq '..') {
+            if ($cmdpath eq '/' && $cmdobj eq '/') {;}
+            if ($cmdobj eq '/') {$cmdpath = '/'}
+            $cmdobj = '/';
+        } elsif ($cmdaction eq 'quit') {
+            $halt = 1;
+            cleanup();
+            last;
+        } elsif ($cmdaction eq 'listlog' || $cmdaction eq 'log') {
+            my $p = '/nodes';
+            print "Latest log entries:", `$cgi$p.cgi -a listlog`, "\n";
+        } elsif ($cmdaction eq 'clearlog') {
+            my $p = '/nodes';
+            print `$cgi$p.cgi -a clearlog`, "\n";
+        } elsif ($cmdpath eq '/' && $isadmin && $cmdaction eq 'setuser' && $params[0]) {
+            $user = $params[0];
+            $ENV{'REMOTE_USER'} = $user;
+            print "User changed to: $user\n";
+        } elsif ($cmdaction eq 'debug') {
+            $debug = ($params[0] eq 'on' || !$params[0])? 1:0;
+            print "Debug is " . ($debug?'on':'off') . "\n";
+        } elsif ($cmdpath eq '/') {
+            if ($cmdaction eq 'list' || $cmdaction eq 'ls') {
+                print $objhelp{$cmdpath};
+            } elsif ($cmdaction eq 'help') {
+                print $cmdhelp{$cmdpath};
+            } elsif ($cmdaction eq 'showuser') {
+                my $suser;
+                $suser = $params[0]if ($isadmin);
+                $suser = $user unless ($suser);
+                print `$cgi/users.cgi -a uuidshow -u $suser`, "\n";
+            } elsif ($cmdaction eq 'listusers') {
+                print `$cgi/users.cgi -a tablelist`, "\n" if ($isadmin);
+            } else {
+                print "Unknown command\n";
+            }
+        } else {
+
+    ## Servers, images, networks, nodes
+            if ($cmdpath eq '/servers' || $cmdpath eq '/images' || $cmdpath eq '/networks' || $cmdpath eq '/nodes'
+                || $cmdpath eq '/users' || $cmdpath eq '/systems') {
+
+                my $path = $cmdpath;
+
+                my $parms = '';
+                if ($params[0] eq '-f' || $params[1] eq '-f') {$parms = '-f';};
+                if ($params[0]  && !($params[0] =~ /^-\w/)) {$parms .= " -m $params[0]";};
+                if ($params[1]  && !($params[1] =~ /^-\w/)) {$parms .= " -m $params[1]";};
+                if (($cmdaction eq 'list' || $cmdaction eq 'ls') && $cmdobj eq '/') {
+                    print "Firing: $cgi$path.cgi -a tablelist $parms\n" if ($debug);
+                    print `$cgi$path.cgi -a tablelist $parms`, "\n";
+                } elsif (($cmdaction eq 'listall' && $cmdpath eq '/images') && $cmdobj eq '/') {
+                    print "Firing: $cgi$path.cgi -a tablelistall $parms\n" if ($debug);
+                    print `$cgi$path.cgi -a tablelistall $parms`, "\n";
+                } elsif ($cmdaction eq 'longlist' || $cmdaction eq 'll') {
+                    print `$cgi$path.cgi -a list $parms`, "\n" unless ($cmdobj ne '/');
+                } elsif ($cmdaction eq 'help') {
+                    if ($cmdobj eq '/') {
+                        my $res = `$cgi$path.cgi -a help`;
+                        chomp $res;
+                        print "\n$res\n\n";
+                    } else {
+                        if ($path eq '/') {
+                            print $objhelp{$path};
+                        } else {
+                            my $res = `$cgi$path.cgi -a plainhelp`;
+                            chomp $res;
+                            print "\n$res\n\n";
+                        }
+                    };
+                } elsif ($cmdaction eq 'listbackups' && $path eq '/images' && $cmdobj ne '/') {
+                    my $uuid = substr($cmdobj,1);
+                    my $res = `$cgi$path.cgi -a listbackups -u $uuid`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /updateallbtimes|removeuserimages/ && $path eq '/images' && $cmdobj eq '/') {
+                    my $res = `$cgi$path.cgi -a $cmdaction`;
+                    chomp $res;
+                    print "\n$res\n\n";
+#                } elsif ($cmdaction =~ /deactivate|deleteentirely/ && $path eq '/users' && $cmdobj eq '/') {
+#                    my $res = `$cgi$path.cgi -a $cmdaction`;
+#                    chomp $res;
+#                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /removeuserservers|destroyuserservers/ && $path eq '/servers' && $cmdobj eq '/') {
+                    my $res = `$cgi$path.cgi -a $cmdaction`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /removeusersystems/ && $path eq '/systems' && $cmdobj eq '/') {
+                    my $res = `$cgi$path.cgi -a $cmdaction`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /removeusernetworks/ && $path eq '/networks' && $cmdobj eq '/') {
+                    my $res = `$cgi$path.cgi -a $cmdaction`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /^monitors/ && $path eq '/systems') {
+                    my $uuid = substr($cmdobj,1);
+                    my $cgicmd = "$cgi$path.cgi -a monitors" . ($uuid?" -u $uuid":"") . " $parms";
+                    my $res = `$cgicmd`;
+                    print "Firing: $cgicmd\n" if ($debug);
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction =~ /^billengine/ && $path eq '/users') {
+                    my $cgicmd = "$cgi$path.cgi -a billengine $parms";
+                    my $res = `$cgicmd`;
+                    print "Firing: $cgicmd\n" if ($debug);
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif (($cmdaction eq 'listfiles' || $cmdaction eq 'lf') && $path eq '/images' && $cmdobj ne '/') {
+                    my $uuid = substr($cmdobj,1);
+                    my $esc_paramstxt = uri_escape($paramstxt);
+                    print "Firing: $cgi$path.cgi -a listfiles -u $uuid path=$esc_paramstxt" if ($debug);
+                    my $res = `$cgi$path.cgi -a listfiles -u $uuid path=$esc_paramstxt`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction eq 'listpackages' && $path eq '/images' && $cmdobj ne '/') {
+                    my $uuid = substr($cmdobj,1);
+                    print "Firing: $cgi$path.cgi -a listpackages -u $uuid" if ($debug);
+                    my $res = `$cgi$path.cgi -a listpackages -u $uuid`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif (($cmdaction eq 'restorefiles' || $cmdaction eq 'rf') && $path eq '/images' && $cmdobj ne '/') {
+                    my $uuid = substr($cmdobj,1);
+                    my $esc_paramstxt = uri_escape($paramstxt);
+                    print "Firing: $cgi$path.cgi -a restorefiles -u $uuid files=$esc_paramstxt" if ($debug);
+                    my $res = `$cgi$path.cgi -a restorefiles -u $uuid files=$esc_paramstxt`;
+                    chomp $res;
+                    print "\n$res\n\n";
+                } elsif ($cmdaction eq 'show' || $cmdaction eq 'list' || $cmdaction eq 'ls') {
+                    if ($cmdobj ne '/') {
+                        my $uuid = substr($cmdobj,1);
+                        print "Firing: $cgi$path.cgi -a uuidshow -u $uuid\n" if ($debug);
+                        my $fcmd = qq[$cgi$path.cgi -a uuidshow -u $uuid];
+                        $fcmd = $1 if ($fcmd =~ /(.*)/);
+                        print `$fcmd`, "\n";
+                    }
+                } elsif ($cmdaction || @params) {
+                    if ($cmdobj ne '/' || (($cmdaction =~ /^new (.+)/ || $cmdaction eq 'new') && $cmdobj eq '/')) {
+            #Object operation
+                        my $postdata;
+                        my $uuid = substr($cmdobj,1);
+                        my $actionstr;
+                        if ($cmdaction eq 'new') { # New object
+                            $actionstr .= qq{"action": "save", };
+                            foreach my $action (@params) {
+                                if ($action =~ /^(\w+)=(.+)/) {
+                                    $actionstr .= qq{"$1": "$2", };
+                                }
+                            }
+                            $actionstr .= qq{"status": "new"};
+                        } else { # Perform action, possibly on object
+                            my $caction = $cmdaction || 'save';
+                            $actionstr .= qq{"action": "$caction", };
+                            foreach my $action (@params) {
+                                if ($action =~ /^(\w+)=(.+)/) {
+                                    $actionstr .= qq{"$1": "$2", };
+                                }
+                            }
+                            my $identifier = 'uuid';
+                            if ($path eq '/nodes') {$identifier = 'mac';}
+                            elsif ($path eq '/users') {$identifier = 'username';};
+                            $actionstr .= qq{"$identifier": "$uuid"};
+                        }
+                        $postdata = uri_escape(
+#                            qq/{"identifier": "uuid", "label": "uuid", "items":[{$actionstr, "console": 1}]}/
+                             qq/[{$actionstr, "console": 1}]/
+                            ) unless $postdata;
+                        print "Firing: REQUEST_METHOD=post $cgi$path.cgi -k ". uri_unescape($postdata) . "\n" if ($debug);
+                        print "$postdata\n" if ($debug);
+                        my $res = `REQUEST_METHOD=post $cgi$path.cgi -k $postdata`;
+                        my $outres;
+                        chomp $res;
+                        for (split /^/, $res) {
+                            if ($_ =~ /\w+=OK (.+)/i || $_ =~ /\w+=ERROR (.+)/i) {$outres .= "$1\n"};
+                        }
+                        print "$outres\n";
+                    } else {
+            #Object selection
+                        print "Firing: $cgi$path.cgi -a uuidlookup -u $cmdaction\n" if ($debug);
+                        my $res = `$cgi$path.cgi -a uuidlookup -u $cmdaction`;
+                        chomp $res;
+                        if ($res || $res eq '0') {
+                            if ($user) {
+                                $cmdobj = "/$res";
+                            } else {
+                                if (isadmin || $uuser eq "irigo-$res") {
+                                    $user = "$res";
+                                    $ENV{'REMOTE_USER'} = $user;
+                                }
+                            }
+                        } else { # No object found - treat $cmdaction as action (instead of uuid)
+                            print "Firing: $cgi$path.cgi -a $cmdaction\n" if ($debug);
+                            my $res = `$cgi$path.cgi -a $cmdaction`;
+                            my $outres;
+                            chomp $res;
+                            #print "Got: $res\n" if ($debug);
+                            for (split /^/, $res) {
+                                if ($_ =~ /\w+=OK (.+)/i || $_ =~ /\w+=ERROR (.+)/i) {$outres .= "$1\n"}
+                                else {$outres .= $_;};
+                            }
+                            print "$outres\n";
+                        }
+                    }
+                }
+            } else {
+                print "Unknown command!\n";
+            }
+        }
+    }
+    print "\n";
+
+} catch Error with {
+	my $ex = shift;
+	if ($ex->{-text}) {
+    	print $ex->{-text}, "\n";
+	} else {
+	    print "Stream=ERROR\n";
+	}
+} finally {
+};
+
+sub cleanup {
+    print "Unmounting all images\n";
+    my $res = `$cgi/images.cgi -a unmountall`;
+    print $res if ($debug);
+    print "Thanks for now\n";
+    exit(1);
+}
+
+sub inithelp {
+
+$cmdhelp{'/'} = <<END
+Available commands:
+list
+"path"
+setuser "user"
+END
+;
+
+$cmdhelp{'/servers'} = <<END
+Available commands:
+..
+list
+"object uuid"
+END
+;
+
+$cmdhelp{'/images'} = <<END
+Available commands:
+..
+list
+"object uuid"
+END
+;
+
+$cmdhelp{'/networks'} = <<END
+Available commands:
+..
+list
+"object uuid"
+END
+;
+
+$cmdhelp{'/users'} = <<END
+Available commands:
+..
+list
+billing
+"object uuid"
+END
+;
+
+
+my $t2 = Text::SimpleTable->new(36);
+$t2->row('Path');
+$t2->hr;
+$t2->row('systems');
+$t2->row('servers');
+$t2->row('images');
+$t2->row('networks');
+$t2->row('nodes') if ($isadmin);
+$t2->row('users') if ($isadmin);
+$objhelp{'/'} = $t2->draw;
+
+
+#$objhelp{'/'} = <<END
+#servers
+#images
+#networks
+#END
+#;
+
+#$objhelp{'/'} .= "nodes\n" if ($isadmin);
+
+$objhelp{'/networks'} = <<END
+Available commands:
+..
+show
+END
+;
+
+
+}

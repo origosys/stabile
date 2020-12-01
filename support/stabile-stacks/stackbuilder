@@ -1,0 +1,406 @@
+#!/usr/bin/perl
+
+use JSON;
+use URI::Escape::XS qw/uri_escape uri_unescape/;
+use ConfigReader::Simple;
+use Cwd;
+use Data::Dumper;
+use Getopt::Std;
+
+our %options=();
+Getopt::Std::getopts("rapd", \%options);
+my $ofile = $ARGV[(scalar @ARGV)-1] if @ARGV;
+my $reinstall = 1 if ($options{r});
+my $noactivate = 1 if ($options{a});
+my $nopublish = 1 if ($options{p});
+my $debug = 1 if ($options{d});
+
+my $cwd = cwd();
+
+unless ($ofile) {
+    opendir(DIR, ".");
+    my @files = grep(/\.o/,readdir(DIR));
+    closedir(DIR);
+
+    if (@files) {
+        $ofile = $files[0];
+        print "Using $ofile as stackfile\n";
+    } else {
+        print "Usage: stackbuilder 'stackfile'\n";
+        exit;
+    }
+}
+unless (-e $ofile) {
+    print "Stabile file not found: $ofile\n";
+    print "Usage: stackbuilder 'stackfile'\n";
+    exit;
+}
+
+my $config = ConfigReader::Simple->new($ofile);
+chdir $1 if ($ofile =~ /(.*\/).+/);
+
+# The version of the app we are building
+my $version = $config->get("VERSION") || '1.0';
+my $baseimage = $config->get("BASEIMAGE");
+my $rebase = $config->get("REBASE");
+my $basesuite = $config->get("BASESUITE") || 'xenial';
+my $basename = $config->get("BASENAME") || 'ubuntu-16.04';
+$basename = 'ubuntu-18.04' if ($basesuite eq 'bionic');
+my $name = $config->get("NAME");
+die "You must supply a name [NAME]" unless ($name);
+my $appname = $config->get("APPNAME");
+my $dir = $config->get("DIR");
+die "Directory '$dir' [DIR] does not exist" unless (!$dir || -d $dir);
+my $dirtarget = $config->get("DIRTARGET") || '/tmp';
+my $tar = $config->get("TAR");
+my $tartarget = $config->get("TARTARGET") || '/tmp';
+my $git = $config->get("GIT");
+my $gittarget = $config->get("GITTARGET") || '/tmp';
+my $downloadurl = $config->get("DOWNLOADURL");
+my $debs = $config->get("DEBS");
+my $preexec = $config->get("PREEXEC");
+my $postexec = $config->get("POSTEXEC");
+my $service = $config->get("SERVICE");
+my $dname="$name.$version";
+my $size=$config->get("SIZE") || 9216;
+my $masterpath;
+my $managementlink = $config->get("MANAGEMENTLINK") || '';
+my $upgradelink = $config->get("UPGRADELINK") || '';
+my $terminallink = $config->get("TERMINALLINK") || '';
+my $vcpu = $config->get("VCPU") || '';
+my $memory = $config->get("MEMORY") || '';
+my $logo = $config->get("LOGO") || '';
+my $price = $config->get("PRICE") || '';
+my $thumbnail = $config->get("THUMBNAIL") || '';
+my $summary = $config->get("SUMMARY") || '';
+my $description = $config->get("DESCRIPTION") || '';
+my $appid = $config->get("APPID") || '';
+my $dataimage = $config->get("DATAIMAGE") || '';
+my $fuelpath = '';
+
+# Check if we are on an admin server or on a regular VM
+unless (-e "/mnt/stabile/images" || -e "/stabile-images/images") {
+    # Mount shared storage
+    `curl --silent http://localhost:10000/stabile/index.cgi?action=mountpools`;
+    $fuelpath = `cat /proc/mounts | grep '/mnt/fuel'`;
+    die "Unable to mount shared storage" unless ($fuelpath =~ /(\/mnt\/fuel\/pool\d+)/);
+    $fuelpath = $1;
+}
+
+if (!$reinstall && -e "$cwd/$dname.master.qcow2") { # Master image already exists, try to activate and publish
+    print "Found $cwd/$dname.master.qcow2, trying to activate and publish app\n";
+
+} else {
+    # Load nbd
+    print `rmmod nbd`;
+    print `modprobe nbd max_part=63`;
+
+    unless (-e "$cwd/$dname.master.qcow2") {
+        # If app is based on another image, get a link to it, and mount it
+        if ($baseimage) {
+            my $basepath = "$cwd/$baseimage";
+            if (-e "$cwd/$baseimage") {
+                # If base image is available, do nothing
+            } elsif ($fuelpath) {
+                # If not make base image available in fuel
+                # First remove any existing base image link
+                print ">> $baseimage not found\n";
+                print ">> Asking Valve to link or copy $baseimage\n";
+                print qq|>> curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"|;
+                my $json = `curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"`;
+                print $json;
+                my $jobj = from_json($json);
+                my $linkpath = $jobj->{linkpath};
+                $basepath = $jobj->{path};
+                $masterpath = $jobj->{masterpath};
+                unless ($basepath) {
+                    print ">> No base path received. Perhaps master image is not on fuel storage?\n";
+                    print $json, "\n";
+                    exit 0;
+                }
+                while (!(-e $basepath)) {
+                    print ">> Waiting for $basepath...\n";
+                    sleep 1
+                }
+            } else {
+                print ">> You are trying to build an image which depends on a baseimage, $baseimage, which is not available\n";
+                exit;
+            }
+
+            # Clone base image
+            if (-e "$cwd/$dname.master.qcow2") {
+                print ">> Destination image already exists: $cwd/$dname.master.qcow2\n";
+            } else {
+                print `qemu-img create -f qcow2 -b "$basepath" "$cwd/$dname.master.qcow2"`;
+            }
+    # No baseimage, let's build image from scratch or download
+        } else {
+            if ($downloadurl) {
+                my $dlname = "$cwd/$dname.master.qcow2";
+                $dlname = "$cwd/$dname.master.qcow2.tar" if ($downloadurl =~ /\.box$/);
+                $cmd = qq|wget -O "$dlname" "$downloadurl"|;
+                print `$cmd`;
+                if ($dlname =~ /\.tar$/) {
+                    print ">> untarring...\n";
+                    print `tar -xvf "$dlname" box.img`;
+                    print `mv box.img "$cwd/$dname.master.qcow2"`;
+                    print `rm "$dlname"`;
+                }
+            } else {
+                #            die "You need to install python-vm-builder in order to build a base image\n" unless (`which vmbuilder`);
+                die "You need to install virt-builder in order to build a base image\n" unless (`which virt-builder`);
+                # We unfortunately have to patch vmbuilder
+                ## See: http://askubuntu.com/questions/819844/kvm-vmbuilder-fails
+
+                #            my $vmbuilder_dapper = "/usr/lib/python2.7/dist-packages/VMBuilder/plugins/ubuntu/dapper.py";
+                #            if (-e $vmbuilder_dapper) {
+                #                unless (`grep 'force-confnew' $vmbuilder_dapper`) {
+                #                    print ">> Patching vmbuilder\n";
+                #                    system(qq|perl -pi -e "s/(\'dist-upgrade\')/\'--option=Dpkg::Options::=--force-confnew\', \'dist-upgrade\'/" $vmbuilder_dapper|);
+                #                    unlink($vmbuilder_dapper.'c');
+                #                }
+                #                unless (`grep 'force-confnew' $vmbuilder_dapper`) {
+                #                    print ">> Patching vmbuilder\n";
+                #                    system(qq|perl -pi -e "s/(self.install_from_template.*sudoers.*)/# \\\$1/" $vmbuilder_dapper|);
+                #                    unlink($vmbuilder_dapper . 'c');
+                #                }
+                #            }
+
+                #my $cmd = qq|vmbuilder kvm ubuntu -o -v --debug --suite $basesuite --arch amd64 --components main,universe,multiverse --rootsize $size --user stabile --pass stabile --hostname $name --tmpfs 2048 --addpkg linux-image-generic --addpkg wget --addpkg curl --domain stabile.io --ip 10.1.1.2|;
+                # print "$cmd\n";
+                $cmd = qq|virt-builder $basename -o "$cwd/$dname.master.qcow2" --arch amd64 --size $size --hostname $name --format qcow2|;
+                print "$cmd\n";
+                print `$cmd`;
+                # The downloaded image is in sparse format - get rid of unused/sparse space
+                print "Getting rid of sparse space...\n";
+                print `qemu-img convert -O qcow2 "$cwd/$dname.master.qcow2" "$cwd/$dname.master.qcow2.new"`;
+                print `mv "$cwd/$dname.master.qcow2.new" "$cwd/$dname.master.qcow2"`;
+                # Clean up
+                # `mv ubuntu-kvm/*.qcow2 "$cwd/$dname.master.qcow2"`;
+                # `rm -r ubuntu-kvm`;
+            }
+        }
+    }
+
+    # Now load nbd and mount the image
+    if (-e "$cwd/$dname.master.qcow2") {
+        # Wait for nbd0 to be created
+        if (!(-e "/dev/nbd0p1")) {
+            print `qemu-nbd -c /dev/nbd0 "$cwd/$dname.master.qcow2"`;
+            while (!(-e "/dev/nbd0p1")) {
+                print ">> Waiting for nbd0p1...\n";
+                sleep 1
+            }
+        }
+        # Mount image
+        print `mkdir "/tmp/$dname"` unless (-d "/tmp/$dname");
+        my $part; # We assume max 4 partitions and assume the main partition is the last
+        for (my $i=4; $i>=0; $i--) {
+            if (-e "/dev/nbd0p$i") {
+                my $partinfo = `blkid /dev/nbd0p$i`;
+                chomp $partinfo;
+                if ($partinfo =~ /TYPE="(xfs|ext|.+_member)/) {
+                    $part = "p$i";
+                    last;
+                }
+            }
+        }
+        print `mount /dev/nbd0$part "/tmp/$dname"` unless (-e "/tmp/$dname/boot");
+        # Mount /proc
+        print `mount --bind /proc "/tmp/$dname/proc"`;
+#        print `mount --bind /dev/pts "/tmp/$dname/dev/pts"`;
+        # Make /dev/null available
+        # print `mknod -m 666 "/tmp/$dname/dev/null" c 1 3`
+    } else {
+        die "Unable to mount image $cwd/$dname.master.qcow2";
+    }
+
+    # Copy files
+    if ($dir) {
+        die "'$dir' not found [DIR]" unless (-d $dir);
+        print ">> Copying files from $dir to /tmp/$dname$dirtarget...\n";
+        print `tar rf "/tmp/$dname.tar" "$dir"`;
+        print `tar xf "/tmp/$dname.tar" -C "/tmp/$dname$dirtarget"`;
+        print `rm "/tmp/$dname.tar"`;
+    }
+
+    print `rm /tmp/$dname/etc/resolv.conf`;
+    print `echo "nameserver 1.1.1.1" > /tmp/$dname/etc/resolv.conf`;
+    # Add user stabile
+    print `chroot "/tmp/$dname" useradd stabile -b /home -s /bin/bash`;
+    print `chroot "/tmp/$dname" mkdir /home/stabile`;
+    print `chroot "/tmp/$dname" chown statile:stabile /home/stabile`;
+
+	# Run pre exec script
+    # Stop local webmin from blocking port 10000
+    print `systemctl stop webmin`;
+    if ($preexec) {
+        print "Running pre exec in /tmp/$dname\n";
+        foreach my $line (split(/\\n/, $preexec)) { # $preexec may contain a multi-line script
+            $line =~ s/^\s+//; # remove leading spaces
+            $line =~ s/\s+$//; # remove trailing spaces
+            $line =~ s/#.+$//; # remove comments
+            $line =~ s/\|/\|chroot "\/tmp\/$dname" /; # redirect pipes
+            $line =~ s/\> +/\> \/tmp\/$dname/; # redirect pipes
+            $line =~ s/\< +/\> \/tmp\/$dname/; # redirect pipes
+            $line =~ s/\$\((.+)\)/\$(chroot "\/tmp\/$dname" $1) /; # handle environment variables
+            if ($line) {
+                my $cmd = qq|chroot "/tmp/$dname" $line|; # execute command in chroot
+                print ">> $cmd\n";
+                print `$cmd`;
+            }
+        }
+    }
+
+    # Install debs
+    if ($debs) {
+        print ">> Installing packages\n";
+        print `chroot "/tmp/$dname" dpkg --clear-avail`;
+        print `chroot "/tmp/$dname" sync-available` if (-e "/tmp/$dname/usr/sbin/sync-available");
+        print `chroot "/tmp/$dname" apt-get update`;
+        print `chroot "/tmp/$dname" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -q -y --show-progress install $debs'`;
+    }
+
+    # Unpack tar
+    if ($tar && -e $tar) {
+        print ">> Unpacking files...\n";
+        if ($tar =~ /\.zip$/) {
+            print `unzip $tar -d "/tmp/$dname/$tartarget" > /dev/null`;
+        } else {
+            print `tar xfv $tar -C "/tmp/$dname/$tartarget"`;
+        }
+    }
+
+    # Git clone
+    if ($git) {
+        print ">> Cloning from Git repo...\n";
+        print `git clone $git "/tmp/$dname$gittarget"`;
+    }
+
+    # Run post exec script
+    if ($postexec) {
+        print "Running post exec in /tmp/$dname\n";
+        foreach my $line (split(/\\n/, $postexec)) {
+            $line =~ s/^\s+//;
+            $line =~ s/\s+$//;
+            $line =~ s/#.+$//;
+            $line =~ s/\|/\|chroot "\/tmp\/$dname" /;
+            $line =~ s/\> +/\> \/tmp\/$dname/;
+            $line =~ s/\< +/\> \/tmp\/$dname/;
+            $line =~ s/\$\((.+)\)/\$(chroot "\/tmp\/$dname" $1) /;
+            if ($line) {
+                my $cmd = qq|chroot "/tmp/$dname" $line|;
+                print ">> $cmd\n";
+                print `$cmd`;
+            }
+        }
+    }
+
+    # Install boot exec script
+    if ($service) {
+        my $unit =  <<END
+[Unit]
+DefaultDependencies=no
+Description=Stabile $dname
+After=network-online.target stabile-ubuntu.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$service
+TimeoutSec=0
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+END
+        ;
+        `echo "$unit" > "/tmp/$dname/etc/systemd/system/stabile-$dname.service"`;
+        `chmod 664 "/tmp/$dname/etc/systemd/system/stabile-$dname.service"`;
+        `chmod 755 "/tmp/$dname$service"`;
+        `chroot /tmp/$dname ln -s /etc/systemd/system/stabile-$dname.service /etc/systemd/system/multi-user.target.wants/stabile-$dname.service`;
+#        `systemctl enable stabile-$dname.service`;
+    }
+
+    if ($debug) {
+        print ">> Leaving image mounted on: /tmp/$dname\n";
+        print ">> Remember to unmount /tmp/$dname/proc and /tmp/$dname manually and 'killall qemu-nbd' when you are done debugging.\n";
+        exit;
+    }
+# Start webmin again
+	print `killall -9 miniserv.pl`;
+    print `systemctl start webmin`;
+	sleep 2;
+# Unmount base image and clean things up
+    print `umount "/tmp/$dname/proc"`;
+    print `umount "/tmp/$dname"`;
+    print `killall qemu-nbd`;
+    print `rm -d "/tmp/$dname"`;
+
+    # convert to qcow2
+    # print "Converting $cwd/$dname.master.qcow2\n";
+    # print `qemu-img amend -f qcow2 -o compat=0.10 $cwd/$dname.master.qcow2`;
+
+    # Rebase image
+    if ($rebase) { # Flatten image
+        print ">> Rebasing and flattening image...\n";
+        print `qemu-img rebase -f qcow2 -b "" "$cwd/$dname.master.qcow2"`;
+    } elsif ($masterpath) { # Update backing file path
+        print ">> Rebasing to new backing file path ...\n";
+        print `qemu-img rebase -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"` if ($masterpath);
+    }
+}
+
+# Create data image if specified
+if ($dataimage && !(-e "$cwd/$dname-data.master.qcow2")) {
+    print ">> Creating data image $dataimage in $cwd/$dname-data.master.qcow2...\n";
+    print `qemu-img create -f qcow2 "$cwd/$dname-data.master.qcow2" $dataimage`;
+    print `modprobe nbd max_part=63`;
+    print `qemu-nbd -c /dev/nbd0 "$cwd/$dname-data.master.qcow2"`;
+    print `sfdisk /dev/nbd0 << EOF\n;\nEOF`;
+    print `mkfs.ext4 /dev/nbd0p1`;
+    print `qemu-nbd -d /dev/nbd0`;
+}
+
+if ($fuelpath) {
+    # Activate and publish image
+    $appname = uri_escape($appname);
+    $managementlink = uri_escape($managementlink);
+    $upgradelink = uri_escape($upgradelink);
+    $terminallink = uri_escape($terminallink);
+    $logo = uri_escape($logo);
+    $thumbnail = uri_escape($thumbnail);
+    $summary = uri_escape($summary);
+    $description = uri_escape($description);
+    $price = uri_escape($price);
+    $image2 = "$dname-data.master.qcow2" if ($dataimage);
+
+    my $imgpath = "$cwd/$dname.master.qcow2";
+    # Move image unless already on shared storage
+    unless ($imgpath =~ /\/mnt\/fuel\/pool\d+/) {
+        die "Unable to move image to shared storage - already exists" if (-e "$fuelpath/$dname.master.qcow2");
+        print "Moving $dname.master.qcow2 to $fuelpath\n";
+        print `mv -v "$cwd/$dname.master.qcow2" $fuelpath`;
+        $imgpath = "$fuelpath/$dname.master.qcow2";
+    }
+
+    unless ($noactivate) {
+        my $res = `curl --silent -k "https://10.0.0.1/stabile/images?action=activate&image=$imgpath&version=$version&name=$appname&managementlink=$managementlink&upgradelink=$upgradelink&terminallink=$terminallink&image2=$image2"`;
+        print $res;
+        $res =~ /(\S{8}-\S{4}-\S{4}-\S{4}-\S{12})$/;
+        my $uuid = $1;
+        chomp $uuid;
+        unless ($nopublish) {
+            if ($uuid) {
+                print "Trying to publish $uuid to the registry\n";
+                print "Hang on - this may take a while...\n";
+                $res = `curl -k "https://10.0.0.1/stabile/images?action=publish&uuid=$uuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2"`;
+                print $res;
+            } else {
+                print "Something went wrong (did not get valid uuid $uuid) when trying to activate the image $imgpath - left it in your shared storage, please activate manually.\nUnable to publish app to the registry\n";
+            }
+        }
+    }
+} else {
+    print "Looks like we are not running in a VM - leaving image in $cwd/$dname.master.qcow2\n";
+}

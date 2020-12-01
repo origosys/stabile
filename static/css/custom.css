@@ -1,0 +1,2569 @@
+.dj_ie6 .dijitTooltipConnector,
+*html #header-logo img,
+html {
+    height: 100%;
+}
+body {
+    color: #333;
+    font: 300 1.4rem/1.3 "petala-pro",helvetica !important;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    text-rendering: optimizelegibility;
+    width: 100%;
+    background-color:#fbfbfb!important;
+}
+body.inframe {
+    background-color: white !important;
+}
+.inframe .modal-body {
+    padding:0!important;
+}
+.inframe .navbar-brand {
+    display:none;
+}
+.inframe #activityPanel {
+    border-top: 0 none; box-shadow: none;
+}
+.inframe #activityHeading1 {
+    display:none;
+}
+.manage_system, .terminal{
+    display:none;
+}
+.info-engine {
+    display:none;
+}
+.inframe #manage_system_button,
+.inframe #terminal_button,
+.inframe #new_app_button,
+.inframe #manage_in_tab,
+.inframe #terminal_in_tab
+{
+/*    visibility:hidden; */
+}
+#manageSystemIframe {
+    padding: 0 10px;
+}
+.tk-source-code-pro{font-family:"source-code-pro",sans-serif;}.tk-petala-pro{font-family:"petala-pro",sans-serif;}
+
+/*html, body { width: 100%;height:0;margin: 0; padding:0;}
+
+html {
+overflow: -moz-scrollbars-vertical; 
+overflow-y: scroll;	
+}
+*/
+h3 {margin-top: 4px;}
+h2,h3,h4 {
+	color:#474747!important;
+}
+iframe{border:none;width:100%;height:100%;}
+.well {
+    background-color: #ffffff!important;
+    margin-bottom:10px!important;
+}
+
+#widget_servers_search_query .dijitInputField {
+ padding:5px !important;
+}
+
+body.tundra  {
+/*	font-family: helvetica, arial, sans-serif;
+	font-size:12px;
+	background-color:#fbfbfb;
+	color: #474747;	 */
+/*	background:transparent;
+	background-repeat:repeat;
+	background-image:url(/stabile/static/gfx/bg-pattern-01.png); */
+}
+/*
+@-moz-document url-prefix() {
+    #homeContent {
+        width:519px!important;
+        border-right:1px solid #e3e3e3!important;
+    }
+}
+*/
+
+.navbar-brand {
+    height: 32px;
+}
+.navbar-right {
+    float: right !important;
+}
+#dialogDiv {
+    overflow:auto;
+    padding: 10px 10px 10px 20px;
+    max-height:400px;
+    min-width:500px;
+    width:600px;
+}
+@media screen and (max-width: 840px) {
+    #homeContent, #homeContent_splitter, #serverstab, #imagestab, #networkstab, #nodestab, #hometab_a {
+        display:none;
+    }
+    .navbar-brand {
+        height: auto;
+    }
+    .dijitDialog {
+        left: 3px;
+        top: 50px!important;
+        width: 94%;
+    }
+    #dialogDiv {
+        min-width:200px;
+        width:auto;
+    }
+    .float {
+        padding: 4px!important;
+        left: 110px!important;
+        top: 6px!important;
+        right: auto!important;
+        bottom: auto!important;
+    }
+}
+
+.carousel-control:hover,
+.carousel-control:focus,
+.carousel-control {
+    color: rgba(0, 0, 0, 0.54);
+}
+.carousel-indicators .active {
+    background-color: rgba(0, 0, 0, 0.54);
+}
+.carousel-indicators {
+    bottom: 0;
+}
+carousel-control {
+    width: 50%;
+}
+.carousel-indicators li {
+    border: 1px solid rgba(0, 0, 0, 0.54);
+}
+#app-carousel {
+    height:400px;
+}
+.carousel-app p {
+    font-size: 1.1em!important;
+    padding: 0!important;
+}
+.carousel-app {
+    text-align: center!important;
+    margin-bottom:0!important;
+    font-size:18px!important;
+    padding:0!important;
+}
+.carousel-control.left, .carousel-control.right {
+    background: none;
+}
+
+
+pre {
+ white-space: pre-wrap;       /* css-3 */
+ white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+ white-space: -pre-wrap;      /* Opera 4-6 */
+ white-space: -o-pre-wrap;    /* Opera 7 */
+ word-wrap: break-word;       /* Internet Explorer 5.5+ */
+}
+
+span.irigo-tooltip-base {
+    border:none !important;
+}
+
+body.docs {
+	background-color:#fbfbfb;
+}
+
+.grid-tab {
+    min-height: 500px;
+}
+
+.grid-div {
+    min-height: 415px!important;
+    height: 71vh!important;
+}
+
+.red{
+    color: red !important;
+}
+.green{
+    color: green !important;
+}
+.orange{
+    color: orange !important;
+}
+.blue{
+    color: blue !important;
+}
+.grey{
+    color: grey !important;
+}
+.uptime_alert {
+    padding:10px !important;
+    margin-bottom:10px !important;
+}
+.uptime_line {
+    color: #E8E8E8;
+    margin: 10px 0 8px 0;
+}
+.uptime_header {
+    font-weight: 400;
+    margin: 10px 0 2px 0;
+}
+.nav-tabs > li > a {
+    font-size: 16px;
+}
+.nav-pills {
+    border-bottom: 1px solid #ddd
+}
+.nav-pills > li > a {
+    border-radius: 0!important;
+    padding: 5px 10px 5px 10px !important;
+}
+.nav-pills > li.active > a, .nav-pills > li.active > a:focus, .nav-pills > li.active > a:hover {
+    /* background-color: #5bc0de!important;
+    background-color: #95a5a6!important; */
+    background-color: #3498db!important;
+}
+b, strong, label {
+    font-weight: 500!important;
+}
+.tundra .dijitSplitterH, .tundra .dijitGutterH {
+    background: none repeat scroll 0 0 #f9f9f9;
+    border-top: 1px solid #ddd;
+}
+.tundra .dijitSplitterV, .tundra .dijitGutterV {
+  background: #F5F5F5;
+  border-right: 1px solid #ddd;
+}
+a:link {
+    color: #ff4400
+}
+
+a:visited {
+    color: #ff4400
+}
+a:active {
+	  color: #FF0000;
+}
+
+img{
+    border:none;
+}
+.btn-info {
+    background-color: #3498db!important;
+    border-color: #3498db!important;
+}
+.btn-success {
+    background-color: #73c74a!important;
+    border-color: #73c74a!important;
+}
+.dojoxLegendNode {border: 1px solid #ccc; margin: 5px 10px 5px 10px; padding: 3px}
+.dojoxLegendText {vertical-align: text-top; padding-right: 10px}
+
+/*LAYOUTCONTAINER*/
+.tundra .dijitLayoutContainer {
+	overflow:visible;
+}
+
+.dj_ie6 .tundra .dijitLayoutContainer {
+	overflow:auto;
+}
+
+/*RULECONTAINER*/
+.dijitRuleContainer {
+	  z-index: 1 !important;
+}
+
+/*HEADER*/
+#auth-header,
+#header-container {
+	width:100%;
+	margin:10px 0 10px 0;
+    font-size:20px;
+    font-weight:300;
+}
+#auth-form input {
+    margin:4px;
+}
+#auth-form .btn {
+    margin-right:-4px;
+}
+.navbar-right {
+    font-size:13px!important;
+}
+#header {
+	height:50px;
+	margin:0 auto;
+	text-align:right;
+	/*width:850px;*/
+	/*width:960px;*/
+	/*margin-bottom:-30px;*/
+}
+
+#header-user  {
+	padding:8px;
+	color:#fff;
+	/*float:left;*/
+	float:right;
+}
+
+.form-control:focus {
+    border-color: #00a800 !important;
+    /* box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset, 0 0 8px rgba(34, 171, 35, 0.60) !important; */
+    box-shadow: none!important;
+}
+/*TEST*/
+/*USERFUNCTIONS UND */
+/*DROPDOWN SERVICES*/
+/*UND SO WAS UND ANDERES*/
+#top-function-container {
+	background-color: #395058; /* fallback color if gradients are not supported */ 
+	background-image: -webkit-linear-gradient(top, #556970, #395058); 
+	background-image:    -moz-linear-gradient(top, #556970, #395058); 
+	background-image:     -ms-linear-gradient(top, #556970, #395058);
+	background-image:      -o-linear-gradient(top, #556970, #395058); 
+	background-image:         linear-gradient(top, #205365, #152125); 
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#556970', endColorstr='#395058'); 	
+	height:18px;
+
+}
+
+#top-functions-container {
+}
+
+#top-functions {
+	margin:0 auto;
+	text-align:right;
+	float:right;
+    color: #FFFFFF;
+    font-weight:100;
+}
+
+#top-services {
+    height:18px;
+	float:left;
+    color: #FFFFFF;
+    font-weight:100;
+}
+#top-functions ul,
+#top-services ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    height: 14px;
+    line-height: 16px;
+}
+#top-functions li,
+#top-services li {
+    /* padding: 3px; */
+	display:inline;
+    line-height: 16px !important;
+    margin-right: 1px;
+	/*white-space:nowrap;*/
+}
+#top-services .active
+/*, #top-services .dijitButtonContents */
+{
+    background: none repeat scroll 0 0 #FFA500 !important;
+}
+#top-functions a,
+#top-services a {
+	color:#FFF;
+	text-decoration:none;
+	font-size:13px;
+	padding:3px 6px;
+	font-weight:100;
+	text-transform:lowercase;
+	/*white-space:nowrap;*/
+}
+#top-services .inactive a:hover {
+	background:#222;
+	color:#efefef;
+}
+#top-functions a:hover {
+	background:#222;
+	color:#efefef;
+}
+#top-services .active a:hover {
+    background:auto;
+    color:#efefef;
+}
+
+#top-functions span, #top-services span {
+/*	padding-left:0px; */
+}
+
+
+/*#top-functions a {
+	color:#FFF!important;	
+	text-decoration:none;
+}
+#top-functions a:hover {
+
+}*/
+
+#userFunctions {
+	width:220px;
+	float:right;
+}
+
+#helplink{
+	width:520px;
+	height:30px;
+	position:relative;
+	float:left;
+	top:40px;
+	padding:6px 0;
+	margin-right:0;
+	text-align:right;
+}
+
+#username {
+	padding-left:2px!important;
+}
+
+#dropdownServices {
+	width:30px;
+	float:right;
+	background:#38A7D1;
+	margin:0 0 0 0;
+	position:relative;
+	top:10px;
+	/*height:30px;*/
+	height:0;
+
+
+}
+#dijit_Menu_1 * .dijitMenuArrowCell,
+#dijit_form_ComboButton_0_dropdown *  .dijitMenuArrowCell,
+#dijit_form_ComboButton_0_dropdown *  .dijitMenuItemIcon,
+#dijit_Menu_1 * .dijitMenuItemIcon {
+	display:none;
+	visibility:hidden;
+}
+#dijit_Menu_1 * .dijitMenuItemLabel,
+#dijit_form_ComboButton_0_dropdown *.dijitMenuItemLabel {
+	/*display:block;
+	word-wrap:break-word;*/
+	max-width:220px;
+	height:30px;
+	line-height:2.3em;
+	padding:0px 12px;
+}
+
+
+#dropdownServices .dijitStretch {
+	display:none;
+	visibility:hidden;
+}
+
+
+#dropdownServices  div.dijitArrowButtonInner {
+	background-image:url(../gfx/cogwheel.png);
+	background-position:6px 7px !important;
+	background-repeat:no-repeat;
+	width:30px;
+	padding:0;
+	height:30px;
+	/*padding-bottom:10px;	*/
+	margin:0 0;
+}
+/*HOVER ON SERVICES ICON*/
+.tundra #dropdownServices .dijitComboButton .dijitDownArrowButton,
+.tundra #dropdownServices .dijitComboButton .dijitDownArrowButtonHover {
+	padding:0px;
+	padding-rigth:0;
+}
+
+#dijit_form_ComboButton_0_dropdown #dijit_Menu_0 {
+	/*position:relative;*/
+	left:-190px;
+	width:220px!important;
+	max-width:220px!important;
+	position:absolute;
+}
+
+#dijit_form_ComboButton_0_dropdown .tundra .dijitMenuExpand {
+	background-image: none;
+    height: 0;
+    width: 0;
+}
+
+#dijit_Menu_0 td {
+	width:0;
+}
+
+#dropdownUserFunctions {
+	/*width:100%;*/
+	/*width:189px; 220 unitll sso functions implemented*/
+	/*width:220px; oh, we area moving the help link out of the dropdown, so...*/
+	position:relative;
+	top:40px;
+	border:0px none;
+	/*border-right:1px solid #9FD8EB; HIDE UNTILL SSO FUNCTIONS ARE IMPLEMENTED*/
+}
+
+#dropdownServices .dijitComboButton,
+#dropdownUserFunctions .dijitDropDownButton  {
+	/*width:100%;too wide for having the help next to it?*/
+	width:100%;
+	background:#38A7D1;
+	margin:0 0 0 0;
+}
+
+#dropdownServices td.dijitButtonNode,
+#dropdownUserFunctions span.dijitButtonNode {
+	color:#efefef;
+	padding:0 0 0 0;
+	margin:0 0 0 0;
+	width:100%;
+	text-align:left;
+	border:0px none;
+}
+
+
+
+.tundra #dropdownServices  .dijitButtonHover .dijitButtonNode,
+.tundra #dropdownServices  .dijitButtonNodeHover,
+.tundra #dropdownServices .dijitToggleButtonHover .dijitButtonNode,
+.tundra #dropdownServices  .dijitDropDownButtonHover .dijitButtonNode,
+.tundra #dropdownServices .dijitComboButton .dijitButtonContentsHover,
+.tundra #dropdownServices  .dijitComboButton .dijitDownArrowButtonHover {
+	border-color: inherit;
+	border-bottom-color:inherit;
+    background: inherit !important;
+/*	color:#FFF;
+	background-color: #2794c5;
+	background-image:inherit;
+	background:none #2794c5; */
+}
+
+.tundra #dropdownServices  .dijitMenuPassive .dijitMenuItemHover,
+.tundra #dropdownServices .dijitMenuItemSelected {
+
+	color:#777;
+}
+
+.tundra #dropdownUserFunctions span.dijitButtonNodeHover,
+.tundra #dropdownUserFunctions span.dijitToggleButtonHover .dijitButtonNode,
+.tundra #dropdownUserFunctions span.dijitDropDownButtonHover .dijitButtonNode,
+.tundra #dropdownUserFunctions span.dijitComboButton .dijitButtonContentsHover,
+.tundra #dropdownUserFunctions span.dijitComboButton .dijitDownArrowButtonHover {
+
+	color:#FFFFFF;
+	background-color:#2794C5;
+	background-image:none;
+}
+
+#userFunctionsButton  {
+	/*padding:4px 0;*/
+	/*line-height:30px;*/
+	height:30px;
+}
+.tundra .dijitMenuItem td {
+	padding:0;
+	border-bottom:1px solid #e3e3e3;
+}
+#userFunctionsButton span.dijitButtonText {
+	text-align:left;
+	padding:8px;
+}
+#userFunctionsButton span.dijitInline{
+	margin:0 0 ;
+	display:block;
+}
+
+#userFunctionsButton span.dijitArrowButtonInner {
+	background-image:url(../gfx/padlock.png);
+	background-repeat:no-repeat!important;
+	width:16px;
+	height:16px;
+	position: absolute;
+    right: 6px;
+    top: 7px;
+}
+#dijit_Menu_1 {
+	width:220px;
+}
+
+.tundra .dijitMenu,
+.tundra .dijitMenuBar {
+    background-color: #CAEBF5;
+    border-width: 0 0 0px 0;
+    border-bottom-color:#38A7D1;
+    margin: 0;
+    padding: 0;
+}
+.tundra .dijitMenuItem {
+	line-height:30px;
+	color:#777;
+	font-family:inherit;
+	white-space: normal;
+    border-bottom: 1px solid #ddd;
+}
+
+.dijitComboBoxMenuPopup .dijitMenuItemHover,
+.tundra .dijitMenuPassive .dijitMenuItemHover,
+.tundra .dijitMenuItemSelected {
+	background-color:#e6e6e6;
+}
+
+
+/* /\*END TEST*\/ */
+
+
+
+/* /\*END USERFUNCTIONS O.A.*\/ */
+.logo {
+display: none;
+}
+#header a {
+	color:#e3e3e3;
+}
+#header-logo {
+	position:relative;
+	/*z-index:950;*/
+	width:200px;
+	float:left;
+}
+
+#header-logo a img {
+	top:0;
+	left:12px;
+	position:relative;	
+}
+
+
+/*TABS*/
+#tabs *{
+
+}
+
+.tabContainer{
+  /* width:850px;*/
+ /* width:960px;*/
+ /* width:100%;*/
+    height:540px;
+    margin-left:auto;
+    margin-right:auto;
+/*	background:transparent;
+	background:url(/stabile/static/gfx/bg_gradient.png);
+	background-repeat:repeat-x; */
+}
+
+
+#tabs {
+	background:transparent;	
+}
+
+#tabs_tablist {
+	width:100%;
+	overflow:visible;
+	postion:absolute;
+}
+.tundra #activityPane .dijitTitlePaneTitle,
+.tundra #tabs_tabslist,
+.tundra .dijitTabListWrapper {
+	/*height:30px!important;*/
+    background-color: #e6e6e6; /* fallback color if gradients are not supported */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#e6e6e6', endColorstr='#d6d6d6'), progid:DXImageTransform.Microsoft.Shadow(Strength=8, Direction=190, Color='#b3b3b3'); 
+	background-image: -webkit-linear-gradient(top, #e6e6e6, #d6d6d6);   
+	background-image:    -moz-linear-gradient(top, #e6e6e6, #d6d6d6);    
+	background-image:     -ms-linear-gradient(top, #e6e6e6, #d6d6d6);    
+	background-image:      -o-linear-gradient(top, #e6e6e6, #d6d6d6);   
+	background-image:         linear-gradient(top, #e6e6e6, #d6d6d6); 
+	
+	box-shadow: 0px 1px 4px #474747;
+	-moz-box-shadow: 0px 1px 4px #474747;
+	-webkit-box-shadow:0px 1px 4px #474747;
+	z-index:1;
+	overflow:visible;
+}
+
+
+
+.tundra .dijitTab .tabLabel {
+	min-height:20px;
+	/*padding: 4px 12px 0px  12px;*/
+}
+.tundra .dijitTab {
+background:#D4EDF1 none/*url("/stabile/static/gfx/tab.png") repeat-x 0 0*/;
+background:transparent;
+border:0px none;
+border-right:0px none;
+/*-moz-border-radius: 6px 6px 0 0;
+-webkit-border-radius: 6px 6px 0 0;
+border-radius: 6px 6px 0 0;*/
+line-height:normal;
+margin-right:0px;
+/*padding:3px 8px;*/
+font: 100 14px helvetica,Arial,Verdana,sans-serif;
+/*font-size:14px;
+font-weight:100;*/
+color:#555555;
+/*height_30px;*/
+}
+
+
+.tundra .dijitTabContainerTop-tabs {
+border-color:#e3e3e3;
+margin-bottom:0;
+padding-left:0px;
+border-bottom: 0px none;
+height:30px;
+width:960px!important;
+position:relative!important;
+margin:0 auto;
+}
+
+.tundra .dijitTabContainerTop-tabs,
+.tundra .dijitTabContainerBottom-tabs {
+padding-left:0;
+padding-right:0px;
+}
+
+.tundra .dijitTabInnerDiv {
+	border:0px none;
+	-moz-border-radius: 0 0 0 0;
+	/*padding:3px 12px 1px;
+	margin-bottom:1px;*/
+	padding:9px 12px;
+	/*margin-bottom:-1px;*/
+	margin-bottom:0;
+
+}
+
+.tundra .dijitTabContainerTop-tabs .dijitTab {
+	border-right:1px solid #e6e6e6;
+	height:30px;
+}
+
+.tundra .dijitTabContainerTop-tabs .dijitTabChecked,
+.tundra .dijitTabContainer .dijitTabCheckedHover,
+.tundra .dijitTabHover {
+	color:#555555;/*HER!*/
+	border:0px;
+background-color: #fff; /* fallback color if gradients are not supported */  
+filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#dddddd', endColorstr='#FFFFFF'); 
+background-image: -webkit-linear-gradient(top, #ddd, #FFF);   
+background-image:    -moz-linear-gradient(top, #ddd, #FFF);  
+background-image:     -ms-linear-gradient(top, #ddd, #FFF);   
+background-image:      -o-linear-gradient(top, #ddd, #FFF); 
+background-image:         linear-gradient(top, #ddd, #FFF);
+border-bottom:5px solid #FFF;
+	border-bottom-color:#FFF;
+	/*border-bottom:0px none;*/
+}
+
+.tundra .dijitTabContainerTop .dijitTabHover {
+	border-bottom-color:#FFF;
+}
+
+
+/*.tundra .dijitTabContainerTop-tabs .dijitTabChecked {
+border-bottom-color:#FFF;
+background:#FFF url();
+}*/
+
+/*WRAPPER*/
+.tundra .dijitTabPaneWrapper {
+	border:0px none;
+	margin-top:0;
+	overflow-x:hidden;
+	/*width:960px!important;
+	margin:0 auto;*/
+	/*width:100%!important;*/
+		background:transparent;
+}
+.tundra .dijitTabPane {
+		background:transparent;
+
+}
+
+.dijitTabContainerTop-child {
+	overflow:hidden;
+}
+
+
+.tundra .dijitTabContainerTop-dijitContentPane,
+.tundra .dijitTabContainerLeft-dijitContentPane,
+.tundra .dijitTabContainerBottom-dijitContentPane,
+.tundra .dijitTabContainerRight-dijitContentPane,
+.tundra .dijitAccordionContainer-dijitContentPane {
+	padding:10px;
+	padding-top:0;
+	
+}
+
+#home.dijitTabContainerTop-child {
+	padding:10px;	
+	padding-top:1px;
+}
+
+/*ACTIVITY*/
+#activityPane{
+/*    width:960px;
+    margin:0 auto;
+    padding:0;*/
+}
+.tundra #activityPane .dijitTitlePaneTitle {
+/*background:none #e4e4e4;*/
+border:0px solid #e3e3e3;
+padding:0;
+/*line-height:22px;*/
+}
+
+.tundra #activityPane .dijitTitlePaneTitleFocus {
+	border:0px solid #FFF;
+	padding:3px 4px;
+}
+
+.tundra #activityPane .dijitTitlePaneTitleFocus .dijitArrowNode {
+	background-image:url(/stabile/static/gfx/spriteArrowLarge.png);
+	width:16px;
+	height:16px;
+}
+
+.tundra #activityPane .dijitClosed .dijitTitlePaneTitleFocus  .dijitArrowNode {
+	background-position:-32px 0;
+}
+
+
+
+.tundra #activityPane .dijitTitlePaneContentOuter {
+background:none repeat scroll 0 0 #FFFFFF;
+border-color:#e3e3e3 #e3e3e3 #e3e3e3;
+border-right:1px solid #e3e3e3;
+border-style:none solid solid;
+border-width:0 2px 2px;
+padding:0 5px 30px 0;
+}
+.tundra #activityPane .dijitTitlePaneContentOuter .dijitButton {
+	float:right;
+	margin-left:4px;
+}
+.tundra  #activityPane .dijitTitlePaneTextNode {
+	color:#656565;
+	font-weight:bold;
+}
+
+.tundra .dijit.TitlePaneContentInner { padding: 0;}
+
+
+#logContainer {
+	border-bottom:1px solid #e3e3e3!important;
+	padding:5px!important;
+	border-color:#e3e3e3!important;
+	margin:0 0 5px 0!important;
+}
+
+label {
+    font-size:13px;
+    font-weight:400;
+    padding: 4px;
+/*    width:130px;
+    display:inline;*/
+}
+/*WIZARD*/
+.wizardInfoPane {
+    display: none;
+    background: #FFFFFF;
+    border: #b7b7b7 1px solid;
+    padding: 0 2px 0 4px;
+    margin: 0 0 8px 0;
+    -moz-border-radius:3pt;
+    -webkit-border-radius:4pt;
+}
+.wizardRow {
+    display: none;
+}
+.wizardLabel table {
+    margin-top:-2px;
+}
+.wizardLabel label {
+    margin-bottom:0!important;
+}
+.dimlink {
+    color: grey !important;
+    font-size: 13px;
+}
+#wizardTitle {
+    margin-top:0;
+    margin-bottom: 0;
+}
+#wizardSubForm0 {
+    left:0!important;
+    margin:20px;
+}
+#wizardSubForm2 {
+    height: auto!important;
+    left: auto!important;
+    top: auto!important;
+    width: 100%!important;
+}
+.hidecost {display: none;}
+.showcost {;}
+
+.wizardInfoPane h1,
+.wizardInfoPane p,
+.tundra .dijitTooltipContainer h1 {
+	margin: 4px 0 4px 0;
+}
+.dj_webkit .tundra .dijitTooltipContainer {
+  -webkit-box-shadow: none!important;
+}
+
+.tundra .dojoxWizard {
+-moz-border-radius:0;
+background:none repeat scroll 0 0 transparent;
+border:0px none;
+padding:2px;
+}
+
+.dojoxGridNoChildren .dojoxGridExpando {
+/*display: none;*/
+}
+.tundra .dojoxGridExpandoCell {
+    height: 22px;
+}
+.tundra #dijit_layout_ContentPane_2,
+.tundra #dijit_layout_ContentPane_1,
+.tundra #wizards {
+	display:block;
+	clear:both;
+}
+
+.tundra .dijitButton {
+    margin-left: 4px;
+}
+/*LOAD GRAPHS*/
+/* FIXME: don't use a random dijit number to set these! 
+   removed for now -- Jakob
+*/
+/* #dijit_layout_ContentPane_3 { */
+/* 	/\*overflow-y:scroll;*\/ */
+/* } */
+/* #dijit_layout_ContentPane_4 { */
+/* 	height:430px!important; */
+/* } */
+/* .dj_ie7 #dijit_layout_ContentPane_3, */
+/* .dj_ie6 #dijit_layout_ContentPane_3 { */
+/* 	overflow-x:hidden; */
+/* } */
+/* .dj_ie7 #dijit_layout_ContentPane_4, */
+/* .dj_ie6 #dijit_layout_ContentPane_4 { */
+/* 	height:auto!important; */
+/* 	/\*overflow-y:scroll;*\/ */
+/* 	overflow-x:hidden; */
+/* } */
+
+#memoryUsageChart,
+#cpuUsageChart,
+#diskUsageChart,
+#networkActivityChart{
+	noheight:auto;
+}
+/*HOME PAGE*/
+
+/*CONTENT PANES SHOULD STAY IN SHAPE*/
+#dijit_layout_ContentPane_0 {
+		
+}
+
+#dijit_layout_ContentPane_1 {
+
+}
+
+#GetStartedButton {
+	/*height:30%;	*/
+	float:right;
+	font-size:120%;
+	margin-top:0;
+	padding-bottom:4px;
+}
+#GetStartedText {
+	height:70%;
+}
+
+#homeServers{
+	height:65%;
+	overflow:auto;
+	padding:0;
+}
+
+#homeServerVitals {
+	height:35%;
+	overflow:auto;
+	padding:6px 10px 0 10px;
+    width:100%!important;
+}
+
+#homeTabs {
+/*    height:80vh; */
+}
+#homeTabs iframe {
+	max-width:500px!important;	
+}
+#homeTabs * {
+/*	max-width:520px!important;	*/
+}
+#homeTabs .dijitTabPaneWrapper {
+	border-right:1px solid #e3e3e3;	
+	background:#FFF;
+	padding-top:10px;
+}
+#home,
+#servers,
+#images,
+#networks, 
+#nodes {
+	width:960px!important;
+	position:relative;
+	margin:0 auto;
+}
+
+
+/*SERVERS INFO*/
+#ServersInfo {
+	padding: 6px;
+	clear:both;
+	/* width:96%;*/
+}
+
+#ServersInfo h3 {
+	font-size:18px;
+	font-weight:normal;
+	nowidth:150px;
+    margin-right: 4px;
+	float:left;
+}
+
+#consumption {
+	width:40%;
+	float:left;
+	font-size:11px;
+	color:#474747;
+	margin-top:4px;
+}
+
+/*SERVER NOTES*/
+#vitalsHeader {
+	
+}
+
+#vitalsHeader h3 {
+	font-size:18px;
+	font-weight:normal;
+	margin-top:0;
+}
+
+#notes,
+#vitals {
+	font-size:13px;
+	line-height: 1.2em;
+}
+#vitals div {
+	margin-bottom:6px;
+}
+
+/*PROBLEMGRID*/
+
+/*
+#systemsGrid {
+	clear:both;
+	width:96%;
+	margin:0 10px!important;
+}
+*/
+.tundra #systemsGrid .dojoxGridRowTable .dojoxGridCellFocus div {
+	/*background-color:transparent;*/
+	/*background-color:#39B54A;*/
+	/*background:url(/stabile/static/gfx/selected.png) no-repeat 0 0;*/
+	/*width:16px;
+	height:16px;*/
+}
+
+.tundra #systemsGrid,
+.tundra #wizards {
+	background:none #FFF;
+	margin:1px;
+}
+#systemsGrid div[aria-selected='true'] {
+	background-color:#ededed;	
+}
+
+/*MODAL DIALOG*/
+.tundra .dijitDialogUnderlay {
+	opacity:0;
+}
+
+.tundra .dijitDialog {
+background:none repeat scroll 0 0 #FFFFFF;
+/* border:3px solid #e3e3e3;*/
+padding:0;
+-moz-border-radius:6px;
+border-radius: 6px;
+-webkit-border-radius: 6px;
+border: 0 none;
+box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.dj_ie6 .tundra .dijitDialog {
+	width: 500px;
+}
+
+.tundra .dijitDialogTitleBar {
+	-moz-border-radius:4px 4px 0 0;
+	border-radius: 4px 4px 0 0;
+	-webkit-border-radius: 4px 4px 0 0;
+
+	background-color: #fff;
+    background-image: none;
+	padding:12px 8px 6px 12px;
+	line-height:30px;
+	font-size:18px;
+    border-bottom:1px solid #e5e5e5;
+}
+#createSystemDialog .dijitDialogTitleBar {
+    border-bottom:none !important;
+}
+#createSystemDialog {
+    top: 50px !important;
+}
+.tundra .dijitDialogTitle {
+    font-weight: 400!important;
+}
+
+.tundra .dijitDialogPaneContent {
+    background:none repeat scroll 0 0 #FFFFFF;
+    overflow:auto;
+    border-top:1px solid #FFF;
+    margin: 0;
+    padding: 0;
+    -moz-border-radius:0 0 4px 4px ;
+    border-radius: 0 0 4px 4px ;
+    -webkit-border-radius: 0 0 4px 4px ;
+    /*background:url(/stabile/static/gfx/tab_selected.png) repeat-x;*/
+}
+
+.dj_ie6 .tundra .dijitDialogPaneContent {
+	padding:0;
+	background:none transparent;
+}
+
+#packages {
+    width: 100%;
+    border-bottom:1px solid #e3e3e3;
+    font-size:90%;
+    color:#666666;
+    margin: 5px 0;
+    border-top: solid 1px #E8E8E8
+/*    height: 35vh;
+    min-height: 300px;
+    padding: 4px;
+    overflow: auto; */
+}
+#packagesContentPane, #statisticsContentPane {
+/*    height:100%; */
+}
+.systemTables {
+    width: 100%;
+    border-color:#ddd!important;
+}
+.systemTables tr th{
+    font-weight: normal;
+    text-align: center;
+    padding:4px;
+}
+.dijitSelectSelectedOption * {
+  font-weight: 300;
+}
+.dijitSelectMenu {
+    min-width:200px;
+}
+.systemTables tr td{
+    margin:0;
+    padding:4px;
+    border-top:1px solid #e3e3e3;
+}
+
+/*FORM IN DIALOG*/
+#dialogForm tbody td {
+	padding:3px 0;
+}
+#dialogForm tbody td table{
+	margin:0;
+}
+#dialogForm tbody td table td {
+	padding:0 0 0 0;
+}
+.dialogFormTable td {
+    min-width:116px;
+}
+#dialogForm .dijitTextBox {
+    width:90%;
+}
+/*.tundra #dialogForm .dijitInputContainer input,
+.tundra #dialogForm .dijitTextBox {
+	margin:3px 0;
+}*/
+
+/* Define clearable textbox */
+
+.tundra .stabileClearBox {
+    padding-right: 25px;
+    position: relative;
+}
+.tundra .stabileClearBox a.stabileClear {
+    width: 12px;
+    height: 12px;
+    display: block;
+    overflow: hidden;
+    text-indent: -5000px;
+    position: absolute;
+    top: 8px;
+    right: 5px;
+    background: url(/stabile/static/img/closeButtonSprite.png) 0 0 no-repeat;
+    z-index: 2000;
+    cursor: pointer;
+}
+.tundra .stabileClearBox a.stabileClear:hover {
+    background-position:-12px 0;
+}
+.dj_ie .tundra .stabileClearBox a.stabileClear  {
+    top:2px;
+}
+
+
+/*SELECT BOXES BORDERS AND BACKGROUNDS*/
+input, textarea, select {
+border:1px solid #e3e3e3;
+}
+.tundra .dijitTextBox {
+background:none #FFFFFF;
+border:1px solid #e3e3e3;
+}
+.tundra .dijitComboBox {
+    border:0;
+}
+
+.dj_webkit .dijitTextBoxDisabled input {
+color: inherit;
+}
+
+
+
+/*BUTTONS UP*/
+/*GENEREL KNAPHED*/
+/*WE WANT TO BE AWESOME*/
+.tundra .dijitButtonText {
+	/*padding: 2px 6px 2px 6px;	*/
+	padding: 0 3px 0 3px;
+	
+}
+
+.dijitButtonNode,
+.dijitButtonHover .dijitButtonNode,
+.dijitButtonFocused .dijitButtonNode
+{
+    border: none!important;
+    background: none!important;
+    border-width: 0!important;
+}
+.tundra .dijitButtonNode {
+	border-color:transparent;
+	border-style:solid;
+	border-width:1px;
+	background:none transparent;
+	padding:0.1em 0.2em 0.2em;
+}
+.tundra .dijitButton .dijitButtonNode,
+.tundra .dijitButtonDisabled .dijitButtonNode,
+.dijitButtonHover
+{
+/*    border: inherit !important;
+    background: inherit !important; */
+    color: inherit !important;
+}
+
+.plupload_filelist_footer {
+    height: auto!important;
+}
+
+.button,
+/*.plupload_button, */
+.dj_ie6 #dialogButtons .save_icon,
+#dialogButtons .save_icon, 
+.docs #search input.dijitButtonNode {
+  background-image:url(/stabile/static/img/alert-overlay.png);
+  background-repeat: repeat-x; 
+  display: inline-block; 
+  padding: 5px 10px 6px; 
+  color: #fff; 
+  text-decoration: none;
+  -moz-border-radius: 5px; 
+  -webkit-border-radius: 5px;
+  border-radius:5px;
+  -moz-box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  -webkit-box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+ 	box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+
+  text-shadow: 0 -1px 1px rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(0,0,0,0.25);
+  position: relative;
+  cursor: pointer;
+  background-color:#39B54A;
+   border:0px none;
+}
+
+.dj_ie6 .docs #search input.dijitButtonNode,
+.dj_ie6 .tundra .dijitButton .dijitButtonNode {
+	background:#39B54A url(/stabile/static/img/alert-overlay.png) repeat-x/;
+}
+
+.docs #search input.dijitButtonNode{
+	padding:2px 6px;
+}
+
+.tundra .dijitButton .dijitButtonNode .dijitButtonContents{
+	border:0px none;
+	padding:0 0 0 0;	
+}
+
+.cancelButton {
+	margin-left:4px!important;	
+}
+/*HOW ABOUT OTHER BUTTON COLOR OPTIONS?*/
+span.graybutton span,
+span.greybutton span {
+	background-color:#aaa!important;	
+}
+span.graybutton span *,
+span.greybutton span *  {
+	background-color:transparent!important;	
+}
+
+/*TEXT COLOR IN SEARCH FIELD*/
+.dijitPlaceHolder {
+	color: #777;	
+}
+
+/*DIALOGBUTTONS*/
+#dialogButtons {
+	clear:both;
+}
+#dialogButtons button {
+	/*float:right;	*/
+	position:relative;
+}
+#dialogButtons .save_icon {
+	width:auto;
+	background-position: 0 0;
+	display:block;
+	float: right;
+	margin: 0 4px 0px 6px;
+	padding:0;
+	height:22px;
+	opacity:1;
+	filter: alpha(opacity=100);
+	-moz-opacity: 1;*/
+}
+
+.dj_ie6 #dialogButtons .save_icon {
+	float:none;
+}
+
+#dialogButtons .save_icon:hover {
+	background:#39B54A url(/stabile/static/img/alert-overlay.png) repeat-x;
+	border-color:#84C187;*/
+}
+#dialogButtons .save_icon span{
+	display:inline;
+	margin:0;
+	padding:2px 6px;
+	vertical-align:super;
+}
+
+/*
+.plupload_disabled, 
+a.plupload_disabled:hover{
+	background:#cdcdcd;
+	color:#ddd!important;
+}
+*/
+.tundra .dijitDisabled .dijitButtonText {
+	color:#ddd!important;
+}
+
+/*
+.tundra .dijitSelectHover .dijitButtonNode {
+	border-color:#e3e3e3;
+	border-bottom-color:#e3e3e3;
+	border-right-color:#e3e3e3;
+	color:#4f4f4f;
+	background:url(/stabile/static/gfx/tab_selected.png) repeat-x;
+}
+*/
+.tundra .dijitTextBoxFocused,
+.tundra .dijitTextBoxFocused .dijitButtonNode {
+border-color:#e3e3e3;
+}
+
+.tundra .dijitTextBox .dijitButtonNode {
+	border-color: #e3e3e3;
+}
+.tundra .dijitComboBox .dijitButtonNode {
+	border:0;
+}
+
+.dj_ie6 .tundra .dijitTextBox .dijitButtonNode {
+	height:16px!important;
+}
+
+.dijitToggleButton, .dijitButton,
+.dijitDropDownButton, .dijitComboButton {
+margin:0;
+}
+
+
+/*ARROWS*/
+/*.tundra .dijitDownArrowButton {
+	border-color:#e3e3e3;	
+	border-width:1px;
+	border-style:solid;
+}*/
+.tundra .dijitArrowButtonInner {
+
+}
+
+.tundra .dojoxGridMasterHeader .dojoxGridArrowButtonNode {
+	
+}
+
+#systemsGrid .dojoxGridRowSelected {
+    background-color: transparent !important;
+    font-weight: bold;
+}
+
+.tundra .dojoxGridRowSelected {
+    background-color: transparent !important;
+}
+
+.tundra .dojoxGridArrowButtonNode {
+	display: block !important;
+	padding-left: 0px;
+	float: left;
+	/*background:url("/stabile/static/gfx/spriteArrows.png") no-repeat left center;*/
+	background:url("/stabile/static/gfx/spriteArrowLarge.png") no-repeat 0 0;
+	width: 16px;
+	height: 1em;
+	margin: 0px 2px 0px 0px;
+	cursor:pointer;
+}
+.dj_ie6 .tundra .dojoxGridArrowButtonNode {
+	/*background-image:url("/stabile/static/gfx/spriteArrows.png");*/
+	background-image:url("/stabile/static/gfx/spriteArrowLarge.png");
+	margin-left: 0px;
+}
+.tundra .dojoxGridSortUp .dojoxGridArrowButtonNode {
+	/*background-position: -21px;*/
+	background-position: -48px 0;
+}
+
+/* ruins the height of the grid -- Jakob */
+.tundra .dojoxGridMasterSearch{
+  padding: 3px;
+  width:100%;
+}
+
+.tundra .dojoxGridMasterSelectAll{
+  line-height:24px;
+}
+
+.tundra .dojoxGridMasterInfo{
+  line-height:24px; /* makes room for action button icon */
+}
+
+.tundra .dojoxGridMasterSearch .dijitInputField {
+    text-align:right;
+    padding:5px !important;
+}
+
+.tundra .dojoxGridMasterHeader .dojoxGridHeader div.dojoxGridSortNode,
+.tundra .dojoxGridMasterHeader .dojoxGridHeader div.dojoxGridArrowButtonNode {
+	height:16px;
+	white-space:nowrap;
+	display:inline;
+}
+ADJUST MARGIN SO HELP-BUTTON STAYS VISIBLE
+.tundra .dojoxGridMasterHeader .dojoxGridHeader div.dojoxGridArrowButtonNode {
+	margin: 0 0 0 0;
+}
+
+.tundra .dijitTextBox .dijitArrowButtonInner {
+	/*background-position: 0 -16px;*/
+}
+
+.tundra .dijitSelect .dijitButtonNode  {
+	padding: 0 0 0 1px !important;
+	border:0px none;
+}
+
+.tundra .dijitSelect .dijitButtonContents {
+	padding-top: -2px;
+	background:#fff none;
+}
+
+#account .dijitButtonContents, #engines .dijitButtonContents {
+    background: transparent;
+    vertical-align: bottom;
+    text-transform: lowercase;
+    font-size: 13px;
+}
+
+#engines .dijitButtonContents:hover {
+/*    background: none repeat scroll 0 0 #222222; */
+}
+
+/*#top-function-container .dijitButtonNode  {
+    padding: 0 !important;
+}*/
+
+#top-function-container .dijitSelect {
+    margin: 0;
+}
+#top-function-container .dijitSelectLabel {
+/*    margin-top: -6px;*/
+}
+#top-function-container .dijitButtonNode * {
+    vertical-align: top;
+}
+.dijitMenuPopup {
+    min-width:220px;
+}
+.tundra .dijitSelectHover .dijitButtonNode,
+.tundra .dijitSelectDisabled .dijitButtonNode,
+.tundra .dijitSelectActive .dijitButtonNode
+{
+    background:none!important;
+}
+
+.dijitSelectHover#account .dijitSelectLabel,
+.dijitSelectHover#engines .dijitSelectLabel
+{
+/*    color: #FFFFFF;
+    border: none;*/
+}
+
+.tundra .dijitSelect .dijitButtonNode .dijitArrowButtonInner {
+background:url("/stabile/static/gfx/arrowdown.png") no-repeat scroll left top transparent;
+height:16px;
+margin:3px 0 -1px -1px;
+width:16px;
+/*background: url("/stabile/static/gfx/toggle.png") no-repeat scroll right top rgba(0, 0, 0, 0);
+float: right;
+height: 16px;
+transition: border-color 0.2s ease 0s;
+width: 19px; */
+
+}
+.tundra .dijitComboBoxHover .dijitDownArrowButton .dijitArrowButtonInner,
+.tundra .dijitTextBoxFocused .dijitDownArrowButton .dijitArrowButtonInner,
+.tundra .dijitSelectHover .dijitDownArrowButton .dijitArrowButtonInner,
+.tundra .dijitSelectActive .dijitDownArrowButton .dijitArrowButtonInner,
+.tundra .dijitSelectFocused .dijitDownArrowButton .dijitArrowButtonInner {
+	background:url("/stabile/static/gfx/arrowdown.png") no-repeat scroll 0 -16px transparent;
+
+}
+/*
+.tundra .dijitSelectHover .dijitButtonNode .dijitArrowButtonInner {
+	background:url("/stabile/static/gfx/arrowdown.png") no-repeat scroll 0 -16px transparent;
+}
+
+.tundra .dijitSelectActive .dijitButtonNode,
+.tundra .dijitSelectOpened .dijitButtonNode {
+	border-color:#DDD;
+	background:#fff none;
+}
+*/
+
+/* buttonHover.png doesn't exist! Commenting out -- Jakob*/
+/* .tundra .dijitDownArrowButtonHover, */
+/* .tundra .dijitUpArrowButtonHover { */
+/* 	color:#243C5F; */
+/* 	background:#fcfdff url(/stabile/auth/tundra/images/buttonHover.png) repeat-x bottom; */
+/* } */
+
+.tundra .dijitTextBox .dijitArrowButtonInner {
+	background:url("/stabile/static/gfx/arrowdown.png") no-repeat scroll left top transparent;
+	height:16px!important;
+	margin:0 0px;
+	width:16px;
+}
+
+.tundra .dijitLeftArrowButton .dijitArrowButtonInner {
+	background-position: -7px center; /*????*/
+}
+.tundra .dijitRightArrowButton .dijitArrowButtonInner {
+	background-position: -14px center;/*????*/
+}
+.tundra .dijitUpArrowButton .dijitArrowButtonInner {
+background-position:0 -7px;/*????*/
+}
+
+.dijitSpinner .dijitSpinnerButtonContainer .dijitUpArrowButton .dijitArrowButtonInner {
+	background:url("/stabile/static/gfx/arrowupdown.png") no-repeat scroll left top transparent;
+/* - kunne starte med .dijitTextBox i stedet */
+}
+.dijitSpinner .dijitSpinnerButtonContainer .dijitDownArrowButton {
+	border-top:0px!important;
+	padding-top:0px;
+}
+.dijitSpinner .dijitSpinnerButtonContainer .dijitDownArrowButton .dijitArrowButtonInner {
+	background:url("/stabile/static/gfx/arrowupdown.png") no-repeat scroll left -7px transparent;
+}
+
+
+/*HOVER ON UP-DOWN ARROWS*/
+.dijitSpinner .dijitSpinnerButtonContainer  .dijitUpArrowButtonActive .dijitArrowButtonInner,
+.dijitSpinner .dijitSpinnerButtonContainer  .dijitUpArrowButtonHover .dijitArrowButtonInner {
+	background-position: 0 -16px;
+}
+.dijitSpinner .dijitSpinnerButtonContainer .dijitDownArrowButtonActive .dijitArrowButtonInner,
+.dijitSpinner .dijitSpinnerButtonContainer .dijitDownArrowButtonHover .dijitArrowButtonInner {
+	background-position: 0 -23px;
+}
+
+.tundra .dijitDisabled .dijitArrowButtonInner {
+	background-position: -28px center;
+}
+.tundra .dijitDisabled .dijitLeftArrowButton .dijitArrowButtonInner {
+	background-position: -35px center;
+}
+.tundra .dijitDisabled .dijitRightArrowButton .dijitArrowButtonInner {
+	background-position: -42px center;
+}
+.tundra .dijitDisabled .dijitUpArrowButton .dijitArrowButtonInner {
+	background-position: -49px center;
+}
+.dj_webkit .tundra .dijitSpinner .dijitUpArrowButton .dijitArrowButtonInner {
+	margin-top: 0px;
+}
+.dj_ie .tundra .dijitSpinner .dijitDownArrowButton .dijitArrowButtonInner {
+	margin-top: -2px;
+}
+.dj_ie8 .tundra .dijitSpinner .dijitDownArrowButton .dijitArrowButtonInner {
+	margin-top: -1px;
+}
+.tundra .dijitSpinnerButtonContainer {
+	width: auto;
+	padding: 0;
+}
+.tundra .dijitSpinner .dijitArrowButton {
+	width: 16px;
+}
+.tundra .dijitSpinner .dijitSpinnerButtonInner {
+	width: 16px;
+}
+.tundra .dijitSpinner .dijitArrowButtonInner .dijitInputField {
+	padding: 0;
+	-moz-transform:scale(1.1);
+	-moz-transform-origin:top top;
+}
+
+/*GOODBYE BACKGROUND-IMAGE IN IE6 BUTTONS*/
+.dj_ie6 .editDialogButtons .dijitButtonNode,
+.dj_ie6 #wizards .dijitButtonNode,
+.dj_ie6 #activity .dijitButtonNode,
+.dj_ie6 .dojoxWizardButtons .dijitButtonNode,
+.dj_ie6 .gridButtonContainer span.dijitButtonNode {
+	/*background-image: none;	OH WELL HELLO ANYWAY*/
+}
+
+
+/*DROPDOWNS*/
+.tundra .dijitMenu,
+.tundra .dijitMenuBar {
+background-color:#F7F7F7;
+border-top:1px solid #e3e3e3;
+border-left:1px solid #e3e3e3;
+border-right:1px solid #e3e3e3;
+margin:0;
+padding:0;
+}
+
+#account_menu {
+    position: relative;
+    top: 3px !important;
+}
+#engines_menu {
+    position: relative;
+    top: 3px !important;
+}
+
+
+/*DIALOGBUTTONS*/
+#dialogButtons {
+	clear:both;
+	margin-bottom: 12px;
+}
+#dialogButtons button {
+	/*float:right;	*/
+	position:relative;
+}
+#dialogButtons .save_icon {
+	width:auto;
+	background-position: 0 0;
+	display:block;
+	-moz-border-radius: 6px;
+	border-radius: 6px ;
+	-webkit-border-radius: 6px ;
+	border-width:2px;
+	border-color: #e3e3e3;
+	background:#39B54A url(/stabile/static/img/alert-overlay.png) repeat-x;
+	margin: 0 4px 4px 0;
+	color:#FFF;
+	font-weight:bold;
+	padding:0;
+	height:22px;
+	opacity:1;
+	filter: alpha(opacity=100);
+	-moz-opacity: 1;}
+
+.dj_ie6 #dialogButtons .save_icon {
+	background:#39B54A url(/stabile/static/img/alert-overlay.png) repeat-x;
+	float:none;
+}
+
+#dialogButtons .save_icon:hover {
+	background:#2b8837 url(/stabile/static/img/alert-overlay.png) repeat-x;
+	border-color:#2b8837;
+}
+#dialogButtons .save_icon span{
+	display:inline;
+	margin:0;
+	padding:2px 6px;
+	vertical-align:super;
+}
+
+
+
+/*BOXING*/
+.tundra .dijitBorderContainer {
+	background:inherit;
+}
+
+.tundra .dijitSplitContainer-child,
+.tundra .dijitBorderContainer-child {
+/*border:1px solid #e3e3e3;*/
+    border: 0;
+}
+
+.tundra .dijitAccordionTitle {
+	background:/*url("/stabile/static/gfx/tab.png")*/ none repeat-x scroll 0 0 #D4EDF1;
+	font-size:14px;
+	color:#656565;
+	text-transform: lowercase;
+	font-weight:bold;
+	height:24px!important;
+	line-height:24px;
+	margin:1px;
+	border-bottom:1px solid #FFF;
+}
+
+
+/*SHUT IT*/
+.tundra .dijitDialogCloseIcon {
+	background:none!important;
+	cursor:pointer;
+    right: 12px;
+    top: 8px;
+}
+.tundra .dijitDialog .closeText {
+    display: inline;
+    visibility: hidden;
+    color: #000;
+    float: right;
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0.2;
+    text-shadow: 0 1px 0 #fff;
+    font-family:helvetica!important;
+}
+.closeText:after {
+    content: '\00D7';
+/*    content: '×'; */
+    visibility: visible;
+    margin-left:-10px;
+}
+.tundra .dijitDialogCloseIconHover  {
+	background:none!important;
+}
+
+/*THOSE ANNOYING DOTTED BORDERS*/
+* {
+	outline:0px none!important;
+}
+
+/*OH YEAH FOCUS*/
+.tundra .dojoxGridCellFocus {
+	border:1px solid transparent!important;
+	border-color: transparent #CCCCCC #CCCCCC transparent!important;
+    border-style: dotted!important;
+    border-width: 0!important;
+}
+
+/*GETTIN GRIDDY WITH IT*/
+.dojoxGridCell {
+    font-size:12px;
+}
+
+/* Clarogrid defaults to geneva which does not work well in Chrome */
+.dojoxGrid {
+    font-family: Arial, Verdana, sans-serif
+}
+
+
+.tundra .dojoxGridCell {
+/*	border-color:transparent #ccc  #ccc transparent;
+	border-right:1px dotted  #ccc;
+	border-style:dotted;*/
+	border-width:0;
+}
+
+.dj_ie6 .tundra .dojoxGridCell{
+	border-color: #FFFFFF #CCCCCC #CCCCCC #FFFFFF!important;
+	border-style: dotted!important;
+}
+
+.tundra .dojoxGridCellOver {
+	border-color:transparent #AAA  #AAA transparent;
+}
+
+.tundra .dojoxGridRowOver .dojoxGridCell {
+/*    background-color: transparent !important;*/
+    background-color:#CCCCCC;
+}
+
+.tundra div.dojoxGrid {
+	background-color: #FFF;
+/*    border-top:1px solid #e3e3e3; */
+/*    border-bottom:1px solid #e3e3e3; */
+}
+
+.dojoxGrid{
+    /* the grid needs a height */
+    /* height:300px; */
+    font-size:20px;
+}
+
+.tundra div.dojoxGrid div.dojoxGrid{
+	background-color: transparent;
+	border:0px none;
+}
+
+
+.gridContainer{
+    padding:0px;
+    margin:1px;
+    overflow:auto;
+}
+
+.dj_ie6 .gridContainer {
+	width:auto;
+}
+
+.border_container{
+/*    border: 1px solid #e3e3e3;
+    margin: 1px 0 0 0; */
+    padding:6px 8px;
+    overflow:hidden;
+    background:#FFF;
+}
+
+.border_container_south{
+    position: absolute;
+    bottom: 90px;
+    right: 40px;
+/*    overflow:hidden;
+    padding:8px 6px;
+    background:#FFF;
+    text-align:right;
+    padding-right: 30px;
+    padding-left: 7px; */
+}
+
+.float{
+	background-color:#3498db;
+	color:#FFF;
+	padding:8px;
+	border-radius:50px;
+	text-align:center;
+	box-shadow: 2px 2px 3px #999;
+}
+
+.shadow{
+	box-shadow: 2px 2px 3px #999;
+}
+
+.collapsing {
+    -webkit-transition: none;
+    transition: none;
+    display: none;
+}
+
+.tundra .dojoxGridMasterHeader {
+	height:30px!important;
+	background:#F4f4f4;
+	border-bottom:1px solid #e3e3e3;
+}
+.tundra .dojoxGridHeader .dojoxGridCell,
+.tundra .dojoxGridMasterHeader .dojoxGridHeader .dojoxGridCell {
+	border:0px none;
+	border-right:1px dotted #e3e3e3;
+	background:transparent;
+	color:#656565!important;
+
+}
+
+.tundra .dojoxGridMasterHeader .dojoxGridHeader .dojoxGridRowTable,
+.tundra .dojoxGridMasterHeader .dojoxGridHeader,
+.tundra .dojoxGridMasterHeader .dojoxGridHeader div {
+	height:inherit;
+}
+
+
+
+.tundra .dojoxGridHeader {
+	background-color:transparent;
+}
+
+.dojoxGridHeader .dojoxGridCell {
+    height:inherit;
+}
+.tundra .dojoxGridRowTable {
+	border-width:0;
+	border-color:transparent;
+}
+
+.tundra .dojoxGridRowTable th {
+}
+
+.tundra .dojoxGridView{
+    left:1px!important;
+}
+.tundra .dojoxGridContent div.dojoxScrollbox,
+.tundra .dojoxGridContent div.dojoxGridRow {
+	overflow-x:hidden;
+}
+.tundra .dojoxGridContent {
+    height: 100%!important;
+    overflow-y:auto;
+}
+.tundra .dojoxGridRowOdd {
+    background-color: white;
+}
+.tundra .dojoxGridRow {
+    border-bottom: 1px solid #DDD;
+}
+
+.tundra .dojoxGridRowbarInner {
+	border-color:-moz-use-text-color -moz-use-text-color #CCCCCC;
+	border-style:none none solid;
+	border-width:medium medium 1px;
+}
+
+
+.tundra .dojoxGridScrollbox {
+	background-color: #FFF;
+	overflow-x:hidden;
+}
+.tundra .dojoxGridMasterView .dojoxGridRowbar {
+
+	width:0px;
+	overflow:hidden;
+}
+.tundra .dojoxGridMasterView .dojoxGridRowbar * {
+
+}
+.tundra .dojoxGridRowbarInner
+.tundra .dojoxGridMasterView .dojoxGridRowbarInner {
+border-width:0 0 0 0;
+}
+
+.tundra .dojoxGridRowbar {
+background:transparent;
+border-style:none none none none;
+border-width:0 0 0 0;
+padding:0;
+}
+
+/***********    ICONIC   ***********/
+.dijitTabButtonIcon {
+	display:none;
+	visibility:hidden;
+}
+
+.plain_button {
+    border: none;
+    background-repeat:no-repeat;
+    background-position:center;
+    height:20px;
+    margin-right:2px;
+    width:20px;
+    vertical-align:middle;
+}
+.plain_button span{
+    display:none;
+}
+
+.action_button {
+	background-color:#efefef;
+	background-repeat:no-repeat;
+	border:1px solid #e3e3e3;
+	cursor:pointer;
+	height:20px;
+	margin-right:4px;
+	width:20px;
+	background-position: 50% 50%;
+	-moz-border-radius: 2px;
+	border-radius: 2px ;
+	-webkit-border-radius: 2px ;
+	curser: hand;
+    vertical-align: middle;
+}
+.action_button span{
+    display:none;
+}
+
+
+action buttons in grids
+.status_indicator{
+background-color:#FFF;
+padding:0;
+margin:0;
+border:0;
+/* text-indent:-9999px; */ /* IE / dojo grid error when doing this */
+width:16px;
+height:16px;
+}
+
+.action_button:hover {
+	opacity: 1;
+	-moz-opacity:1;
+	filter: alpha(opacity=100);
+	background-color:#FFFFFF;
+}
+
+.tundra .dijitValidationIcon {
+background:url("/stabile/static/gfx/warning.png") no-repeat scroll center center transparent;
+width:16px;
+}
+
+.start_icon, .resume_icon, .start_tunnel_icon {
+background-image:url(/stabile/static/img/icons/control.png);
+}
+.download_icon{
+background-image:url(/stabile/static/img/icons/disk-black.png);
+}
+.browse_icon{
+background-image:url(/stabile/static/img/icons/folder-tree.png);
+}
+.destroy_icon{
+background-image:url(/stabile/static/img/icons/plug-disconnect.png);
+}
+.suspend_icon {
+background-image:url(/stabile/static/img/icons/control-pause.png);
+}
+.sleep_icon{
+background-image:url(/stabile/static/img/icons/control-pause.png);
+}
+.wake_icon{
+background-image:url(/stabile/static/img/icons/control.png);
+}
+.maintenance_icon{
+background-image:url(/stabile/static/img/icons/screwdriver--plus.png);
+}
+.reset_icon{
+background-image:url(/stabile/static/img/icons/hammer--exclamation.png);
+}
+.carryon_icon{
+background-image:url(/stabile/static/img/icons/screwdriver--minus.png);
+}
+.evacuate_icon{
+    background-image:url(/stabile/static/img/icons/fire--exclamation.png);
+}
+.reload_icon{
+background-image:url(/stabile/static/img/icons/arrow-circle.png);
+}
+.refresh_icon{
+background-image:url(/stabile/static/img/icons/arrow-repeat.png);
+}
+.reboot_icon{
+background-image:url(/stabile/static/img/icons/arrow-circle-double.png);
+}
+.unjoin_icon {
+background-image:url(/stabile/static/img/icons/node-delete.png);
+}
+.shutdown_icon, .stop_tunnel_icon {
+background-image:url(/stabile/static/img/icons/control-power.png);
+}
+.delete_icon, .deleteentirely_icon, .removesystem_icon {
+background-image:url(/stabile/static/img/icons/cross-script.png);
+}
+.no-clone_icon{
+background-image:url(/stabile/static/img/icons/documents-text.png);
+}
+.clone_icon{
+background-image:url(/stabile/static/img/icons/images.png);
+}
+.convert_icon{
+background-image:url(/stabile/static/img/icons/image-export.png);
+}
+.inject_icon{
+background-image:url(/stabile/static/img/icons/bandaid--plus.png);
+}
+.save_icon{
+background-image:url(/stabile/static/img/icons/disk-black.png);
+}
+.snapshot_icon{
+background-image:url(/stabile/static/img/icons/camera--plus.png);
+}
+.unsnap_icon{
+background-image:url(/stabile/static/img/icons/camera--minus.png);
+}
+.revert_icon{
+background-image:url(/stabile/static/img/icons/arrow-return-180-left.png);
+}
+.master_icon{
+background-image:url(/stabile/static/img/icons/image--plus.png);
+}
+.backup_icon{
+background-image:url(/stabile/static/img/icons/umbrella--plus.png);
+}
+.unmaster_icon{
+background-image:url(/stabile/static/img/icons/image--minus.png);
+}
+.activate_icon{
+background-image:url(/stabile/static/img/icons/network-status.png);
+}
+.stop_icon{
+background-image:url(/stabile/static/img/icons/network-status-busy.png);
+}
+.deactivate_icon{
+background-image:url(/stabile/static/img/icons/network-status-away.png);
+}
+.system_icon{
+    background-image:url(/stabile/static/img/icons/servers.png);
+}
+.delete_system_icon{
+    background-image:url(/stabile/static/img/icons/server--minus.png);
+}
+.terminal_icon, .console_icon{
+    background-image:url(/stabile/static/img/icons/application-terminal.png);
+}
+.sol_icon {
+    background-image:url(/stabile/static/img/icons/system-monitor.png);
+}
+.start_html5_vnc_viewer_icon,.start_viewer_icon{
+background-image:url(/stabile/static/img/icons/application-terminal.png);
+}
+.stop_viewer_icon{
+background-image:url(/stabile/static/img/icons/application-terminal-close.png);
+}
+.show_stats_icon{
+background-image:url(/stabile/static/img/icons/application-monitor.png);
+}
+.enable_icon{
+    background-image:url(/stabile/static/img/icons/status.png);
+}
+.fail_icon{
+    background-image:url(/stabile/static/img/icons/status-busy.png);
+}
+.acknowledge_icon{
+    background-image:url(/stabile/static/img/icons/tick-red.png);
+}
+.disable2_icon{
+    background-image:url(/stabile/static/img/icons/status-offline.png);
+}
+.disable_icon{
+    background-image:url(/stabile/static/img/icons/status-away.png);
+}
+.resetpassword_icon{
+    background-image:url(/stabile/static/img/icons/mail--arrow.png);
+}
+
+
+.greyInfoIcon{
+    background:url("/stabile/static/gfx/question-grey.png") center right no-repeat;
+    padding:0 14px 0 0;
+    white-space:nowrap;
+}
+
+/*TOOLTIP - NEEDS WORK*/
+.tooltip .dijitButtonNode {
+    background:none;
+    padding:0;
+    margin:1px 2px 2px 2px;
+    border:none;
+    height:auto;
+    width:16px;
+}
+
+.tooltip .dijitButtonText,
+.helpTooltip .dijitArrowButtonInner{
+    display: none;
+}
+.tooltipIconSmall,
+.tooltipIcon{
+    background:url("/stabile/static/gfx/question-blue.png") no-repeat 0 0 transparent;
+    height:16px;
+    width:16px;
+    vertical-align:top;
+}
+.tooltipHover .tooltipIconSmall,
+.tooltipHover .tooltipIcon{
+    background:url("/stabile/static/gfx/question-blue.png") no-repeat 0 -16px transparent;
+}
+
+.tundra .dijitTooltipContainer {
+	background: #ffffff none;
+	border: 1px solid #e3e3e3;
+	padding: 0;
+/*	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;
+	border-radius: 3px;*/
+}
+.tundra .dijitTooltipContents {
+	border:1px solid #fff;
+	padding:8px;
+}
+
+
+
+
+
+.tundra .dijitTooltipConnector {
+	border:0px;
+	z-index: 8;
+}
+.tundra .dijitTooltipABRight .dijitTooltipConnector {
+	left: auto !important;
+	right: 3px;
+}
+.tundra .dijitTooltipBelow .dijitTooltipConnector {
+	top: 2px;
+	left: 3px;
+	background:url(/stabile/static/gfx/tooltipConnectorUp.png) no-repeat top left;
+	width:16px;
+	height:14px;
+}
+.dj_ie .tundra .dijitTooltipBelow .dijitTooltipConnector {
+	background-image: url(/stabile/static/gfx/tooltipConnectorUp.png);
+}
+.tundra .dijitTooltipAbove .dijitTooltipConnector {
+	bottom: 3px;
+	left: 3px;
+	background:url(/stabile/static/gfx/tooltipConnectorDown.png) no-repeat top left;
+	width:16px;
+	height:14px;
+}
+.dj_ie .tundra .dijitTooltipAbove .dijitTooltipConnector {
+	background-image: url(/stabile/static/gfx/tooltipConnectorDown.png);
+}
+.dj_ie6 .tundra .dijitTooltipAbove .dijitTooltipConnector {
+	bottom: -3px;
+}
+.tundra .dijitTooltipLeft {
+	padding-right: 14px;
+}
+.dj_ie6 .tundra .dijitTooltipLeft {
+	padding-left: 15px;
+}
+.tundra .dijitTooltipLeft .dijitTooltipConnector {
+	right: 2px;
+	bottom: 3px;
+	background:url(/stabile/static/gfx/tooltipConnectorRight.png) no-repeat top left;
+	width:16px;
+	height:14px;
+}
+.dj_ie .tundra .dijitTooltipLeft .dijitTooltipConnector {
+	background-image: url(/stabile/static/gfx/tooltipConnectorRight.png);
+}
+.tundra .dijitTooltipRight {
+	padding-left: 14px;
+}
+.tundra .dijitTooltipRight .dijitTooltipConnector {
+	left: 3px;
+	bottom: 3px;
+	background:url(/stabile/static/gfx/tooltipConnectorLeft.png) no-repeat top left;
+	width:16px;
+	height:14px;
+}
+.dj_ie .tundra .dijitTooltipRight .dijitTooltipConnector {
+	background-image: url(/stabile/static/gfx/tooltipConnectorLeft.png);
+}
+ .tundra .dijitTooltipContainer,
+.dj_webkit .tundra .dijitTooltipContainer {
+/*	-webkit-box-shadow: 0px 5px 10px #474747;
+	-moz-box-shadow: 0px 5px 10px #474747;
+	box-shadow: 0px 5px 10px #474747; */
+	border:2px solid #e3e3e3;
+/*	-webkit-border-radius: 3px;
+	-moz-border-radius: 3px;*/
+	border-radius: 3px;
+}
+
+/*ANTIQUE BROWSERS ARE SO LAST DECADE*/
+.dj_ie6 body.tundra *{
+/*SMTH BAD*/
+}
+
+/*SEARCH FOR IMAGES*/
+#searchValueTextBox {
+	padding:3px;
+}
+
+
+/** Search Page */
+
+.docs #formbutton,
+.docs input[type="submit"],
+.docs input[type="button"] {
+	border:1px solid red;
+}
+
+// Set up the color and transition time
+input[type=button] {
+    background-color: #0000aa;
+    -webkit-transition: -webkit-transform 0.3s ease-in-out;
+}
+
+// This is for the click action:
+input[type=button]:active {
+    background-color: #000099;
+    -webkit-transform: rotate(360deg);
+}
+
+// Set up the color and transition time
+input[type=submit] {
+    background-color: #0000aa;
+    -webkit-transition: -webkit-transform 0.3s ease-in-out;
+}
+
+// This is for the click action:
+input[type=submit]:active {
+    background-color: #000099;
+    -webkit-transform: rotate(360deg);
+}
+
+
+#formbutton {
+	font-size:2em;
+	border:1px solid #112233!important;
+}
+form div #formbutton,
+input[type="button"] {
+	border:1px none;
+	background:transparent;
+	color:#FFF;
+}
+#search form input{
+    padding:0;
+    vertical-align:middle;
+    padding: 2px 4px 2px 4px;
+}
+#search form p{
+    margin-top:10px;
+}
+#search li{
+    margin-bottom: 10px;
+}
+#search ul{
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#search p{
+    margin: 0;
+}
+
+
+#search h3{
+    font-size: 14px;
+}
+
+#nav{
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    width: 100%;
+}
+#nav li{
+    display: inline;
+    margin: 0 2px 0 2px;
+    font-size: 14px;
+}
+
+/*TOASTER*/
+.toast {
+    opacity: 0.9 !important;
+}
+.tundra #toaster {
+	top:1px !important;
+    box-shadow: 0px 1px 4px #474747 !important;
+    -moz-box-shadow: 0px 1px 4px #474747 !important;
+    -webkit-box-shadow:0px 1px 4px #474747 !important;
+}
+.tundra .dijitToasterContainer {
+}
+.tundra .dijitToasterContent {
+    border-radius: 4px;
+    padding: 0.25em 0.5em 0.5em 0.7em;
+    margin:0;
+}
+.tundra .dijitToasterMessage {
+    color:#475E7E;
+}
+.tundra .dijitToasterError {
+    display:none;
+}
+.tundra .dijitToasterContent hr {
+    border-color: #64ba13;
+    width:100%;
+    margin: 4px 0 4px 0;
+}
+/* /\*PLUPLOAD*\/ */
+
+.dj_ie6 .tundra #uploadDialog .dijitDialogPaneContent {
+	padding:10px;
+}
+.dj_ie6 .tundra #uploadDialog {
+	width:472px!important;
+}
+.dj_ie7 #uploadDialog .dijitDialogTitleBar{
+	min-width: 462px;
+}
+
+/*.uploadButton {
+	float:left;	
+	margin-right:6px;
+}*/
+
+.uploadRefresh span {
+	display:inline;	
+}
+
+.ui-progressbar .ui-progressbar-value {
+    height: 12px!important;
+}
+
+/*PLUPLOAD PROGRESS IN IMAGE TAB*/
+.border_container_south .plupload_progress {
+	margin:4px;
+}
+.gridButtonContainer .plupload_progress {
+	width:220px;
+	margin:2px 10px;
+	
+}
+.dj_ie7 .gridButtonContainer .plupload_progress,
+.dj_ie6 .gridButtonContainer .plupload_progress {
+	position:absolute;
+	float:left;
+	margin-top:0;
+}
+
+.gridButtonContainer .plupload_progress_container {
+	border:2px solid #e3e3e3;
+	width:200px;
+	-moz-border-radius: 4px;
+	-webkit-border-radius:  4px;
+	border-radius:  4px;
+	position:absolute;
+	top:6px;
+	left:110px;
+	margin-left:10px;
+}
+.dj_ie7 .gridButtonContainer .plupload_progress_container,
+.dj_ie6 .gridButtonContainer .plupload_progress_container {
+	left:0px;
+	margin-top: -4px;
+}
+.gridButtonContainer .plupload_progress_bar {
+	height:16px;
+	background: url("/stabile/static/gfx/progress_large.png") repeat-x scroll 0 0 #39B54A;
+}
+
+/* /\* http://perishablepress.com/press/2008/02/05/lessons-learned-concerning-the-clearfix-css-hack *\/ */
+
+.clearfix:after {
+	clear: both;
+	content: ' ';
+	display: block;
+	font-size: 0;
+	line-height: 0;
+	visibility: hidden;
+	width: 0;
+	height: 0;
+}
+
+* html .clearfix {
+	height: 1%;
+}
+
+.chart h2{
+  /*background-color:#D4EDF1;*/
+  text-align:center;
+  color:#656565;
+  margin:0;
+  width:100%;
+  font-size: 90%;
+  display: inline;
+}
+
+.dojoxLegendNode {
+      border: 1px solid #CCC;
+      margin:0;
+      padding:0;
+}
+#dojox_charting_widget_Legend_0 {
+    position: absolute;
+    top: 198px;
+    left: 20px;
+}
+#dojox_charting_widget_Legend_1 {
+    position: absolute;
+    top: 339px;
+    left: 20px;
+}
+.legendNodeWrapper{
+      nobackground-color: #FBFBFB;
+      margin: 0;
+      padding: 0;
+}
+.dijitRuleContainer {
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
+.searchQueryInput {
+  padding:5px;
+ }
+
+span.dijitContentPaneLoading {
+	display:block;
+	position:relative;
+	width:200px;
+	text-align:center;
+	margin:0 auto;
+}
+.tundra .dijitIconLoading {
+}
+
+.tundra .dojoxGridLoading {
+}

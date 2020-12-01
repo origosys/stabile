@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=Stabile
+Comment=Infrastructure orchestration
+Icon=/var/www/stabile/static/img/logo-icon.png
+Exec=/usr/bin/xdg-open https://localhost/stabile
+Terminal=false
+Categories=Network;WebBrowser;Internet;

@@ -1,0 +1,369 @@
+<div dojoType="dijit.layout.BorderContainer"
+     gutters="false"
+     splitter="true"
+     style="width:100%;"
+     >
+
+	<!-- outer div-->
+    <div dojoType="dijit.layout.ContentPane" region="center"
+         style="padding:0; margin:0; border:0; width:45%; height:80vh;">
+        
+        <div dojoType="dijit.layout.BorderContainer" style="padding:0; margin:0; border:0; width:100%;">
+            
+             <div dojoType="dijit.layout.ContentPane" title="Servers" region="center" id="homeServers" style="overflow:hidden;">
+                <div id="ServersInfo" style="border-bottom: 1px solid #ddd; padding:8px;">
+                    <span id="add_system">
+                        <button class="btn btn-success btn-sm shadow" style="margin-right:10px;" id="new_app_button" onclick="systembuilder.system.create();">Install Stack&hellip;</button> <a href="https://www.origo.io/info/stabiledocs/web/dashboard/new-stack/" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                        <span style="margin:7px 2px 0 0" class="pull-right">
+                            <a href="https://www.origo.io/info/stabiledocs/web/dashboard/add-empty-stack/" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                            <a href="#home" id="home_add_empty" onclick="home.grid.addSystem();" title="Add empty Stack"><img src="/stabile/static/img/icons/server--plus.png" hspace="5"></a>
+                            <a href="#home" onclick="home.grid.refresh();home.updateVitals('update'); if (servers.grid.refresh){servers.grid.refresh();}" title="Refresh" class="pull-right float btn" style="position:absolute;right:26px;bottom:14px;z-index:500;"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+                        </span>
+
+                    </span>
+                </div>
+                <div id="systemsGrid" style="height:100%;margin:0;" ></div>
+             </div>
+			 <div dojoType="dijit.layout.ContentPane" title="vitalspane" 
+                 splitter="true" region="bottom" id="homeServerVitals"  style="height:186px;">
+                 <div id="vitals"></div>
+                 <div id="appstatus" style="padding-top: 5px"></div>
+                 <div id="appid" style="padding-top: 5px"></div>
+                 <span id="vitals_system" style="display:none;">
+                 </span>
+                 <span id="vitals_server" style="display:none;">
+                 </span>
+             </div>
+        </div><!-- end border cont -->
+    </div><!-- end left -->
+
+    <div dojoType="dijit.layout.ContentPane"
+         region="right"
+         splitter="true"
+         style="padding:0; margin:0; border:0; noborder-left: 2px solid #f0f0f0; width:55%; overflow:hidden; height:80vh;"
+         id="homeContent"
+    >
+
+        <ul class="nav nav-pills" id="homeNav">
+            <li role="presentation" class="active"><a href="#infoContentPane" data-toggle="tab">Info</a></li>
+            <li role="presentation"><a href="#usageContentPane" data-toggle="tab">Usage</a></li>
+            <li role="presentation"><a href="#monitoringContentPane" data-toggle="tab" onclick="home.updateMonitoring();">Monitoring</a></li>
+            <li role="presentation"><a href="#packagesContentPane" data-toggle="tab" onclick="home.updatePackages();">Software</a></li>
+            <li role="presentation"><a href="#statisticsContentPane" data-toggle="tab" id="statisticsTab" onclick="">Metrics</a></li>
+        </ul>
+
+        <div id="homeTabs" class="tab-content" nodojoType="dijit.layout.TabContainer" style="padding:0; overflow: hidden auto;">
+          <div id="infoContentPane" class="tab-pane active" dojoType="dijit.layout.ContentPane" title="Info" style="padding:10px;">
+              <div style="float:left; padding-right:6px; margin-top:5px;">
+                  <a href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/account/" rel="help" target="_blank" class="irigo-tooltip">help</a>
+              </div>
+              <h4 id="info_header" style="margin-top:4px;"></h4>
+              <div class="well well-sm">
+                  <div id="info_name" style="display:none;">
+                      <table style="width:100%;">
+                          <tr>
+                              <td width="150"><b>Name:</b></td>
+                              <td><span data-dojo-type="dijit.InlineEditBox" id="info_name_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                width="100%" title="Name" onChange="home.grid.updateSystem('name');"></span></td>
+                          </tr>
+                      </table>
+                  </div>
+                  <div id="info_server" style="display:none;">
+                      <table style="width:100%;">
+                          <tr>
+                              <td width="150"><b>Belongs to stack:</b></td>
+                              <td>
+                                  <span id="info_system_field"></span>
+                                  <button id="updateSystemButton" onclick="home.grid.updateSystem('system');" class="btn btn-info btn-xs" type="button">
+                                      update
+                                  </button>
+                              </td>
+                          </tr>
+                      </table>
+                  </div>
+                  <div id="info_contacts" style="display:none;">
+                      <table style="width:100%;">
+                        <tr>
+                          <td width="150"><b class="info-system">Owner name:</b><b class="info-account">Name:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_fullname_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('fullname');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b class="info-system">Owner email:</b><b class="info-account">Email:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_email_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('email');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b class="info-system">Owner phone:</b><b class="info-account">Phone:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_phone_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('phone');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b>Technician name:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_opfullname_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('opfullname');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b>Technician email:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_opemail_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('opemail');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b>Technician phone:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_opphone_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('opphone');"></span></td>
+                        </tr>
+                        <tr>
+                          <td><b>Alert email:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_alertemail_field" data-dojo-props="editor:'dijit.form.TextBox'" width="100%" title="Name" onChange="home.grid.updateSystem('alertemail');"></span>
+                              <a id="irigo-alertemail-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/alert-email" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                        </tr>
+                          <tr id="info_resettoaccountinfo_tr">
+                              <td colspan="2" align="right">
+                              <a href="#home" id="info_resettoaccountinfo_button" onClick="home.showResetInfo();">Reset stacks and server contacts...</a> <a id="irigo-link-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/resetcontacts" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                              </td>
+                          </tr>
+                      </table>
+                  </div>
+              </div>
+              <h4 style="margin-top:4px;" class="info-security">Account Security</h4>
+              <div class="well well-sm info-security" id="info_security" style="display:none;">
+                  <div>
+                      <table style="width:100%;">
+                          <tr>
+                              <td width="150"><b>Allow login from:</b></td>
+                              <td><span data-dojo-type="dijit.InlineEditBox" id="info_allowfrom_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                        width="100%"onChange="home.grid.updateSystem('allowfrom');"></span>
+                                  <a id="irigo-allowloginfrom-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/allowloginfrom" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                              </td>
+                          </tr>
+                          <tr>
+                              <td><b>Last login:</b></td>
+                              <td><span data-dojo-type="dijit.form.TextBox" id="info_lastlogin_field" readonly
+                                        width="100%" style="border:0;"></span></td>
+                          </tr>
+                          <tr>
+                              <td><b>Last login from:</b></td>
+                              <td><span data-dojo-type="dijit.form.TextBox" id="info_lastloginfrom_field" readonly
+                                        width="100%" style="border:0;"></span></td>
+                          </tr>
+                          <tr>
+                              <td><b>API access:</b></td>
+                              <td><span data-dojo-type="dijit.form.CheckBox" id="info_allowinternalapi_field"
+                                        style="border:0;" onChange="home.grid.updateSystem('allowinternalapi');"></span></td>
+                          </tr>
+                          <tr id="info_changepasswordinfo_tr">
+                              <td colspan="2" align="right">
+                                  <a href="#home" id="info_changepasswordinfo_button" onClick="home.showChangePassword();">Change password...</a>
+                              </td>
+                          </tr>
+                      </table>
+                  </div>
+              </div>
+              <h4 style="margin-top:4px;" class="info-engine">Engine <a id="irigo-engine-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/engine" rel="help" target="_blank" class="irigo-tooltip">help</a></h4>
+              <div class="well well-sm info-engine" id="info_engine">
+                  <table style="width:100%;">
+                      <tr id="info_enginename_tr">
+                          <td width="150"><b>Engine name:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_enginename_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    onChange="home.updateEngine('updateengine');"></span>
+                          </td>
+                      </tr>
+                      <tr id="info_linkengine_tr" style="height:30px;">
+                          <td width="150"><b>Linking:</b></td>
+                          <td>
+                              <span class="awesome" id="info_linkengine_button">
+                                  Link engine...
+                              </span>
+                          </td>
+                      </tr>
+                      <tr id="info_downloadmasters_tr">
+                          <td width="150"><b>Download masters:</b></td>
+                          <td><span data-dojo-type="dijit.form.CheckBox" id="info_downloadmasters_field"
+                                    style="border:0;" onChange="home.grid.updateSystem('downloadmasters');"></span>
+                              <a id="irigo-downloadmasters-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/downloadmasters" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                      </tr>
+                      <tr id="info_externaliprange_tr">
+                          <td width="150"><b>Mapped IP-range:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_externaliprangestart_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    onChange="home.grid.updateSystem('externaliprangestart');"></span>
+                              &#8594;
+                              <span data-dojo-type="dijit.InlineEditBox" id="info_externaliprangeend_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                  onChange="home.grid.updateSystem('externaliprangeend');"></span>
+                              <a id="irigo-externaliprangestart-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/ip-ranges" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                      </tr>
+                      <tr id="info_proxyiprange_tr">
+                          <td width="150"><b>Proxied IP-range:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_proxyiprangestart_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    onChange="home.grid.updateSystem('proxyiprangestart');"></span>
+                              &#8594;
+                              <span data-dojo-type="dijit.InlineEditBox" id="info_proxyiprangeend_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                  onChange="home.grid.updateSystem('proxyiprangeend');"></span>
+                              GW:
+                              <span data-dojo-type="dijit.InlineEditBox" id="info_proxygw_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                  onChange="home.grid.updateSystem('proxygw');"></span>
+                              <a id="irigo-proxyiprange-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/ip-ranges" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                      </tr>
+                      <tr id="info_disablesnat_tr">
+                          <td width="150"><b>Disable SNAT:</b></td>
+                          <td><span data-dojo-type="dijit.form.CheckBox" id="info_disablesnat_field"
+                                    style="border:0;" onChange="home.grid.updateSystem('disablesnat');"></span>
+                              <a id="irigo-disablesnat-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/source-nat" rel="help" target="_blank" class="irigo-tooltip">help</a></td>
+                      </tr>
+                      <tr id="info_imagespartition_tr">
+                          <td width="150"><b>Images storage:</b></td>
+                          <td><select id="info_imagesdevice_field" style="display:inline-block; margin-bottom: 4px; vertical-align: bottom;" dojoType="dijit.form.Select"
+                                      store="stores.imagesDevices" sortbylabel="false" onChange='home.toggleImagesButtons(this);'></select>
+
+                              <button class="btn btn-xs btn-info" id="info_imagesdevice_button" onclick="grid.actionConfirmDialog('info_imagesdevice_field','setimagesdevice','Images storage','use this storage device as primary images device?','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px;">Use this device</button>
+
+                              <button class="btn btn-xs btn-info" id="info_imageszfs_button" onclick="grid.actionConfirmDialog('info_imagesdevice_field','formatimagesdevice','Images ZFS storage','configure this storage device as primary images device? This will erase all current data on the device!!','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px;">Format this device</button>
+
+                              <a id="irigo-imagespartition-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/storage" rel="help" target="_blank" class="irigo-tooltip">help</a></td>
+                      </tr>
+                      <tr id="info_backuppartition_tr">
+                          <td width="150"><b>Backup storage:</b></td>
+                          <td><select id="info_backupdevice_field" style="display:inline-block; margin-bottom: 4px; vertical-align: bottom;" dojoType="dijit.form.Select"
+                                      store="stores.backupDevices" sortbylabel="false" onChange='home.toggleBackupButtons(this);'></select>
+
+                              <button class="btn btn-xs btn-info" id="info_backupdevice_button" onclick="grid.actionConfirmDialog('info_backupdevice_field','setbackupdevice','Backup storage','use this storage device as backup device?','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px; display:none;">Use this device</button>
+
+                              <button class="btn btn-xs btn-info" id="info_backupzfs_button" onclick="grid.actionConfirmDialog('info_backupdevice_field','formatbackupdevice','Backup storage','configure this storage device as backup device? This will erase all current data on the device!!','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px; display:none;">Format this device</button>
+
+                              <a id="irigo-backuppartition-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/storage" rel="help" target="_blank" class="irigo-tooltip">help</a></td>
+                      </tr>
+                      <tr id="info_ioreadlimits_tr">
+                          <td width="150"><b>Disk read default limits:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_vmreadlimit_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    onChange="home.grid.updateSystem('vmreadlimit');"></span> MB/s,
+                              <span data-dojo-type="dijit.InlineEditBox" id="info_vmiopsreadlimit_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                  onChange="home.grid.updateSystem('vmiopsreadlimit');"></span> IOPS
+                              <a id="irigo-ioreadlimits-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/io-limits" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                      </tr>
+                      <tr id="info_iowritelimits_tr">
+                          <td width="150"><b>Disk write default limits:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_vmwritelimit_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    onChange="home.grid.updateSystem('vmwritelimit');"></span> MB/s,
+                              <span data-dojo-type="dijit.InlineEditBox" id="info_vmiopswritelimit_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                  onChange="home.grid.updateSystem('vmiopswritelimit');"></span> IOPS
+                              <a id="irigo-iowritelimits-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/io-limits" rel="help" target="_blank" class="irigo-tooltip">help</a>
+                          </td>
+                      </tr>
+                  </table>
+               </div>
+
+            <h4 style="margin-top:4px;" class="info-services">Services</h4>
+            <div class="well well-sm info-services" style="overflow-y:auto; height:220px;" id="info_rtfs">
+              <div style="display:none;" id="info_recovery">
+                  <table style="width:100%;">
+                      <tr>
+                          <td width="150"><b>Services provided:</b></td>
+                          <td><span data-dojo-type="dijit.InlineEditBox" id="info_services_field" data-dojo-props="editor:'dijit.form.TextBox'"
+                                    width="100%" title="Name" onChange="home.grid.updateSystem('services');"></span></td>
+                      </tr>
+                  </table>
+                  <div style="margin-top: 10px; margin-left: 2px;"><b>Suggested recovery procedures for failed services:</b></div>
+                  <div id="recovery" style="margin-left: 2px; width: 100%;"></div>
+              </div>
+              <div id="info_notes" style="display:none;">
+                   <div style="margin-top: 10px; margin-left: 2px;"><b>Notes:</b></div>
+                   <div id="notes" style="margin-left: 2px; width: 100%;"></div>
+               </div>
+            </div>
+          </div>
+          <div id="usageContentPane" class="tab-pane" style="padding:4px;" dojoType="dijit.layout.ContentPane" title="Usage">
+              <div>
+                  <select id="usage_select" dojoType="dijit.form.Select" store="stores.usageMonths">
+                      <script type="dojo/method" event="onChange" args="value">
+                          (function(){
+                          home.currentUsageMonth = value;
+                          home.updateUsage();
+                          $("#usagecsv")[0].href = home.usageCSV();;
+                          })();
+                      </script>
+                  </select>
+                  <a href="#home" onclick="home.updateUsage();" title="refresh"><img src="/stabile/static/img/icons/arrow-circle.png" style="margin-top:4px; margin-left:5px;"></a>
+                  <span style="vertical-align:sub;">(<a id="usagecsv" href="/stabile/users?action=usage&format=csv" target="_blank" title="CSV">csv</a>)</span>
+                  <span class="alert alert-info pull-right" style="display:none; margin: 0 0 10px 0; padding:5px;" id="total_cost"></span>
+              </div>
+              <div id="usage" style="font-size:90%; vertical-align: middle; margin: 5px 0;
+             padding: 4px; overflow: auto; clear: both;"></div>
+             <div class="alert alert-warning" id="cost_warning" style="display:none;margin-top:30px;">Please note that usage listed above is your raw ressource usage. Actual cost is based on  this, but may also include app rebates or license costs.</div>
+          </div>
+          <div id="monitoringContentPane" class="tab-pane" dojoType="dijit.layout.ContentPane" title="Monitoring">
+            <div id="monitoringGrid" style="padding:0; margin-bottom:2px; width:100%;"></div>
+            <span id="missingmonitors"></span>
+            <span style="text-align:right; padding:2px; height:32px; float:right;">
+                <button onclick="home.monitoringGrid.newItem()" style="display:none;" id="new_monitor_button" class="btn btn-success btn-xs">New monitor&hellip;</button>
+                <a href="#home" onClick="home.monitoringGrid.refresh();" title="refresh monitors"><img src="/stabile/static/img/icons/arrow-circle.png" hspace="5"></a>
+            </span>
+            <div style="padding:4px;">
+                <div style="margin:2px 4px 0 4px;">
+                    <span style="font-weight:400;">Show uptime for:</span>
+                    <select id="uptime_select" dojoType="dijit.form.Select" store="stores.uptimeMonths" style="margin-top:-5px;">
+                        <script type="dojo/method" event="onChange" args="value">
+                            (function(){
+                                home.currentUptimeMonth = value;
+                                home.updateUptime();
+                            })();
+                        </script>
+                    </select>
+                    <button class="btn btn-xs btn-info" onClick="home.updateUptime();" style="margin-top: -3px;">Show</button>
+                </div>
+                <div id="uptime" style="font-size:90%; color:#666666; noheight: 220px;
+                 width:100%; padding: 6px; overflow-y: auto; overflow-x: hidden;
+                 border-bottom: solid 1px #E8E8E8; border-top: solid 1px #E8E8E8;">
+                 </div>
+            </div>
+          </div>
+          <div id="packagesContentPane" class="tab-pane" dojoType="dijit.layout.ContentPane" title="Software">
+          <!-- div style="padding:0;" -->
+                  <h5 style="padding:4px 4px 8px 4px;">
+                      Operating Systems <span style="font-weight:normal;">(<a id="oslistcsv_link" href="/stabile/systems/?action=register&format=csv" target="_blank">csv</a>)</span>
+                      <span class="pull-right">
+                          <button class="btn btn-info btn-xs" onClick="home.updatePackages();" style="display:none;">Show</button>
+                          <button class="btn btn-info btn-xs" id="clear_packages" onClick="home.clearPackages();">Clear</button>
+                          <button class="btn btn-info btn-xs" id="load_packages" onClick="home.loadPackages();" style="display:none;">Rescan server(s)&hellip;</button>
+                      </span>
+                  </h5>
+                  <div id="oslist" nostyle="color:#666666; vertical-align: middle; " style="margin: 5px 0; font-size:90%; padding: 4px; border-top: solid 1px #E8E8E8; border-bottom: solid 1px #E8E8E8;"></div>
+              <!-- /div -->
+              <h5 style="padding:4px 4px 0 4px;">Installed software <span style="font-weight:normal;">(<a id="packlistcsv_link" href="/stabile/systems/?action=packages&format=csv"  target="_blank">csv</a>)</span>
+              </h5>
+              <div id="packages"></div>
+          </div>
+          <div id="statisticsContentPane" class="tab-pane" dojoType="dijit.layout.ContentPane" title="Metrics" style="padding-top:12px;">
+            <div style="float:right; padding-right:12px;">
+                <a href="https://www.origo.io/info/stabiledocs/web/dashboard/metrics" rel="help" target="_blank" class="irigo-tooltip">help</a>
+            </div>
+            <div id="refresh_charts" style="float:right;">
+                <a href="#" onclick="home.updateApexCharts();"><img src="/stabile/static/img/icons/arrow-circle.png" alt="update" style="margin: 0 5px 0 12px;"></a>
+            </div>
+            <div style="margin:5px; margin-bottom:0" class="clearfix">
+                <div style="margin-bottom:5px; margin-top: 20px; text-align: center;" id="statsInfo">
+                    <span class="label label-info" style="font-size: 15px; font-weight: 300;">Please select a server or an app to show metrics</span>
+                </div>
+                <div id="slider" style="display:none;">
+                    <div id="rules" style="width:100%"></div>
+                </div>
+            </div>
+            <div id="chartsPanel" style="margin:20px 0 0 0; padding:0; display: none; height:700px; overflow:hidden;">
+                <div class="chart" style="width:100%; margin: 6px 2px;" id="cpuLoad">
+                  <div id="chartCpuLoad" style="width:100%;"></div>
+                </div>
+                <div class="chart" style="width:100%;margin:2px;" id="networkActivity">
+                    <div id="chartNetworkActivity" style="width:100%;"></div>
+                </div>
+                <div class="chart" style="width:100%;margin:2px;" id="IO">
+                  <div id="chartIO" style="width:100%;"></div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+</div><!-- end bordercontainer-->

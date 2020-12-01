@@ -1,0 +1,8 @@
+Download from: https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/shellinabox/shellinabox-2.14.tar.gz
+
+./configure --disable-ssl
+vi libhttp/server.h
+->
+#include "stdint.h"
+make
+copy shellinaboxd to here

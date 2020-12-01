@@ -1,0 +1,30 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Strength</title>
+<link href='https://fonts.googleapis.com/css?family=Lato:400,700' rel='stylesheet' type='text/css'>
+<link rel="stylesheet" href="strength.css">
+</head>
+
+<body>
+<h1><span>Strength</span>.js</h1>
+	<form id="myform" action="" method="get" accept-charset="utf-8">
+		<input id="myPassword" type="password" name="" value="">
+	</form>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+<script type="text/javascript" src="strength.js"></script>
+<script>
+$(document).ready(function($) {
+$('#myPassword').strength({
+            strengthClass: 'strength',
+            strengthMeterClass: 'strength_meter',
+            strengthButtonClass: 'button_strength',
+            strengthButtonText: 'Show Password',
+            strengthButtonTextToggle: 'Hide Password'
+        });
+
+});
+</script>
+</body>
+</html>

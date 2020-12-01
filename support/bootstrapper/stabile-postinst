@@ -1,0 +1,2084 @@
+#!/usr/bin/perl
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+
+use warnings;
+use strict;
+
+use Cwd;
+use File::Temp qw(tempfile);
+use File::Basename;
+use File::Copy;
+use File::Path;
+use File::Spec;
+use Getopt::Long qw(:config bundling no_ignore_case no_auto_abbrev);
+use Debconf::Client::ConfModule qw(:all);
+use Data::Dumper;
+use Config::Simple;
+use Digest::SHA qw(sha512_base64);
+
+# Debconf does not like us printing to STDOUT so we print to STDERR if we need to say something
+my $out = *STDERR;
+
+#$ENV{'DEBIAN_FRONTEND'} = 'noninteractive';
+#$ENV{'LC_ALL'} = 'C';
+
+my $base_dir = Cwd::abs_path(dirname($0));
+chdir($base_dir);
+
+my $perlmodules_file = '/usr/share/stabile/cpan_modules';
+my $tftp_root = '/mnt/stabile/tftp';
+
+# Settings for connecting to the database.
+my $g_db_name   = 'steamregister';
+my $g_db_host   = 'localhost';
+my $g_db_user   = 'root';
+my $g_db_pass = '';
+#my $g_db_pass = `grep -m1 password /etc/mysql/debian.cnf`;
+#if ($g_db_pass  =~ /password.*=(.+)/) {
+#	$g_db_pass = $1;
+#} else {
+#	$g_db_pass = '';
+#}
+
+# Global varible for our hostname
+my $g_hostname = get('stabile/hostname');
+
+# Initial user/password to put in DB
+my $i_user = get('stabile/initial_user');
+my $i_password = get('stabile/initial_password');
+if ($i_password) {
+    $i_password = sha512_base64($i_password);
+    set('stabile/initial_password'); # clear password from debconf db
+}
+# Check if we should configure SSL via letsencrypt
+my $letsencrypt = get("stabile/letsencrypt");
+$letsencrypt = '' if ($letsencrypt eq 'false');
+
+# Enumerate network interfaces
+my $droute = `ip route show default`;
+my $externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
+my $internalnic = "$externalnic";
+my $niclist = `ifconfig -s`;
+# my $niclist = `netstat -in`;
+my @nics = ();
+push @nics, $externalnic if ($externalnic);
+foreach my $line (split("\n", $niclist)) {
+	my $nic = $1 if ($line =~ /(\S+) /);
+	if ($nic ne 'lo' && $nic ne $externalnic &&  !($nic=~/^virbr/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
+		push @nics, $1;
+	}
+}
+$externalnic = $nics[0] unless ($externalnic);
+$internalnic = $nics[1] if (scalar @nics > 1);
+print $out "Using these network interfaces: $externalnic, $internalnic\n";
+
+my $oldversion = 0;
+my $oldrev = 0;
+my $curversion = `cat /etc/stabile/version`;
+my $currev = 0;
+$currev = $1 if ($curversion =~ /\d+\.\d+-(\d+)/);
+# Stop debconf processing
+#stop();
+
+
+# Container for our list of tasks to complete.
+my @tasks;
+
+#my @piston_versions = ('lucid', 'stabile-lucid');
+my @piston_versions = ('bionic');
+
+################
+##### MAIN #####
+################
+MAIN:
+$0 = "postinst";
+# Die if we're not root.
+if($< != 0) {
+	die("You must be root for this to work\n");
+}
+
+# Modules from CPAN we need
+# Read and strip newlines.
+open(my $pm_fh, '<', $perlmodules_file) or die $!;
+my @cpan_modules = <$pm_fh>;
+close($pm_fh);
+
+chomp(@cpan_modules);
+
+my $summary = <<END
+Summary of how this script can be called:
+       * <postinst> `configure' <most-recently-configured-version>
+       * <old-postinst> `abort-upgrade' <new version>
+       * <conflictor's-postinst> `abort-remove' `in-favour' <package>
+         <new-version>
+       * <postinst> `abort-remove'
+       * <deconfigured's-postinst> `abort-deconfigure' `in-favour'
+         <failed-install-package> <version> `removing'
+         <conflicting-package> <version>
+       * <postinst> `createdb'
+       * <postinst> `setuptftp'
+       * <postinst> `configure_apache'
+       * <postinst> `create_users'
+       * <postinst> `upgrade'
+for details, see http://www.debian.org/doc/debian-policy/ or
+the debian-policy package.
+END
+;
+die "This script requires arguments.\n$summary"  unless (@ARGV);
+
+#0
+push(@tasks, {
+		function    => \&install_cpan,
+		description => "Install packages from CPAN",
+		prompt      => "Installing CPAN packages",
+		args        => [@cpan_modules]
+	});
+#1
+push(@tasks, {
+		function    => \&install_mod_auth_tkt,
+		description => "Install mod_auth_tkt",
+		prompt      => "Installing mod_auth_tkt" 
+	});
+#2
+push(@tasks, {
+		function    => \&setup_tftp,
+		description => "Install Piston roots",
+		prompt      => "Installing Piston roots"
+	});
+#3
+push(@tasks, {
+		function    => \&install_webmin_api,
+		description => "Install Webmin API",
+		prompt      => "Installing Webmin API",
+		args        => ["/usr/share/stabile/Webmin-API-1.0.tar.gz"]
+	});
+#4
+push(@tasks, {
+		function    => \&setup_ntpd_mon_etc,
+		description => "Set up NTP and mon",
+		prompt      => "Setting up NTPD and mon"
+	});
+#5
+push(@tasks, {
+		function    => \&setup_nfs,
+		description => "Set up NFS shares",
+		prompt      => "Setting up NFS"
+	});
+#6
+push(@tasks, {
+		function    => \&setup_dhcp,
+		description => "Set up DHCP",
+		prompt      => "Setting up DHCP"
+	});
+#7
+push(@tasks, {
+		function    => \&configure_apache,
+		description => "Configure apache",
+		prompt      => "Configuring Apache"
+	});
+#8
+push(@tasks, {
+		function    => \&create_database,
+		description => "Create MySQL database",
+		prompt      => "Creating MySQL Database",
+		args        => [$g_db_name, $g_db_host, $g_db_user, $g_db_pass]
+	});
+#9
+push(@tasks, {
+		function    => \&create_users,
+		description => "Create users",
+		prompt      => "Creating system users"
+	});
+#10
+push(@tasks, {
+		function    => \&upgrade,
+		description => "Upgrade installed Stabile",
+		prompt      => "Upgrading Stabile"
+	});
+
+if($ARGV[0] eq 'configure') {
+    $oldversion = $ARGV[1] if ($ARGV[1]);
+    $oldrev = 0;
+    $oldrev = $1 if ($oldversion =~ /\d+\.\d+-(\d+)/);
+    if ($oldrev && $currev > $oldrev) {
+        print_headline("Commencing Stabile upgrade installation ($oldrev -> $currev)", 1);
+        if (-e "/usr/share/stabile/custom_pre_upgrade") {
+            print $out " *** Executing custom pre upgrade script ***\n";
+            sysexec("/usr/share/stabile/custom_pre_upgrade");
+        }
+        install_all(($tasks[0], $tasks[7], $tasks[5], $tasks[8], $tasks[9], $tasks[10]));
+        print_headline("Upgrade succeeded!");
+        if (-e "/usr/share/stabile/custom_post_upgrade") {
+			print $out " *** Executing custom post upgrade script ***\n";
+            sysexec("/usr/share/stabile/custom_post_upgrade");
+        }
+    } elsif ($oldrev && $currev == $oldrev) {
+        print_headline("Commencing Stabile reconfiguration ($oldrev -> $currev)", 1);
+        install_all(($tasks[2], $tasks[4], $tasks[5], $tasks[6], $tasks[7], $tasks[8], $tasks[9]));
+        print_headline("Configuration succeeded!");
+    } else {
+        print_headline("Commencing full Stabile configuration", 1);
+        install_all(@tasks);
+        print_headline("Configuration succeeded!");
+    }
+    unless (-e '/tmp/stabile.upgrading') { # Stabile is being upgraded by pressurecontrol, don't restart it
+		print $out " *** Restarting pressurecontrol ***\n";
+        sysexec("systemctl restart pressurecontrol");
+		print $out " *** Restarting movepiston ***\n";
+		sysexec("systemctl restart movepiston");
+    }
+
+} elsif ($ARGV[0] eq 'createdb') {
+	print_headline("Creating steamregister db", 1);
+	execute_task($tasks[8]);
+
+} elsif ($ARGV[0] eq 'configure_apache') {
+	print_headline("Configuring Apache for Stabile", 1);
+	execute_task($tasks[4]);
+
+} elsif ($ARGV[0] eq 'create_users') {
+	print_headline("Creating users in valve and piston", 1);
+	execute_task($tasks[9]);
+
+} elsif ($ARGV[0] eq 'upgrade') {
+	print_headline("Performing upgrade tasks", 1);
+	execute_task($tasks[0], $tasks[10]);
+    print_headline("Upgrade succeeded!");
+    unless (-e '/tmp/stabile.upgrading') { # Stabile is being upgraded by pressurecontrol, don't restart it
+        print " *** Restarting pressurecontrol ***\n";
+        sysexec("systemctl restart pressurecontrol");
+		print " *** Restarting movepiston ***\n";
+		sysexec("systemctl restart movepiston");
+    }
+} else {
+	die "No understandable instructions passed $ARGV[0]";
+}
+
+exit 0;
+
+#####################
+##### FUNCTIONS #####
+#####################
+
+# On the valve, we have an internal and an external IP.
+# The hostname points to our external IP.
+# We create a DNS zone, and point our hostname
+# to the internal IP.
+# This is so nodes requesting our IP gets the internal.
+# But it is currently not needed (or set up).
+sub install_bind {
+
+	# Create zone for our host.
+	my $include = "zone \"$g_hostname\" {
+	type master;
+	file \"/var/lib/$g_hostname.hosts;
+	};";
+
+	open(my $FH, '>>', '/etc/bind/named.conf.local');
+	print $FH $include;
+	close($FH);
+
+	#my $zone = "\$ttl 38400 $g_hostname.	IN	SOA	;
+	return 0;
+}
+
+sub create_users {
+
+	###########################
+	# Set up ssh and Webmin   #
+	###########################
+    my $inetaddr = `ifconfig $externalnic 2>/dev/null | grep "inet "`;
+    my $hostnet;
+    my $hostmask;
+    if ($inetaddr =~ /inet (\d+\.\d+\.\d+)\..+ netmask (\d+\.\d+\.\d+\.\d+)/) {
+        $hostnet = $1;
+        $hostmask = $2;
+    }
+
+    unless (!(-e "/etc/hosts.allow")) {
+		print $out "Disallowing SSH and Webmin access\n";
+        `echo "sshd: ALL" >> /etc/hosts.deny` unless (`grep sshd /etc/hosts.deny`);
+		`echo "sshd: 10.0.0.0/24" >> /etc/hosts.allow` unless (`grep 'sshd.*10.0.0' /etc/hosts.allow`);
+		`echo "sshd: 127.0.0.1" >> /etc/hosts.allow` unless (`grep 'sshd.*127.0.0' /etc/hosts.allow`);
+		`echo "sshd: 192.168.0.0/16" >> /etc/hosts.allow` unless (`grep 'sshd.*192.168.0.0' /etc/hosts.allow`);
+    }
+	`echo "allow=127.0.0.1 192.168.0.0/16" >> /etc/webmin/miniserv.conf` unless (`grep 'allow=.*127.0.0' /etc/webmin/miniserv.conf`);
+
+    if ($oldrev && $currev == $oldrev) { # reconfiguring
+		print $out "Allowing SSH and Webmin access from $hostnet\n";
+        `echo "sshd: $hostnet." >> /etc/hosts.allow` unless (!(-e "/etc/hosts.allow") || `grep "sshd: $hostnet" /etc/hosts.allow`);
+        if (`grep "allow=" /etc/webmin/miniserv.conf`) {
+            `perl -pi -e 's/allow=(.*)/allow=\$1 $hostnet.0\\/$hostmask 127.0.0.1/' /etc/webmin/miniserv.conf`;
+        } else {
+            `echo "allow=127.0.0.1" >> /etc/webmin/miniserv.conf`;
+        }
+    }
+    `systemctl restart webmin`;
+
+
+	#################
+	# Add user irigo#
+	#################
+
+    my $irigo_uid = getpwnam('irigo');
+    my $irigo_gid = getgrnam('irigo');
+
+	# Ubuntu will not use IDs above 60k
+	$irigo_uid = 60001 unless ($irigo_uid);
+	$irigo_gid = 60001 unless ($irigo_gid);
+	my $irigo_groups = 'sudo,adm,libvirt,kvm';
+
+	my $ret;
+
+	my $g_cmd = "groupadd -g $irigo_gid irigo";
+	my $u_cmd = "useradd -m -u $irigo_uid -g $irigo_gid -s /bin/bash irigo";
+
+	# create the user on the running system
+	if (defined getgrgid($irigo_gid) && getgrgid($irigo_gid) eq 'irigo') {
+		print $out " *** Group irigo already exists ***\n";
+	} else {
+		print $out " *** Creating irigo group ***\n";
+		$ret = sysexec($g_cmd);
+		# Give the option to return after errors.
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $?;
+		}
+	}
+	# create the group on the running system
+	if (defined getpwuid($irigo_uid) && getpwuid($irigo_uid) eq 'irigo') {
+		print $out " *** User irigo already exists ***\n";
+	} else {
+		print $out " *** Creating irigo user ***\n";
+		$ret = sysexec($u_cmd);
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $?;
+		}
+	}
+	if (! `grep ^irigo: /etc/shadow`) {
+		print $out q(
+The next step is to create the password for the 'irigo' user. This
+password is used both for this machine as well as the individual
+pistons.
+
+Not providing a password prevents you from logging in as 'irigo'
+directly. Instead, you can log in to this machine as another user
+switch to it using 'sudo -i -u irigo'. You may then connect to the
+individual pistons using SSH without providing a password.
+
+);
+
+		#my $user_pass = ask_password("Enter desired password for the 'irigo' user");
+		#print "\n";
+		#set_password('irigo', $user_pass);
+		set_password('irigo', '');
+	}
+
+	my $user_pass = (split(':', `sed -n '/^irigo:/p' /etc/shadow`))[1];
+
+	if (-e "/home/irigo/.ssh/known_hosts") {
+#		unlink("/home/irigo/.ssh/known_hosts"); # Why would we do this?
+	}
+
+	if (! -e "/home/irigo/.ssh/id_rsa") {
+		print $out " *** Create SSH key pair ***\n";
+
+		my $ssh_key_cmd = "sudo -u irigo ssh-keygen -t rsa -f /home/irigo/.ssh/id_rsa -P '' -q";
+		$ret = sysexec($ssh_key_cmd);
+		if($ret != 0 && !ask("Key no found. Ignore error...")) {
+			return $?;
+		}
+	}
+
+	$ret = chmod(0750, '/home/irigo/.ssh');
+	if($ret != 1 && !ask("$!SSH dir not found. Ignore error...")) {
+		return $?;
+	}
+
+	$ret = copy('/home/irigo/.ssh/id_rsa.pub',
+				'/home/irigo/.ssh/authorized_keys');
+	if($ret != 1 && !ask("$! Ignore error...")) {
+		return $?;
+	}
+
+	$ret = chown($irigo_uid, $irigo_gid, '/home/irigo/.ssh/authorized_keys');
+#	$ret = `chown irigo:irigo /home/irigo/.ssh/authorized_keys`;
+	if($ret != 1 && !ask("$! Ignore error...")) {
+		return $?;
+	}
+
+	$ret = chmod(0600, '/home/irigo/.ssh/authorized_keys');
+	if($ret != 1 && !ask("$! Ignore error...")) {
+		return $?;
+	}
+
+	$ret = `echo "Host 10.0.0.*\n    StrictHostKeyChecking no" > /home/irigo/.ssh/config`;
+    $ret = `chown irigo:irigo /home/irigo/.ssh/config`;
+    $ret = `chmod 600 /home/irigo/.ssh/config`;
+
+	$ret = system('usermod', '--append', '--groups', $irigo_groups, 'irigo');
+	if($ret && !ask("Ignore error...")) {
+		return $?;
+	}
+
+	$ret = copy('/usr/share/stabile/sudoers', '/etc/sudoers.d/stabile');
+	if($ret != 1 && !ask("$!\nIgnore error...")) {return $?;}
+	$ret = chmod(0440, '/etc/sudoers.d/stabile');
+	if($ret != 1 && !ask("$!\nIgnore error...")) {return $?;}
+
+	$ret = system('usermod', '--append', '--groups', 'www-data', 'mon');
+	if($ret && !ask("Ignore error...")) {
+		return $?;
+	}
+
+	$ret = system("rsync", "--archive", "--delete", '/home/irigo/.ssh/', '/var/www/.ssh/');
+	if($ret && !ask("Ignore error...")) {
+		return $?;
+	}
+
+    my $www_data_uid = getpwnam('www-data') || die $!;
+    my $www_data_gid = getgrnam('www-data') || die $!;
+    my $mon_uid = getpwnam('mon') || die $!;
+    my $mon_gid = getgrnam('mon') || die $!;
+
+    $ret = chown($www_data_uid, $www_data_gid, '/var/www/.ssh');
+    if($ret != 1 && !ask("$!Ignore error...")) {
+        return $?;
+    }
+
+    $ret = copy('/var/www/.ssh/id_rsa', '/var/www/.ssh/id_rsa_www');
+    if($ret != 1 && !ask("$! Ignore error...")) {
+        return $?;
+    }
+
+    $ret = chown($www_data_uid, $www_data_gid, '/var/www/.ssh/id_rsa_www');
+    if($ret != 1 && !ask("$! Ignore error...")) {
+        return $?;
+    }
+
+    $ret = copy('/var/www/.ssh/id_rsa', '/var/www/.ssh/id_rsa_mon');
+    if($ret != 1 && !ask("$! Ignore error...")) {
+        return $?;
+    }
+
+    $ret = chown($mon_uid, $mon_gid, '/var/www/.ssh/id_rsa_mon');
+    if($ret != 1 && !ask("$!\nIgnore error...")) {
+        return $?;
+    }
+
+    $ret = chmod(0700, '/var/www/.ssh/id_rsa_mon', '/var/www/.ssh/id_rsa_www');
+    if($ret != 2 && !ask("$!\nIgnore error...")) {
+        return $?;
+    }
+
+	foreach my $piston_version (@piston_versions) {
+		my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
+		next unless (-e $piston_root && -e "$piston_root/bin/bash");
+
+		$ret = cp_conf('/usr/share/stabile/valve-cgrules.conf', "$piston_root/etc/cgrules.conf");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', "$piston_root/etc/cgconfig.conf");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = cp_conf('/usr/share/stabile/valve-cgrulesgend.service', "$piston_root/etc/systemd/system/cgrulesgend.service");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = sysexec("chroot $piston_root systemctl enable cgrulesgend");
+		if(!$ret && !ask("Error: $!. Ignoring exec error...")) {return 1;}
+
+		# create the group in the chroot
+		if (!sysexec("chroot $piston_root groupmod irigo 2> /dev/null")) {
+			print $out " *** Group irigo already exists in the $piston_version chroot ***\n";
+		} else {
+			my $cmd = "chroot $piston_root $g_cmd";
+			my $ret = sysexec($cmd);
+			if($ret != 0 && !ask("Ignore error...")) {
+				return $ret;
+			}
+		}
+
+		# create the user in the chroot
+		if (!sysexec("chroot $piston_root id irigo > /dev/null 2> /dev/null")) {
+			print $out " *** User irigo already exists in the $piston_version chroot ***\n";
+		} else {
+			my $cmd = "chroot $piston_root $u_cmd";
+			print $out " *** Creating irigo in the $piston_version chroot: $cmd ***\n";
+			my $ret = sysexec($cmd);
+			if($ret != 0 && !ask("Ignore error...")) {
+				return $ret;
+			}
+		}
+
+		$ret = system('chroot', $piston_root,
+					  'usermod', '--append', '--groups', $irigo_groups,
+					  'irigo');
+		if($ret && !ask("Ignore error...")) {
+			return $?;
+		}
+
+		# then copy the password from the valve to the piston
+		# TODO: use chpasswd -e when we drop support for lucid
+		my $shadow = `grep ^irigo: /etc/shadow`;
+		my $ret = system('sed', '-i', '/^irigo:/d', $piston_root . '/etc/shadow');
+		if($ret && !ask("$!\nIgnore error...")) {
+			return $?;
+		}
+		print $out "Setting password for irigo in $piston_root\n";
+		open(my $fh, '>>', $piston_root . '/etc/shadow') or return 0;
+		print $fh "$shadow";
+		close($fh) or return 0;
+
+		$ret = system("rsync", "--archive", "--delete",
+					  '/home/irigo/.ssh/',
+					  $piston_root . '/home/irigo/.ssh/');
+		if($ret && !ask("Ignore error...")) {
+			return $?;
+		}
+
+		$ret = copy('/usr/share/stabile/sudoers', $piston_root . '/etc/sudoers.d/stabile');
+		if($ret != 1 && !ask("$!\nIgnore error...")) {return $?;}
+		$ret = chmod(0440, $piston_root . '/etc/sudoers.d/stabile');
+		if($ret != 1 && !ask("$!\nIgnore error...")) {return $?;}
+
+	}
+
+    # Copy cgroup rules configuration
+	if (-e '/etc/cgrules.conf') {
+        print $out " *** cgroups are already configured on this engine\n";
+        unless (`grep stabile /etc/cgrules.conf`) {
+            print $out "copying rules into /etc/cgrules.conf\n";
+            `cat /usr/share/stabile/valve-cgrules.conf >> /etc/cgrules.conf`;
+        }
+	} else {
+		print $out "Setting up cgroups on engine\n";
+		$ret = cp_conf('/usr/share/stabile/valve-cgrules.conf', '/etc/cgrules.conf');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', '/etc/cgconfig.conf');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = cp_conf('/usr/share/stabile/valve-cgrulesgend.service', '/etc/systemd/system/cgrulesgend.service');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = sysexec("systemctl daemon-reload");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		$ret = sysexec("systemctl enable cgrulesgend");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+    }
+    # If we are in a virtual environment main disk seems to have primary number 252
+	my $majmin = '8:0';
+	my $rootdev = '/dev/sda';
+	$rootdev = $1 if (`df /` =~ /(\/dev\/\w+)/);
+	# It seems that cgroups cannot handle individual partitions for blkio
+	$rootdev = $1 if ($rootdev =~ /(\w+)\d+/);
+	$majmin = $1 if (`lsblk -l $rootdev` =~ /\S+ +(\d+:\d+)/);
+    `perl -pi -e 's/8:0 /$majmin /' /etc/cgconfig.conf` if ($majmin);
+
+    my $allowusers = <<END
+AllowUsers irigo\@10.0.*
+AllowUsers irigo\@localhost
+AllowUsers irigo\@127.0.0.1
+AllowUsers origo
+END
+;
+    unless (`grep "AllowUsers irigo\@localhost" /etc/ssh/sshd_config`) {
+		print $out "Adding irigo to sshd_config\n";
+        $ret = `echo "$allowusers" >> /etc/ssh/sshd_config`;
+        `systemctl restart ssh`;
+    }
+
+    # Disallow user access to log file
+    `touch /var/log/stabile/steam.log`;
+    `chown www-data:www-data /var/log/stabile/steam.log`;
+
+	# Don't show these users in login screen on workstations with GUI
+	`echo "[User]\nSystemAccount=true" > /var/lib/AccountsService/users/libvirt-qemu`;
+	`echo "[User]\nSystemAccount=true" > /var/lib/AccountsService/users/irigo`;
+
+	# Add icon to application menu
+	if (-e "/usr/share/applications") {
+		$ret = cp_conf('/usr/share/stabile/stabile.desktop', '/usr/share/applications/stabile.desktop');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		else {
+			`perl -pi -e 's/localhost/$g_hostname/' /usr/share/applications/stabile.desktop`;
+			`chmod 644 /usr/share/applications/stabile.desktop`;
+		}
+	}
+
+	print $out "Updating version to $curversion\n";
+    `perl -pi -e 's/VERSION=.*/VERSION=$curversion/' /etc/stabile/config.cfg`;
+	unless (`grep 'mynetworks = .*10.0.0.0' /etc/postfix/main.cf`) {
+	    `perl -pi -e 's/mynetworks = .+/mynetworks = 10.0.0.0\\/24 127.0.0.0\\/8 [::ffff:127.0.0.0]\\/104 [::1]\\/128/' /etc/postfix/main.cf`;
+	}
+	return 0;
+}
+
+sub install_mod_auth_tkt {
+	if (! -f '/etc/apache2/conf-available/auth_tkt_cgi.conf') {
+		print $out "Copying /usr/share/stabile/Apache2/auth_tkt_cgi.conf -> /etc/apache2/conf-available/auth_tkt_cgi.conf\n";
+		my $ret = copy('/usr/share/stabile/Apache2/auth_tkt_cgi.conf',
+					   '/etc/apache2/conf-available/auth_tkt_cgi.conf');
+
+		if($ret == 0 && !ask("Error copying auth_tkt_cgi.conf into apache. " .
+							 "Continue?")) {
+			return 1;
+		}
+        # Replace the password for authtkt
+        my $password = `pwgen -s 32 1`;
+        chomp($password);
+        system("perl -pi -e 's/<%PASSWORD%>/$password/' /etc/apache2/conf-available/auth_tkt_cgi.conf");
+		system("a2enconf auth_tkt_cgi");
+	} else {
+		print $out "/etc/apache2/conf-available/auth_tkt_cgi.conf already exists.\n";
+	}
+	return 0;
+}
+
+sub setup_nfs {
+	my @exportlines = (
+		"/mnt/stabile/tftp",
+		"/mnt/stabile/images",
+	);
+	my @exportlines2 = (
+		"\t10.0.0.0/24(async,ro,no_subtree_check,no_root_squash)",
+		"\t10.0.0.0/24(sync,rw,no_subtree_check,no_root_squash)",
+	);
+
+	my $mounts = `cat /proc/mounts`;
+	my $i = 0;
+	my $newexports;
+	foreach my $line (@exportlines) {
+	    my $line2 = $exportlines2[$i];
+	    $i++;
+#	    next if ($mounts =~ /$line/); # Don't export directories we are importing from elsewhere
+		if (sysexec("grep '^$line' /etc/exports")) { # Line not found - put it in
+			open(my $fh, '>>', '/etc/exports') or die $!;
+    		print $fh "$line$line2\n";
+			close $fh or die $!;
+			$newexports++;
+		};
+	}
+    # Reload nfs server if new exports are found
+	sysexec('exportfs -ra') if ($newexports);
+
+	return 0;
+}
+
+sub setup_dhcp {
+	my $cfg_path = '/usr/share/stabile/dhcpd.conf';
+	my $cfg_dest = '/etc/dhcp/stabile_net.conf';
+	`mkdir /run/dhcp-server` unless (-e "/run/dhcp-server"); # For some reason mimssing
+
+	my $cfg_line = "include \"$cfg_dest\";";
+
+	my $ret = cp_conf($cfg_path, $cfg_dest);
+	if(!$ret && !ask("Error: $!. Ignore error...")) {
+		return 1;
+	}
+
+	$ret = chmod 0644, $cfg_dest;
+	if(!$ret && !ask("Error: $!. Ignore error...")) {
+		return 1;
+	}
+
+	print $out "Bringing up $internalnic\n";
+	
+	my $enp2s0 = <<END
+iface $internalnic inet static
+	address 10.0.0.1
+	netmask 255.255.255.0
+	broadcast 10.0.0.255
+	network 10.0.0.0
+END
+;
+
+	my $enp2s0_netplan = <<END
+network:
+    ethernets:
+        $internalnic:
+            addresses: ['10.0.0.1/24']
+END
+;
+	if ($internalnic ne $externalnic) { # Let pressurecontrol bring up virtual nic with 10.0.0.1 if only one nic
+		if (-d "/etc/netplan") {
+			$ret = `echo "$enp2s0_netplan" >> "/etc/netplan/$internalnic.yaml"` unless (-e "/etc/netplan/$internalnic.yaml");
+			$ret .= `netplan apply`;
+		} else {
+			$ret = `echo "$enp2s0" >> /etc/network/interfaces` unless (`grep enp2s0 /etc/network/interfaces`);
+			$ret .= `ifup enp2s0`;
+		}
+	} else {
+		my $ret = copy("/usr/share/stabile/stabile.dhclient-hook", "/etc/dhcp/dhclient-enter-hooks.d/stabile");
+		`chmod 755 /etc/dhcp/dhclient-enter-hooks.d/stabile`;
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+	}
+	if(!$ret && !ask("Error: $!. Ignore error...")) {
+		return 1;
+	}
+
+    unless (`grep "10.0.0.0" /etc/dhcp/dhcpd.conf`) { # Don't add include line if already configured
+        if (sysexec("grep '$cfg_line' /etc/dhcp/dhcpd.conf")) {
+            open(my $dhcp_cfg, '>>', '/etc/dhcp/dhcpd.conf') or die $!;
+            print $dhcp_cfg "\n#Include stabile options:\n$cfg_line\n"
+                or die $!;
+            close $dhcp_cfg or die $!;
+        }
+    }
+	print $out "Setting $internalnic as DHCP interface\n";
+	`perl -pi -e 's/enp2s0/$internalnic/' $cfg_dest`;
+
+	if ($internalnic ne $externalnic) { # Disable dhcp server if only one nic
+		$ret = sysexec('systemctl restart isc-dhcp-server');
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $?;
+		}
+	} else {
+		$ret = sysexec('systemctl stop isc-dhcp-server');
+		$ret .= sysexec('systemctl disable isc-dhcp-server');
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $?;
+		}
+	}
+	return 0;
+}
+
+sub setup_ntpd_mon_etc {
+#	my $cfg_path = '/usr/share/stabile/ntp-valve.conf';
+#	my $cfg_dest = '/etc/ntp.conf';
+#	my $ret = cp_conf($cfg_path, $cfg_dest);
+#	if(!$ret && !ask("Error: $!. Ignore error...")) {
+#		return 1;
+#	}
+#	$ret = sysexec('systemctl restart ntp');
+#	if($ret != 0 && !ask("Ignore error...")) {
+#		return $?;
+#	}
+
+	unless (-e "/etc/stabile/config.cfg") {
+		my $ret = cp_conf('/usr/share/stabile/config.template.cfg', '/etc/stabile/config.cfg');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+	}
+
+	unless (`grep ENGINE_DATA_NIC=. /etc/stabile/config.cfg`) {
+		print $out "Setting ENGINE_DATA_NIC to $externalnic\n";
+        `perl -pi -e 's/ENGINE_DATA_NIC=.*/ENGINE_DATA_NIC=$externalnic/' /etc/stabile/config.cfg`;
+    }
+	unless (`grep EXTERNAL_NIC=. /etc/stabile/config.cfg`) {
+		print $out "Setting EXTERNAL_NIC to $externalnic\n";
+        `perl -pi -e 's/EXTERNAL_NIC=.*/EXTERNAL_NIC=$externalnic/' /etc/stabile/config.cfg`;
+    }
+	`chmod 644 /etc/stabile/config.cfg`; # Tomcat needs to be able to read this
+
+	my $ret = cp_conf('/usr/share/stabile/nodeconfig.template.cfg', '/etc/stabile/nodeconfig.cfg');
+	if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+	`chmod 644 /etc/stabile/nodeconfig.cfg`;
+
+	unless (`grep DATA_NIC=. /etc/stabile/nodeconfig.cfg`) {
+		print $out "Setting local node DATA_NIC to $externalnic\n";
+        `perl -pi -e 's/DATA_NIC=.*/DATA_NIC=$externalnic/' /etc/stabile/nodeconfig.cfg`;
+    }
+	unless (`grep ADMIN_NIC=. /etc/stabile/nodeconfig.cfg`) {
+		print $out "Setting local node ADMIN_NIC to $internalnic\n";
+        `perl -pi -e 's/ADMIN_NIC=.*/ADMIN_NIC=$internalnic/' /etc/stabile/nodeconfig.cfg`;
+    }
+#	print $out "Setting node ADMIN_SERVER_ADDRESS to 127.0.0.1\n";
+#   `perl -pi -e 's/ADMIN_SERVER_ADDRESS=.*/ADMIN_SERVER_ADDRESS=127.0.0.1/' /etc/stabile/nodeconfig.cfg`;
+
+	`systemctl enable pressurecontrol`;
+	`systemctl enable movepiston`;
+	`systemctl enable stabile`;
+
+	# Disable apparmor for libvirt
+	`ln -s /etc/apparmor.d/usr.sbin.libvirtd /etc/apparmor.d/disable/usr.sbin.libvirtd` if (-e "/etc/apparmor.d/usr.sbin.libvirtd" && !(-e "/etc/apparmor.d/disable/usr.sbin.libvirtd"));
+
+# Custom mon still needed...?
+	$ret = sysexec('cp /usr/share/stabile/mon /usr/sbin');
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $?;
+	}
+    # Allow mon to actually save disabled states
+    `chown mon:mon /usr/lib/mon/state.d`;
+
+	$ret = sysexec('cp /usr/share/stabile/auth.cf /etc/mon');
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $?;
+	}
+	# Patch mon https monitor to not barf about SSL certificates
+	`perl -pi -e 's/(my .+ = new LWP::UserAgent;)/\$1\n\\\$ua->ssl_opts(verify_hostname => 0, SSL_verify_mode => 0x00);/;' /usr/lib/mon/mon.d/http_tppnp.monitor` unless (`grep ssl_opts /usr/lib/mon/mon.d/http_tppnp.monitor`);
+
+	print $out "Patching rdiff-backup to support sparse files\n";
+	if (`grep sparse /usr/share/pyshared/rdiff_backup/rpath.py`) {
+		print $out "Patch already applied to valve\n";
+	} else {
+		print $out `cd /usr/share/pyshared/rdiff_backup; patch < /usr/share/stabile/0-sparse.patch`;
+	}
+	if (-e "/mnt/stabile/tftp/bionic/casper/filesystem.dir/usr/share/pyshared/rdiff_backup/rpath.py") {
+		if (`grep sparse /mnt/stabile/tftp/bionic/casper/filesystem.dir/usr/share/pyshared/rdiff_backup/rpath.py`) {
+			print $out "Patch already applied to piston\n";
+		} else {
+			print $out `cd /mnt/stabile/tftp/bionic/casper/filesystem.dir/usr/share/pyshared/rdiff_backup; patch < /usr/share/stabile/0-sparse.patch`;
+		}
+	}
+	`systemctl restart mon`;
+
+	print $out "Updating fuse.conf to work with guestmount\n";
+	print $out `perl -pi -e "s/#user_allow_other/user_allow_other/g;" /etc/fuse.conf`;
+	print $out `chmod 644 /etc/fuse.conf`;
+#	print $out `adduser www-data fuse`;
+#	print $out `adduser irigo fuse`;
+    # Guestmount needs to be able to read the running kernel
+	print $out `chmod 644 /boot/vmlinuz*`;
+
+    # We need quotas for VM mountable NFS
+	print $out "Adding quota support to fstab\n";
+    `perl -pi -e 's/(errors=remount-ro)/errors=remount-ro,noatime,usrjquota=aquota.user,jqfmt=vfsv0/' /etc/fstab` unless (`grep aquota /etc/fstab`);
+
+	# Generate random secret for Graphite
+	my $secretkey = sprintf "%12X", rand(0xffffffffffff);
+	print $out `perl -pi -e "s/#SECRET_KEY = .*/#SECRET_KEY = '$secretkey'/;" /etc/graphite/local_settings.py`;
+
+	# Link suidperl in case we have forgotten to weed it out somewhere
+	`ln -s /usr/bin/perl /usr/bin/suidperl` unless (-e "/usr/bin/suidperl");
+
+	# We reference qemu-img as kvm-img many places, so create a symlink for backwards compatibility
+	`ln -s /usr/bin/qemu-img /usr/bin/kvm-img` unless (-e "/usr/bin/kvm-img");
+
+	# Make Guacamole available to tomcat
+	`ln -s /usr/share/stabile/guacamole-0.9.14.war /var/lib/tomcat8/webapps/guacamole.war` unless (-e "/var/lib/tomcat8/webapps/guacamole.war");
+	`mv /etc/tomcat8/Catalina/localhost/guacamole.xml /etc/tomcat8/Catalina/localhost/guacamole.xml.bak` unless (-e "/etc/tomcat8/Catalina/localhost/guacamole.xml.bak");
+	`mkdir -p /etc/guacamole/extensions`;
+	`cp /usr/share/stabile/guacamole-auth-stabile-0.9.14.jar /etc/guacamole/extensions/guacamole-auth-stabile-0.9.14.jar`;
+	`systemctl restart tomcat8`;
+	# Tomcat has not created guacamle folder yet, so we do this in pressurecontrol
+	# `cp /usr/share/stabile/guacamole-index.html /var/lib/tomcat8/webapps/guacamole/index.html`;
+
+	# Provide time service to pistons
+	unless (`grep '10.0.0.1' /etc/openntpd/ntpd.conf`) {
+		`echo "listen on 10.0.0.1" >> /etc/openntpd/ntpd.conf`;
+		`systemctl restart openntpd`;
+	}
+	return 0;
+}
+
+# Setup the tftp server installation
+sub setup_tftp {
+	print $out "Setting up tftpd-hpa\n";
+
+	#############
+	# Variables #
+	#############
+	my $cfg_src = '/usr/share/stabile/TFTP';
+	my $cfg_dest = '/etc/default';
+
+	#my $gpxe_folder = 'Apache2/gpxe';
+	#my $gpxe_dest = '/var/www/';
+
+	##################
+	# Install Config # 
+	##################
+	my $ret = copy("$cfg_src/tftpd-hpa", "$cfg_dest/tftpd-hpa") or die $!;
+	if(!$ret && !ask("Error: $!. Ignore error...")) {
+		return 1;
+	}
+
+	# Enable local KVM's VNC server - outside access disabled by pressurecontrol
+	my $cmd = 'sed -i ' . '\'s/^# *\\(vnc_listen = .*\\)$/\\1/\' ' .  "/etc/libvirt/qemu.conf";
+	$ret = sysexec($cmd);
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $ret;
+	}
+
+	#system("cp -r $gpxe_folder $gpxe_dest");
+
+	foreach my $piston_version (@piston_versions) {
+		my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
+
+		unless (-e "$cfg_src/$piston_version.tar.gz") {
+			print $out "Skipping $piston_version - $cfg_src/$piston_version.tar.gz not found\n";
+			print $out "To install $piston_version Stabile node, please apt install stabile-$piston_version-node\n";
+			next;
+		} elsif (-d "$tftp_root/$piston_version/casper/filesystem.dir") {
+			print $out "Skipping $piston_version - already unpacked\n";
+			next;
+		} else {
+			print $out "Insttalling $piston_version piston \n";
+		}
+
+        unless (-d "$piston_root/etc/init.d") { # Don't overwrite existing piston root
+    		File::Path::make_path($piston_root);
+            $cmd = "tar --strip=1 -zxf $cfg_src/$piston_version.tar.gz -C $piston_root";
+			print $out $cmd, "\n";
+            $ret = sysexec($cmd);
+            if($ret != 0 && !ask("Ignore error...")) {
+                return $ret;
+            }
+        } else {
+			print $out "Skipping piston root $tftp_root/$piston_version - already exists.\n";
+		}
+
+    # We do not include these in the .deb file, since they will then be removed when removing stabile,
+    # e.g. when reinstalling, which means running nodes will no longer have their mount point
+        `mkdir -p $piston_root/mnt/stabile/images` unless (-d "$piston_root/mnt/stabile/images");
+        `mkdir -p $piston_root/mnt/stabile/node` unless (-d "$piston_root/mnt/stabile/node");
+		# Enable KVM's VNC server
+		$cmd = 'sed -i ' . '\'s/^# *\\(vnc_listen = .*\\)$/\\1/\' ' .  "$piston_root/etc/libvirt/qemu.conf";
+		$ret = sysexec($cmd);
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $ret;
+		}
+
+		# force pistons to boot from the interface given as 'bootif'
+		# on the kernel command line, rather than the first available
+		# interface -- which frequently happens to be wrong...
+		my $kernel_version = readlink($piston_root . '/vmlinuz');
+		$kernel_version =~ s/^boot\/vmlinuz-//;
+
+
+		# Only relevant for Lucid piston
+		# my @files =
+		# 	glob($piston_root .
+		# 		 '/usr/share/initramfs-tools/scripts/*/select_eth_device');
+        #
+		# if ($#files != -1)
+		# {
+		# 	$ret = sysexec('sed', '-i',
+		# 				   's,l_interfaces="\?\($([^")]*)\)"\?,' .
+		# 				   'l_interfaces="${bootif:-\1}",',
+		# 				   @files);
+        #
+		# 	if($ret != 0 && !ask("Ignore error...")) {
+		# 		return $ret;
+		# 	}
+		# }
+
+		# Generate initramfs
+
+		unless (-e "$piston_root/boot/initrd.img-$kernel_version") {
+			$ret = sysexec('mount', '-t', 'proc', 'proc', "$piston_root/proc");
+			if($ret != 0 && !ask("Ignore error...")) {
+				return $ret;
+			}
+
+			if (!expand_template('/usr/share/stabile/initramfs.conf',
+								 $piston_root . '/etc/initramfs-tools') &&
+				ask("Error installing APT source. Continue?")) {
+				return 1;
+			}
+
+			$ret = sysexec('chroot', $piston_root, 'update-initramfs', '-u',
+						   '-k', $kernel_version);
+			sysexec('umount', "$piston_root/proc");
+			if($ret != 0 && !ask("Ignore error...")) {
+				return $ret;
+			}
+		}
+
+
+		# Copy over kernels for PXE booting
+
+		$ret = hardlink($piston_root . '/boot/vmlinuz-' . $kernel_version,
+						$tftp_root . '/vmlinuz-' . $kernel_version);
+		if(!$ret && !ask("$!\nIgnore error...")) {
+			return $ret;
+		}
+
+		$ret = hardlink($piston_root . '/boot/initrd.img-' . $kernel_version,
+						$tftp_root . '/initrd.img-' . $kernel_version);
+		if(!$ret && !ask("$!\nIgnore error...")) {
+			return $ret;
+		}
+
+		# make the first piston version the default
+		if ($piston_version eq $piston_versions[0]) {
+			$ret = hardlink($piston_root . '/boot/vmlinuz-' . $kernel_version,
+							$tftp_root . '/vmlinuz');
+			if(!$ret && !ask("$!\nIgnore error...")) {
+				return $ret;
+			}
+
+			$ret = hardlink($piston_root . '/boot/initrd.img-' . $kernel_version,
+							$tftp_root . '/initrd.img');
+			if(!$ret && !ask("$!\nIgnore error...")) {
+				return $ret;
+			}
+		} else {
+			# copy over SSH keys from the first version
+			my $srcdir =
+				"$tftp_root/$piston_versions[0]/casper/filesystem.dir/etc/ssh";
+
+			$ret = unlink(glob($piston_root . '/etc/ssh/ssh_host_*_key*'));
+			if($ret == 0 && !ask("Unlink failed - $! " . 'Ignore error...')) {
+				return $ret;
+			}
+
+			foreach my $srcfile (glob($srcdir . '/ssh_host_*_key*')) {
+				$ret = copy($srcfile, $piston_root . '/etc/ssh/' .
+							basename($srcfile));
+				if ($ret != 1 &&
+					!ask("Copy failed - $! " . "Ignore error...")) {
+						return -1;
+				}
+			}
+
+			chmod(0600, glob($piston_root . '/etc/ssh/ssh_host_*_key'));
+			chmod(0644, glob($piston_root . '/etc/ssh/ssh_host_*_key.pub'));
+		}
+
+		# Configure piston to use the same timezone as us
+
+		$ret = copy('/etc/timezone', $piston_root . '/etc/timezone');
+		if(!$ret && !ask("Error copy /etc/timezone -> $piston_root/etc/timezone: $!. Ignore error...")) {
+			return 1;
+		}
+
+#		$ret = sysexec("chroot $piston_root dpkg-reconfigure -f noninteractive tzdata");
+#		if($ret != 0 && !ask("Ignore error...")) {
+#			return $ret;
+#		}
+
+		if (-e $piston_root . '/etc/hostname') {
+			$ret = unlink($piston_root . '/etc/hostname');
+			if($ret != 1 && !ask("Ignore error...")) {
+				return $ret;
+			}
+		}
+
+		# Copy piston config
+        print $out `mkdir $piston_root/etc/stabile/` unless (-e "$piston_root/etc/stabile");
+		unless (-e "$piston_root/etc/stabile/nodeconfig.cfg") {
+			my $ret = copy("/usr/share/stabile/nodeconfig.template.cfg", "$piston_root/etc/stabile/nodeconfig.cfg");
+			if($ret == 0 && !ask("Error copying nodeconfig.cfg into stabile. Continue?")) {
+			   return 1;
+			}
+			print $out "Setting piston DATA_NIC to $externalnic\n";
+			`perl -pi -e 's/DATA_NIC=.*/DATA_NIC=$externalnic/' $piston_root/etc/stabile/nodeconfig.cfg`;
+			print $out "Setting piston ADMIN_NIC to $internalnic\n";
+			`perl -pi -e 's/ADMIN_NIC=.*/ADMIN_NIC=$internalnic/' $piston_root/etc/stabile/nodeconfig.cfg`;
+		}
+
+		# Set up SOL for IPMI and AMT
+		my $ltext = <<END
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+respawn
+exec /sbin/getty -8 115200,38400,9600 ttyS1
+END
+		;
+		print $out `echo "$ltext" > $piston_root/etc/init/ttyS1.conf` unless (-e "$piston_root/etc/init/ttyS1.conf");
+		$ltext = <<END
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+respawn
+exec /sbin/getty -8 115200,38400,9600 ttyS4
+END
+		;
+		print $out `echo "$ltext" > $piston_root/etc/init/ttyS4.conf` unless (-e "$piston_root/etc/init/ttyS4.conf");
+
+	}
+
+	$ret = chmod(0644, glob $tftp_root . '/vmlinuz*');
+	if(!$ret && !ask("$!\nIgnore error...")) {
+		return $ret;
+	}
+
+	unless (-e "$tftp_root/pxelinux.cfg") {
+		$ret = sysexec("mkdir -p $tftp_root/pxelinux.cfg");
+		$ret .= sysexec("chmod 777 $tftp_root/pxelinux.cfg");
+		if($ret != 0 && !ask("Ignore error...")) {
+			return $ret;
+		}
+		$ret = copy('/usr/share/stabile/TFTP/pxe_default', "$tftp_root/pxelinux.cfg/default");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+		$ret = copy('/usr/lib/PXELINUX/pxelinux.0', "$tftp_root/pxelinux.0");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+		$ret = copy('/usr/lib/syslinux/modules/bios/menu.c32', "$tftp_root/menu.c32");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+		$ret = copy('/usr/lib/syslinux/modules/bios/ldlinux.c32', "$tftp_root/ldlinux.c32");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+		$ret = copy('/usr/lib/syslinux/modules/bios/libutil.c32', "$tftp_root/libutil.c32");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {
+			return 1;
+		}
+	}
+
+	#print "Transfer of node root-filesystem completed.\n";
+	#print "When you press a key you will be editing the PXE config.\n";
+	#print "Please edit the NFS ip address: ..";
+	#prompt("");
+
+	#edit_file("$tftp_root/pxelinux.cfg/default");
+
+	$ret = sysexec('/bin/systemctl restart tftpd-hpa');
+	if($ret != 0 && !ask("Ignore error...")) {
+		return 1;
+	}
+
+	return 0;
+}
+
+# Sub for installing apache config files
+# and generating a self-signed certificate.
+sub configure_apache {
+	my $certificate_out_dir = "/etc/apache2/ssl";
+	my $cfg = '/usr/share/stabile/Apache2/apache_config';
+	my $cfg_ssl = '/usr/share/stabile/Apache2/apache_config.ssl';
+	my $hostname = $g_hostname;
+
+	if(!$hostname) {
+		$hostname = `hostname -A | cut -d ' ' -f 1`;
+		chomp($hostname);
+		if (!$hostname) {
+			$hostname = `hostname -f`;
+			chomp($hostname);
+		}
+	}
+
+	# Set the global hostname. Used for bind installation.
+	# But not needed right now.
+	$g_hostname = $hostname;
+	print $out "Using $hostname as virtual_host name.\n";
+	print $out `echo $hostname > /etc/hostname`;
+	print $out `hostname $hostname`;
+	my $cmd = qq|perl -pi -e 's/^127\.0\.1\.1.*\$/127.0.1.1 $hostname/' /etc/hosts|;
+	print $out `$cmd`;
+
+	# Baseurl required for updatescript
+	open(my $baseurl, '>', '/etc/stabile/baseurl');
+	print $baseurl "https://$hostname/stabile";
+	close($baseurl);
+
+	my $sslcert = '/etc/apache2/ssl/stabile.crt';
+	my $sslkey = '/etc/apache2/ssl/stabile.key';
+	my $sslchain = '';
+	my $sslcerts;
+	my $plainsite;
+
+	my @sites = split("\n", `grep -l 'VirtualHost.*:80' /etc/apache2/sites-available/*`);
+	foreach my $site (@sites) {
+		my $asite = $site;
+		$asite =~ s/-available/-enabled/;
+		if (-e $asite) {
+			$plainsite = $site;
+			last;
+		}
+	}
+	my $sslsite;
+	@sites = split("\n", `grep -l 'VirtualHost.*:443' /etc/apache2/sites-available/*`);
+	foreach my $site (@sites) {
+		my $asite = $site;
+		$asite =~ s/-available/-enabled/;
+		if (-e $asite) {
+			$sslsite = $site;
+			last;
+		}
+	}
+
+	#########################################
+	# Installing Apache configuration files #
+	#########################################
+	my $cfg_out = "/etc/apache2/sites-available/stabile.conf";
+	$cfg_out = "/etc/apache2/conf-available/stabile.conf" if ($plainsite);
+	my $cfg_out_ssl = "/etc/apache2/sites-available/stabile-ssl.conf";
+	$cfg_out_ssl = "/etc/apache2/conf-available/stabile-ssl.conf" if ($sslsite);
+	$sslchain = '/etc/apache2/ssl/stabile.chain' if ($letsencrypt);
+
+	if ( -f "$certificate_out_dir/stabile.key" && -f "$certificate_out_dir/stabile.crt" ) {
+		print $out "Skipping SSL configuration and certificate generation\n";
+		$sslcert = `sed -n -e 's/[ ]*SSLCertificateFile[ ]*//pi' $cfg_out_ssl`;
+		chomp $sslcert;
+		$sslkey = `sed -n -e 's/[ ]*SSLCertificateKeyFile[ ]*//pi' $cfg_out_ssl`;
+		chomp $sslkey;
+		$sslchain = `sed -n -e 's/[ ]*SSLCACertificateFile[ ]*//pi' $cfg_out_ssl`;
+		chomp $sslchain;
+		$sslcerts = 1;
+	}
+
+	open(my $cfg_fh, '<', $cfg) or die $!;
+	open(my $cfg_out_fh, '>', $cfg_out) or die $!;
+	while(my $line = <$cfg_fh>) {
+		$line =~ s/\[%HOSTNAME%\]/$hostname/g;
+		unless ($plainsite && $line =~ /(VirtualHost|DocumentRoot)/i) {
+			print $cfg_out_fh $line;
+		}
+	}
+	close($cfg_fh) or die $!;
+	close($cfg_out_fh) or die $!;
+	if ($plainsite && !(`grep stabile $plainsite`)) {
+		`perl -pi -e "s/<\\/VirtualHost>/Include \\/etc\\/apache2\\/conf-available\\/stabile.conf\\n<\\/VirtualHost>/gi" "$plainsite"`;
+	}
+
+	open(my $ssl_fh, '<', $cfg_ssl) or die $!;
+	open(my $ssl_out_fh, '>', $cfg_out_ssl) or die $!;
+	while(my $line = <$ssl_fh>) {
+		$line =~ s/\[%HOSTNAME%\]/$hostname/g;
+		if (!$sslsite) { # configuring new SSL-site
+			$line =~ s/\[%SSLCERTIFICATEFILE%\]/$sslcert/g;
+			$line =~ s/\[%SSLCERTIFICATEKEYFILE%\]/$sslkey/g;
+			if ($sslchain) {
+				$line =~ s/\[%SSLCACERTIFICATEFILE%\]/$sslchain/g;
+			} else {
+				$line =~ s/( +SSLCACertificateFile \[%SSLCACERTIFICATEFILE%\])/# $1/g;
+			}
+		} else {
+			$line =~ s/( +SSLCertificateFile \[%SSLCERTIFICATEFILE%\])/# $1/g;
+			$line =~ s/( +SSLCertificateKeyFile \[%SSLCERTIFICATEKEYFILE%\])/# $1/g;
+			$line =~ s/( +SSLCACertificateFile \[%SSLCACERTIFICATEFILE%\])/# $1/g;
+		}
+		unless ($sslsite && $line =~ /(VirtualHost|DocumentRoot)/i) {
+			print $ssl_out_fh $line;
+		}
+	}
+	close($ssl_fh) or die $!;
+	close($ssl_out_fh) or die $!;
+
+	if ($sslsite && !(`grep stabile $sslsite`)) {
+		`perl -pi -e "s/<\\/VirtualHost>/Include \\/etc\\/apache2\\/conf-available\\/stabile-ssl.conf\\n<\\/VirtualHost>/gi" "$sslsite"`;
+		`ln -s /var/www/stabile /var/www/html/stabile` if (-e "/var/www/html" && !(-e "/var/www/html/stabile"));
+	}
+# disable private tmp
+	`perl -pi -e "s/PrivateTmp=true/PrivateTmp=false/" /lib/systemd/system/apache2.service`;
+	system("systemctl daemon-reload");
+
+	if ($sslsite) { # We already have a SSL-enabled site, assume SSL is configured
+		print $out "Found SSL-enabled site $sslsite - assuming certs are configured\n";
+	} elsif (!$sslcerts) { # Generate new certs
+		# Obtain certificat via Let's Encrypt
+		if ($letsencrypt) {
+			my $wd = "/etc/stabile/getssl";
+			if (! -e("$wd/$hostname")) {
+				`find $wd ! -name '$hostname' -type d -exec rm -rf {} +`; # Remove leftover dirs in case of change of hostname
+				`mkdir -p $wd/$hostname` unless -e ("$wd/$hostname");
+				`cp /usr/share/stabile/getssl.cfg $wd/$hostname/` unless -e ("$wd/$hostname/getssl.cfg");
+			}
+			`echo "127.0.0.1 $hostname" >> /etc/hosts` unless (`grep "$hostname" /etc/hosts`);
+			print $out "Getting SSL certificate from Let's Encrypt\n";
+			print $out `/usr/local/bin/getssl -w $wd $hostname`;
+		}
+		# Generate our own if letsencrypt failed or was deselected
+		if (!(-e "$certificate_out_dir/stabile.crt")) {
+			`perl -pi -e "s/( +SSLCACertificateFile .+)/# $1/i" $cfg_out_ssl`; # remove reference to ssl chain cert
+			print $out "Generating self-signed certificate with OpenSSL, you can add your own later\n";
+			# Replace the hostname in SSL_Config file.
+			open(my $ssl_cfg_tmp, '<', '/usr/share/stabile/openssl.config.template') or die $!;
+			open(my $ssl_cfg, '>', '/usr/share/stabile/openssl.config') or die $!;
+			while(my $line = <$ssl_cfg_tmp>) {
+				$line =~ s/\[%HOSTNAME%\]/$hostname/g;
+				print $ssl_cfg $line;
+			}
+			close($ssl_cfg_tmp);
+			close($ssl_cfg);
+			system("openssl req -newkey rsa:2048 -nodes -x509 -days 780 -out /usr/share/stabile/certificate.crt -utf8 -config /usr/share/stabile/openssl.config -keyout /usr/share/stabile/privkey.key");
+			if($? != 0) {
+				print $out "Error generating certificate\n";
+				return 1;
+			}
+			# Making sure $certificate_out_dir exists.
+			if(! -d $certificate_out_dir) {
+				mkdir($certificate_out_dir) or die "Failed to create directory: $!";
+			}
+			# install certificates.
+			move('/usr/share/stabile/certificate.crt', $certificate_out_dir . "/stabile.crt") or die $!;
+			move('/usr/share/stabile/privkey.key', $certificate_out_dir . "/stabile.key") or die $!;
+		}
+	}
+
+#	print $out `echo "AddHandler cgi-script cgi pl" > /etc/apache2/sites-available/default`;
+
+	###########################
+	# Enabling site in apache #
+	###########################
+	print $out "Configuration installed, enabling site\n";
+
+#	system("/etc/init.d/apache2 stop");
+#	system("a2dissite default");
+	system("a2ensite stabile") unless ($plainsite);
+	system("a2ensite stabile-ssl") unless ($sslsite);
+	system("a2enmod ssl");
+	system("a2enmod cgid");
+	system("a2enmod rewrite");
+	system("a2enmod auth_tkt");
+	system("a2enmod perl");
+	system("a2enmod proxy_http");
+	system("a2enmod headers");
+
+	# Reloading apache2
+	system("systemctl restart apache2");
+
+	########################################
+	# Generating htpasswd-file for pistons #
+	########################################
+
+	print $out "Creating /etc/apache2/htpassswd-piston\n";
+	system("htpasswd -bc /etc/apache2/htpasswd-piston irigo sunshine");
+
+	#######################################################
+	# Creating /mnt/stabile/images/irigo and settings rights #
+	#######################################################
+
+	my $uid = getpwnam('www-data');
+	my $gid = getgrnam('www-data');
+
+	my $ret = chown($uid, $gid, '/mnt/stabile/images');
+	$ret = chown($uid, $gid, '/mnt/stabile/images/irigo');
+
+ 	if ($ret != 1 && !ask("Ignore error...")) {
+		return -1;
+	}
+
+    unless (`grep ENGINENAME=. /etc/stabile/config.cfg`) {
+		print $out "Setting ENGINENAME to $g_hostname\n";
+        `perl -pi -e 's/ENGINENAME=.*/ENGINENAME=$g_hostname/' /etc/stabile/config.cfg`;
+    }
+
+	return 0;
+}
+
+# Install modules from CPAN
+sub install_cpan {
+#    return unless ($ARGV[0] eq 'upgrade');
+
+    `perl /usr/share/stabile/install_cpan_modules.pl`;
+    return 0;
+
+	my @cpan_packages = @_;
+	foreach my $pack(@cpan_packages) {
+		my $cmd = "PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install $pack'";
+		print $out $cmd . "\n";
+
+		# Run command and continue if successfull, else return error.
+		my $ret = sysexec($cmd);
+
+		if($ret != 0 && !ask("Ignore error...")) {
+			print $out "Got an error: $ret\n";
+		}
+	}
+
+	return 0;
+}
+
+## Creates the database db_name, and installs all .sql files from the hardcoded_foldername into it
+sub create_database {
+	require DBI;
+	require DBIx::Simple;
+	require SQL::Abstract;
+
+	my $db_name = shift or die;
+	my $db_host = shift or die;
+	my $db_user = shift or die;
+	my $db_pass = shift || $g_db_pass;
+	my $dbinit; # Set if database has been initialized
+
+	# TODO 
+	# Accept a folder with stored .sql files dynamically,
+	# and insert them into the new database. For now:
+	my $hardcoded_foldername = '/usr/share/stabile/SQL';
+
+	if(! defined($db_pass)) {
+	#	$db_pass = ask_password("Enter desired MySQL root password");
+		$db_pass = '';
+	}
+
+	my $drh = DBI->install_driver('mysql');
+
+	# Test if there is a password for mysql.
+	# If there isn't, set the password.
+	# If not, just assume they know what they're doing.
+	print $out "Trying to connect to mysql on $db_host with $db_user, $db_pass\n";
+	my $dbh = $drh->connect("mysql", $db_user, $db_pass, { host => $db_host});
+	# Test if the MySQL password is identical to the password we have.
+	# If it is, we don't set the new password.
+	if (!$dbh) {
+		print $out "Could not connect to database!!\n";
+		return;
+#		$db_pass = ask_password( "Reenter MySQL password for user '$db_user'", 1);
+	} else {
+		print $out "Successfully connected to DB\n";
+	}
+
+	#######################
+	# Create the database #
+	#######################
+
+    # Just try to create the database, and if it fails, it already exists
+    $drh->func('createdb', $db_name, $db_host, $db_user, $db_pass, 'admin');
+
+    $dbh = $drh->connect("$db_name", $db_user, $db_pass,
+                         { host => $db_host, RaiseError => 1,
+                           mysql_multi_statements => 1, });
+
+    my $db = new DBIx::Simple($dbh) or die DBIx::Simple->error;
+    $db->abstract = new SQL::Abstract();
+
+    # Test if database exists and contains user irigo in table users
+    my @i_users = $db->query("SELECT username FROM users WHERE username=\"irigo\"")->flat;
+    # If db not found, read in SQL files
+    if (!@i_users) {
+		print $out "User irigo not found in DB $db_name, initializing DB\n";
+
+        #######################################################
+        # Read all our saved .sql files into the new database #
+        #######################################################
+
+        my @files = glob($hardcoded_foldername . '/*.sql');
+        foreach my $sql(@files) {
+			print $out "$sql\n";
+            my $source = `cat $sql`;
+            my $ret = $dbh->do($source);
+
+            if (!defined $ret || $ret ne "0E0") {
+				print $out DBI->errstr;
+                return 1;
+            }
+        }
+		$dbinit = 1;
+    } else {
+		print $out "User irigo found in DB $db_name, assuming all is good\n";
+	}
+
+	###########################
+	# Granting user privilege #
+	###########################
+	{
+		my $cmd = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE ON $db_name.* TO irigo\@localhost IDENTIFIED BY 'sunshine'";
+
+		if($dbh->do($cmd) ne "0E0") {
+			print $out "!!! Error granting access to user irigo. This needs to be fixed.\n";
+		}
+	}
+
+	##############################
+	# Create initial user in SQL #
+	##############################
+
+#	if (($db->select('users', 'count(*)')->list)[0] eq 0) {
+		# Don't encrypt it. If stabile sees the unencrypted password,
+		# it will automatically create the unix user.
+	if ($dbinit) {
+		$i_user = $i_user || 'origo';
+		$i_password = $i_password || 'sunshine';
+	}
+    if ($i_user && $i_password) {
+        my @i_users = $db->query("SELECT username FROM users WHERE username=\"$i_user\"")->flat;
+        if (!@i_users) {
+			print $out "Adding initial user $i_user\n";
+            $db->insert('users', { 'username' => $i_user.'',
+                                   'password' => $i_password.'',
+                                   'fullname' => $i_user.'',
+								   'created'  => time(),
+                                   'allowinternalapi' => '1',
+                                   'privileges' => 'a' })
+                || die $db->error;
+        } else {
+			print $out "Setting password for initial user $i_user\n";
+            $db->update('users', {'password' => $i_password.'', 'privileges' => 'a' }, { 'username' => $i_user.''})
+                || die $db->error;
+        }
+	}
+    if ($i_user ne 'irigo') {
+        my @i_users = $db->query("SELECT username FROM users WHERE username=\"irigo\"")->flat;
+        if (!@i_users) {
+			print $out "Also adding irigo user (without password, in order to allow stash use)\n";
+            $db->insert('users', { 'username' => 'irigo',
+                                   'password' => '',
+                                   'privileges' => 'a' })
+                || die $db->error;
+
+        }
+    }
+    # Create guest user
+    my @g_users = $db->query("SELECT username FROM users WHERE username=\"guest\"")->flat;
+    if (!@g_users) {
+        print $out "Adding guest user\n";
+        $db->insert('users', { 'username' => 'guest',
+                               'password' => '',
+                               'allowinternalapi' => '0',
+                               'privileges' => 'd' })
+            || die $db->error;
+    } else {
+        print $out "Removing priviliges from guest user\n";
+        $db->update('users', {'password' => '', 'privileges' => 'd' }, { 'username' => 'guest'})
+            || die $db->error;
+    }
+#	}
+
+	#############################################################
+	# Creating nodeidentities to allow integration of new nodes #
+	#############################################################
+
+	foreach my $piston_version (@piston_versions) {
+		my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
+		next unless (-e $piston_root && -e "$piston_root/bin/bash");
+
+		my $kernel_version = readlink($piston_root . '/vmlinuz');
+		$kernel_version =~ s/^boot\/vmlinuz-//;
+		next unless ($kernel_version);
+
+		$db->insert('nodeidentities', {
+			identity => "kvm-$piston_version-x64",
+			hypervisor => 'kvm',
+			dist => $piston_version,
+			formats => 'img,qcow,qcow2',
+			name => "kvm-$piston_version-x64",
+			sleepafter => 0,
+			kernel => $kernel_version,
+			path => '/mnt/stabile/tftp/' . $piston_version,
+			arch => undef,
+					});
+
+		$db->insert('nodeidentities', {
+			identity => "vbox-$piston_version-x64",
+			hypervisor => 'vbox',
+			dist => $piston_version,
+			formats => 'vmdk,vdi,vhd',
+			name => "vbox-$piston_version-x64",
+			sleepafter => 0,
+			kernel => $kernel_version,
+			path => '/mnt/stabile/tftp/' . $piston_version,
+			arch => undef,
+					});
+	}
+
+	my @i_ids = $db->query("SELECT name FROM nodeidentities WHERE identity=\"default\"")->flat;
+	unless (@i_ids) {
+		my $piston_version = $piston_versions[0];
+
+		$db->update('nodeidentities',
+		            { identity => 'default' },
+		            { name => "kvm-$piston_version-x64" })
+			|| print $out $db->error,"\n";
+	}
+
+	###################################
+	# Alter tables to add new columns #
+	###################################
+	my %new_columns = (
+		'users' => {
+			'allowfrom' => 'varchar(512)',
+			'lastloginfrom' => 'varchar(15)',
+			'lasttkt' => 'varchar(512)',
+			'allowinternalapi' => 'varchar(4)',
+		},
+	);
+
+	while (my ($table, $new_columns) = each %new_columns) {
+		while (my ($cname, $ctype) = each %$new_columns) {
+			if (! $db->select($table, $cname)) {
+				$db->query("ALTER TABLE $table ADD $cname $ctype")
+					|| print $out $db->error,"\n";
+			}
+		}
+	}
+
+	## TODO: Check exit status of MYSQL commands
+
+	# Create symlink to MySQL driver for Tomcat
+	`ln -s ../../java/mysql-connector-java.jar /usr/share/tomcat8/lib/` unless (-e "/usr/share/tomcat8/lib/mysql-connector-java.jar");
+
+	return 0;
+}
+
+# Install the Webmin API.
+sub install_webmin_api {
+	my $tarball = shift;
+	my $ret;
+
+	# HACK: install Webmin API
+	$ret = sysexec("tar zxf $tarball");
+
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $ret;
+	}
+
+	$ret = sysexec("cd Webmin-API-1.0 && perl Makefile.PL && make install");
+
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $ret;
+	}
+
+	$ret = rmtree("Webmin-API-1.0");
+
+	if($ret == 0 && !ask("Ignore error...")) {
+		return $ret;
+	}
+
+	$ret = sysexec("chmod a+rX /etc/webmin/miniserv.conf");
+
+	if($ret != 0 && !ask("Ignore error...")) {
+		return $ret;
+	}
+
+	{
+		my $oldcwd = cwd();
+		require Webmin::API;
+
+		my $cfg_path = '/etc/webmin/config';
+		my $cfg = {};
+
+		Webmin::API::read_file($cfg_path, $cfg);
+
+		$cfg->{'referer'} = 1;
+		$cfg->{'referers'} = '';
+		$cfg->{'referers_none'} = '0';
+
+		Webmin::API::write_file($cfg_path, $cfg);
+
+		$cfg_path = '/etc/webmin/mon/config';
+		$cfg = {};
+
+		Webmin::API::read_file($cfg_path, $cfg);
+
+		$cfg->{'mon_cgi'} = '/usr/lib/cgi-bin/mon.cgi';
+		$cfg->{'pid_file'} = '/var/run/mon/mon.pid';
+
+		Webmin::API::write_file($cfg_path, $cfg);
+
+		chdir($oldcwd);
+	}
+
+	return 0;
+}
+
+# Upgrade existing stabile.
+sub upgrade {
+	# Bump up mon limits
+#	 `perl -pi -e "s/(maxprocs\\s+)= \\d+/maxprocs = 100/" /etc/mon/mon.cf`;
+#	 `perl -pi -e "s/(histlength\\s+)= \\d+/histlength = 10000/" /etc/mon/mon.cf`;
+
+	 # Allow mon to actually save disabled states
+#	 `chown mon:mon /usr/lib/mon/state.d`;
+
+	print $out "No tasks to do for this upgrade...\n";
+	return 0;
+
+	foreach my $piston_version (@piston_versions) {
+        my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
+        if (!(-e "$piston_root/bin/bash")) {
+			print $out "** Invalid piston found in $piston_root **\n";
+            next;
+        } else {
+			print $out "** Now upgrading software and configuration in existing piston $piston_root **\n";
+        }
+
+        unless (`grep "apt.origo.io" $piston_root/etc/apt/sources.list.d/steampiston.list`) {
+            my $ret = `echo "deb http://apt.origo.io/archives bionic stabile" >> $piston_root/etc/apt/sources.list.d/steampiston.list`;
+        } else {
+            `perl -pi -e "s/archives main mysection/archives bionic stabile/" $piston_root/etc/apt/sources.list.d/steampiston.list`;
+        }
+		print $out `sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' $piston_root/etc/apt/sources.list`;
+		print $out `sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' $piston_root/etc/apt/sources.list`;
+		print $out `chroot $piston_root apt-get update`;
+		print $out `chroot $piston_root apt-get -q -y --force-yes install libproc-background-perl cgroup-bin`;
+		print $out `chroot $piston_root apt-get -q -y --force-yes install kvm-pxe`;
+		print $out `chroot $piston_root apt-get -q -y --force-yes install ssl-cert megacli`;
+		print $out `chroot $piston_root apt-get -q -y --force-yes install msmtp`;
+		print $out `chroot $piston_root apt-get -q -y --force-yes install msmtp-mta bsd-mailx`;
+		print $out `echo "account default\nhost 10.0.0.1\nfrom origo\@origo.io" > /etc/msmtprc`;
+		print $out `cp /usr/share/stabile/lsi/lsi.sh $piston_root/usr/local/bin`;
+
+    # Set up SOL for IPMI and AMT
+        my $ltext = <<END
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+respawn
+exec /sbin/getty -8 115200,38400,9600 ttyS1
+END
+;
+        print `echo "$ltext" > $piston_root/etc/init/ttyS1.conf` unless (-e "$piston_root/etc/init/ttyS1.conf");
+        $ltext = <<END
+start on stopped rc RUNLEVEL=[2345]
+stop on runlevel [!2345]
+
+respawn
+exec /sbin/getty -8 115200,38400,9600 ttyS4
+END
+;
+        print `echo "$ltext" > $piston_root/etc/init/ttyS4.conf` unless (-e "$piston_root/etc/init/ttyS4.conf");
+
+    # Handle piston config
+        if (-e "$piston_root/etc/stabile/nodeconfig.cfg") {
+			print $out "** Now upgrading nodeconfig.cfg in existing $piston_versions[0] piston **\n";
+            my $cfgtpl = new Config::Simple("/usr/share/stabile/nodeconfig.template.cfg");
+            my %cfgtplhash = $cfgtpl->vars();
+            my $cfg = new Config::Simple("$piston_root/etc/stabile/nodeconfig.cfg");
+            my %cfghash = $cfg->vars();
+
+            # Copy in new config keys and values
+            foreach my $pref (keys %cfgtplhash) {
+                if (!(defined $cfg->param($pref))) {
+                    $cfg->param($pref, $cfgtplhash{$pref});
+                }
+            }
+            # Weed out obsolete config keys
+            foreach my $pref (keys %cfghash) {
+                if (!(defined $cfgtpl->param($pref))) {
+                    $cfg->delete($pref);
+                }
+            }
+            $cfg->save();
+        }
+
+    }
+
+	print $out "** Now upgrading software in existing valve **\n";
+	print $out `perl -MCPAN -e 'install Locale::TextDomain'`;
+	print $out "** Now upgrading database **\n";
+#    `echo "ALTER TABLE nodes ADD vmuuids varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE nodes ADD vmnames varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE nodes ADD vmusers varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE nodes ADD nfsroot varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE nodes ADD kernel varchar(64);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE nodes ADD maintenance int(4);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#	`echo "ALTER TABLE nodes ADD amtip varchar(15);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#	`echo "ALTER TABLE nodes ADD stor varchar(8);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image3 varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image3name varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image3type varchar(5);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image4 varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image4name varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD image4type varchar(5);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD locktonode varchar(5);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD maccpucores int(4);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD statustime varchar(48);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#
+#    `echo "ALTER TABLE domains ADD networkuuid3 varchar(48);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD networkid3 varchar(48);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD networkname3 varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE domains ADD nicmac3 varchar(17);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#
+#    `echo "ALTER TABLE systems ADD image varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE systems ADD networkuuid1 varchar(48);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE systems ADD internalip varchar(15);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE users ADD billto varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#
+#    `echo "ALTER TABLE images ADD upgradelink varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE images ADD version varchar(48);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE images ADD terminallink varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#
+#    `echo "ALTER TABLE users CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;" | mysql steamregister 2>/dev/null 1>/dev/null`;
+
+    # Delete archived billing rows - getting out of hand
+	print $out "** Cleaning up billing tables\n";
+#    `echo "DELETE FROM billing_images where userstoragepooltime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "DELETE FROM billing_domains where usernodetime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "DELETE FROM billing_networks where useridtime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+    # Changing to from float to double to increase precision
+#    `echo "ALTER TABLE billing_images MODIFY virtualsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_images MODIFY realsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_images MODIFY backupsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_images MODIFY startvirtualsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_images MODIFY startrealsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_images MODIFY startbackupsizeavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_domains MODIFY vcpuavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_domains MODIFY memoryavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_domains MODIFY startvcpuavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    `echo "ALTER TABLE billing_domains MODIFY startmemoryavg double(24,6);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+#    # Cleaning up billing tables
+##    `echo "UPDATE billing_images SET virtualsizeavg=virtualsize WHERE userstoragepooltime LIKE '%2015-09';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET virtualsizeavg=virtualsize WHERE userstoragepooltime LIKE '%2015-10';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET virtualsizeavg=virtualsize WHERE userstoragepooltime LIKE '%2015-11';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET realsizeavg=realsize WHERE userstoragepooltime LIKE '%2015-09';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET realsizeavg=realsize WHERE userstoragepooltime LIKE '%2015-10';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET realsizeavg=realsize WHERE userstoragepooltime LIKE '%2015-11';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET backupsizeavg=backupsize WHERE userstoragepooltime LIKE '%2015-09';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET backupsizeavg=backupsize WHERE userstoragepooltime LIKE '%2015-10';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+##    `echo "UPDATE billing_images SET backupsizeavg=backupsize WHERE userstoragepooltime LIKE '%2015-11';" | mysql steamregister 2>/dev/null 1>/dev/null`;
+
+	print $out "** Now upgrading config.cfg in existing valve **\n";
+    # Handle valve config
+    if (-e "/etc/stabile/config.cfg") {
+        my $cfgtpl = new Config::Simple("/usr/share/stabile/config.template.cfg");
+        my %cfgtplhash = $cfgtpl->vars();
+        my $cfg = new Config::Simple("/etc/stabile/config.cfg");
+        my %cfghash = $cfg->vars();
+
+        # Copy in new config keys and values
+        foreach my $pref (keys %cfgtplhash) {
+            if (!(defined $cfg->param($pref))) {
+                $cfg->param($pref, $cfgtplhash{$pref});
+            }
+        }
+        # Weed out obsolete config keys
+        foreach my $pref (keys %cfghash) {
+            if (!(defined $cfgtpl->param($pref))) {
+                $cfg->delete($pref);
+            }
+        }
+        $cfg->save();
+    }
+
+    # We need quotas for VM mountable NFS
+    `perl -pi -e 's/(errors=remount-ro)/errors=remount-ro,usrjquota=aquota.user,jqfmt=vfsv0/' /etc/fstab` unless (`grep aquota /etc/fstab`);
+    # print `apt-get -q -y --force-yes install quota quotatool`; # included in dependencies instead
+    `mount -o remount /`;
+    `quotacheck -avum`;
+
+    # We need xinetd to run netperf netserver with hosts.allow support
+    # print `apt-get -q -y --force-yes install xinetd`; # included in dependencies instead
+    # Install copy of netserver from Precise netperf package
+	print $out `cp -a /usr/share/stabile/netserver /usr/local/bin`;
+	print $out `cp /usr/share/stabile/netperf /etc/xinetd.d/netperf`;
+    # Run netserver under xinetd
+    `perl -pi -e "s/(smsqp\\s+11201\\/udp)/$1\nnetperf         12865\\/tcp/" /etc/services` unless (`grep netperf /etc/services`);
+    `echo "netserver: 10.0.0.0/8" >> /etc/hosts.allow` unless (`grep netserver /etc/hosts.allow`);
+
+    # We need libmime-lite-perl to send HTML mon alerts
+    # print `apt-get -q -y --force-yes install libmime-lite-perl`; # included in dependencies instead
+
+    # Copy in new version of amtterm
+    print `cp /usr/share/stabile/amtterm /usr/bin/amtterm`;
+    # Upgrade pxe boot files to support AMT terminal
+    `perl -pi -e "s/(bootif=eth0)/console=ttyS4,38400n81 bootif=eth0/" /mnt/stabile/tftp/pxelinux.cfg/*` unless (`grep ttyS4 /mnt/stabile/tftp/pxelinux.cfg/default`);
+
+    # Change permissions of dnsmasq configuration files
+    print `chown -R www-data:www-data /etc/stabile/networks`;
+    return 0;
+}
+
+########################
+### HELPER FUNCTIONS ###
+########################
+
+sub edit_file {
+	my $path = shift || die "no file to edit!";
+	my $prompt = shift;
+
+	my $editor = $ENV{"VISUAL"} || $ENV{"EDITOR"} || "nano";
+
+	if($prompt) {
+		print $out("$prompt\n");
+	}
+
+	return system("$editor $path");
+}
+
+# Copies a file to a directory, lets you edit the copy before installing it.
+# Meant for configuration files.
+sub cp_conf {
+	my $file = shift or die "No input";
+	my $dest = shift or die "No dest";
+	my $edit = shift;
+	die "Input file not found: $file" unless (-e $file);
+	open(my $fh, '<', $file) or die $!;
+	my ($tfh, $tfile) = tempfile() or die $!;
+	while(my $line = <$fh>) {
+		print $tfh $line;
+	}
+	close($tfh);
+	print $out "Installing '$file'\n";
+	print $out "The file will be installed here '$dest'\n";
+	if($edit) {
+		if(ask("Do you want to edit this file before installation? (You probably should..)")) {
+			system("vim $tfile");
+		}
+	}
+	#system("less -N $tfile");
+	#unlink($tfile);
+	move($tfile, $dest);
+}
+
+sub db_get {
+	my $var = shift;
+	my $res = `/usr/share/stabile/db_get.sh $var 2>&1`;
+	chomp $res;
+	return $res;
+}
+
+sub ask {
+	my $ret;
+	my $warning = shift;
+	my $default = shift;
+
+	if(!$default) {
+		$default = 'y';
+	} elsif (lc($default) ne 'y' && lc($default) ne 'n') {
+		die "Invalid default option passed";
+	} else {
+		$default = lc($default);
+	}
+
+	if($default eq 'y') {
+		print $out "$warning [Y/n]: \n";
+	} else {
+		print $out "$warning [y/N]: \n";
+	}
+	return $default;
+}
+
+# Pretty print a header.
+sub print_headline {
+	my $text = shift;
+	my $level = shift || 2;
+
+	my $char;
+	if($level == 1) {
+		$char = '*';
+	} elsif($level == 2) {
+		$char = '-';
+	}
+
+	# my ($twidth, $theight) = GetTerminalSize();
+	my $twidth = 64;
+
+	my $indent = " " x ((($twidth - 1)/2) - length($text)/2);
+	print $out "$char" x ($twidth) . "\n";
+	print $out "$char" . $indent . $text;
+	print $out " " x ($twidth - 2 - length($indent) - length($text));
+	print $out "$char\n";
+	print $out "$char" x ($twidth) . "\n";
+}
+
+sub execute_task {
+	my $task = shift;
+	my $function = $task->{function};
+	my $name = $task->{prompt};
+
+	print_headline($name);
+
+	# Call the function with the rest of the array as parameters.
+	my $return = &$function(@{$task->{args}});
+
+	if(!defined $return || $return eq '' || $return != 0) {
+		print $out "Something went wrong executing $name\n";
+	}
+}
+
+# Runs through every task and does the install.
+sub install_all {
+	my @tasks = @_;
+	my $tasknum = 0;
+	foreach my $task (@tasks) {
+#	    if ($tasknum == 0) {$tasknum++; next;}; # Skip Perl modules
+	    if ($tasknum == 11 || $tasknum == 5) {$tasknum++; next;}; # Don't upgrade, skip guacamole
+		execute_task($task);
+		$tasknum++;
+	}
+}
+
+sub die_handler {
+	print $out "$!\n";
+    exit 0;
+}
+
+sub int_handler {
+	print $out "\n";
+	exit 1;
+}
+
+sub sysexec {
+	my $ret = system(@_);
+
+	my $int = $ret & 127;
+	$ret = $ret >> 8;
+
+	if($int == 2) {
+		print $out "Exiting on CTRL-C\n";
+		exit 0;
+	}
+
+	if(wantarray) {
+		return ($ret, $int)
+	} else {
+		return $ret;
+	}
+}
+
+# Look up the ip for a given interface.
+sub if_ip {
+	my $ifname = shift or die "No interface name";
+
+	my $req = `ip addr show $ifname 2> /dev/null | grep "inet "`;
+	if($? != 0) {
+		return undef;
+	}
+	$req =~ s/^\s+\S//;
+	my $ip = (split(/\//, (split(/\ /, $req))[1]))[0];
+	if(($ip !~ m/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)) {
+		return undef;
+	}
+
+	return $ip;
+}
+
+sub set_password {
+	my $user = shift;
+	my $passwd = shift;
+	my $chroot = shift;
+
+	my $precmd;
+	my $msgsuffix;
+
+	if ($chroot) {
+		$msgsuffix = "in $chroot";
+		$precmd = "chroot $chroot";
+	} else {
+		$msgsuffix = "on the running system";
+		$precmd = '';
+	}
+
+	if ($passwd) {
+		print $out "Setting password for $user $msgsuffix\n";
+
+		open(my $fh, '|-', "$precmd chpasswd") or return 0;
+		print $fh "$user:$passwd";
+		close($fh) or return 0;
+	} else {
+		print $out "Removing password for $user $msgsuffix\n";
+
+		return !system("$precmd passwd --quiet --delete $user");
+	}
+}
+
+# expand a template file
+sub expand_template {
+	my $srcfile = shift;
+	my $dstfile = shift;
+	my $expansions = shift;
+	# my ($srcfile, $dstfile, %expansions) = $_;
+
+	if (-d $dstfile) {
+		$dstfile .= "/" . basename($srcfile);
+	}
+
+	open(my $srcfh, "<", $srcfile) or return 0;
+	open(my $dstfh, ">", $dstfile) or return 0;
+
+	while (my $line = <$srcfh>) {
+		while (my $key = (each %$expansions)) {
+			$line =~ s/\%$key\%/$expansions->{$key}/g;
+        }
+
+		print $dstfh $line;
+	}
+
+	return 1;
+}
+
+# hardlink a file, overwriting the destination
+sub hardlink {
+	my $src = shift;
+	my $dst = shift;
+
+	if (-e $dst && !unlink($dst)) {
+		return 0;
+	}
+
+	return link($src, $dst);
+}
+
+# Local Variables:
+# mode: perl;
+# indent-tabs-mode: t;
+# tab-width: 4;
+# End:

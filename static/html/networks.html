@@ -1,0 +1,39 @@
+<div>
+  <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
+
+    <button class="btn btn-success btn-sm pull-left shadow" onclick="networks.grid.newItem()" id="networksNewButton" style="display:none">New connection&hellip;</button>
+
+    <div class="pull-right" style="margin-left:10px;">
+      <form action="#networks" method="get" onsubmit="document.getElementById('networks_search_query').blur(); return false;">
+        <div id="networks_search_query" class="searchQueryInput"
+             data-dojo-type="stabile.ClearTextBox"
+             data-dojo-props="placeHolder:'search by name', intermediateChanges:false">
+        </div>
+      </form>
+    </div>
+
+    <div class="pull-right">
+      <span id="ips_sum" style="font-size:90%; color:#AAAAAA; vertical-align: sub;"></span>
+      <span style="vertical-align: sub; margin-left:10px">Show:</span>
+      <select id="networks_status_filter_select" dojoType="dijit.form.Select">
+        <option value="all" selected="selected">All</option>
+        <option value="up">Up</option>
+        <option value="nat">NAT</option>
+        <option value="down">Down</option>
+      </select>
+
+    </div>
+
+  </div>
+
+  <!-- end top button container  -->
+
+  <div id="networks-grid" class="grid-div"></div>
+
+  <!-- end grid container -->
+
+  <div class="border_container_south">
+    <a href="#networks" onClick="window['networks'].grid.refresh();" title="refresh" class="pull-right float btn"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+  </div>
+</div>
+</div>

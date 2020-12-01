@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <title>Stabile API Explorer</title>
+</head>
+<body>
+
+<div class="modal-body" style="padding: 4px 10px!important;">
+    <ul class="nav nav-tabs" style="height:38px;">
+        <li class="nav-item">
+            <a class="nav-link active" data-toggle="tab" href="#servers">Servers API</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#images">Images API</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#networks">Networks API</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#systems">Systems API</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#nodes">Nodes API</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-toggle="tab" href="#users">Users API</a>
+        </li>
+        <span style="padding-top: 8px; margin: 0 0 0 auto;"><a id="login" href="/stabile/auth/login?back=/stabile/api">Log in</a></span>
+    </ul>
+
+    <div id="tabs-content" class="tab-content">
+        <div id="servers" class="show active tab-pane fade grid-tab">
+            <iframe id="serversframe" src="/stabile/servers/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+        <div id="images" class="show tab-pane fade grid-tab">
+            <iframe id="imagesframe" src="/stabile/images/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+        <div id="networks" class="show tab-pane fade grid-tab">
+            <iframe id="networksframe" src="/stabile/networks/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+        <div id="systems" class="show tab-pane fade grid-tab">
+            <iframe id="systemsframe" src="/stabile/systems/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+        <div id="nodes" class="show tab-pane fade grid-tab">
+            <iframe id="nodesframe" src="/stabile/nodes/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+        <div id="users" class="show tab-pane fade grid-tab">
+            <iframe id="usersframe" src="/stabile/users/?action=help" style="height: calc(100vh - 54px); width:100%; border: none;"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- Optional JavaScript -->
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script>
+$(document).ready(function() {
+    if (location.hash) {
+        $("a[href='" + location.hash + "']").tab("show");
+    }
+    $(document.body).on("click", "a[data-toggle='tab']", function(event) {
+        location.hash = this.getAttribute("href");
+    });
+    if (document.cookie.indexOf("tktuser")>0) $("#login").text("Log out")[0]; //.href = "/stabile/auth/logout";
+});
+$(window).on("popstate", function() {
+    var anchor = location.hash || $("a[data-toggle='tab']").first().attr("href");
+    $("a[href='" + anchor + "']").tab("show");
+});
+</script>
+</body>
+</html>

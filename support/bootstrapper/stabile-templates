@@ -1,0 +1,19 @@
+Template: stabile/letsencrypt
+Type: boolean
+Default: false
+Description: Do you want Stabile to install a SSL certificate from Let's Encrypt? This only works if your hostname is a resolvable FQDN.
+
+Template: stabile/hostname
+Type: string
+Default:
+Description: Please enter the public domain name this Engine should be availabe at. Domain name must be a fully qualified domain name (FQDN). Leave empty for default host name.
+
+Template: stabile/initial_user
+Type: string
+Default: stabile
+Description: Please enter desired user name for the initial user. This user will have administrator privileges.
+
+Template: stabile/initial_password
+Type: password
+Default:
+Description: Please enter desired password for the initial user.

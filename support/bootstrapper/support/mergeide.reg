@@ -1,0 +1,74 @@
+Windows Registry Editor Version 5.00
+
+;Add driver for Atapi (requires Atapi.sys in Drivers directory)
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\atapi]
+"ErrorControl"=dword:00000001
+"Group"="SCSI miniport"
+"Start"=dword:00000000
+"Tag"=dword:00000019
+"Type"=dword:00000001
+"DisplayName"="Standard IDE/ESDI Hard Disk Controller"
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,44,00,\ 
+  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,61,00,74,00,61,00,70,00,69,00,2e,\ 
+  00,73,00,79,00,73,00,00,00
+
+;Add driver for intelide (requires intelide.sys in drivers directory)
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\IntelIde]
+"ErrorControl"=dword:00000001
+"Group"="System Bus Extender"
+"Start"=dword:00000000
+"Tag"=dword:00000004
+"Type"=dword:00000001
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,44,00,\ 
+  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,69,00,6e,00,74,00,65,00,6c,00,69,\ 
+  00,64,00,65,00,2e,00,73,00,79,00,73,00,00,00
+
+
+;Add driver for Pciide (requires Pciide.sys and Pciidex.sys in Drivers directory)
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\PCIIde]
+"ErrorControl"=dword:00000001
+"Group"="System Bus Extender"
+"Start"=dword:00000000
+"Tag"=dword:00000003
+"Type"=dword:00000001
+"ImagePath"=hex(2):53,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,44,00,\ 
+  52,00,49,00,56,00,45,00,52,00,53,00,5c,00,70,00,63,00,69,00,69,00,64,00,65,\ 
+  00,2e,00,73,00,79,00,73,00,00,00
+
+;
+; Add the viostor service
+;
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor]
+"Group"="SCSI miniport"
+"ImagePath"=hex(2):73,00,79,00,73,00,74,00,65,00,6d,00,33,00,32,00,5c,00,64,\
+  00,72,00,69,00,76,00,65,00,72,00,73,00,5c,00,76,00,69,00,6f,00,73,00,74,00,6f,\
+  00,72,00,2e,00,73,00,79,00,73,00,00,00
+"ErrorControl"=dword:00000001
+"Start"=dword:00000000
+"Type"=dword:00000001
+"Tag"=dword:00000040
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor\Parameters]
+"BusType"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor\Parameters\MaxTransferSize]
+"ParamDesc"="Maximum Transfer Size"
+"type"="enum"
+"default"="0"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor\Parameters\MaxTransferSize\enum]
+"0"="64  KB"
+"1"="128 KB"
+"2"="256 KB"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor\Parameters\PnpInterface]
+"5"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Services\viostor\Enum]
+"0"="PCI\\VEN_1AF4&DEV_1001&SUBSYS_00021AF4&REV_00\\3&13c0b0c5&2&20"
+"Count"=dword:00000001
+"NextInstance"=dword:00000001

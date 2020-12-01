@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Loading...</title>
+    <link rel="stylesheet" type="text/css" href="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/themes/base/jquery-ui.css" />
+
+    <!-- Loading Bootstrap -->
+    <link href="/stabile/static/css/bootstrap.css" rel="stylesheet">
+    <!-- Loading Flat UI -->
+    <link href="/stabile/static/css/flat-ui.css" rel="stylesheet">
+    <link href='https://fonts.googleapis.com/css?family=Lato:400,700' rel='stylesheet' type='text/css'>
+
+    <style>
+
+        .ui-progressbar .ui-progressbar-value {
+            margin: 0;
+        }
+
+        .ui-progressbar-value {
+            box-sizing: content-box;
+            border:0;
+            background-image: none;
+            background-color: #1ABC9C;
+            margin: 0;
+        }
+        pre{
+            white-space: pre-wrap;
+            margin: 20px 4px 10px 4px;
+            overflow-x: hidden;
+        }
+    </style>
+
+</head>
+<body>
+<div style="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; border: 0px solid;">
+    <h4 id="upgradetitle">
+        Your app is being upgraded. Hang on...
+    </h4>
+    <div style="text-align:left; width:600px; margin-left:auto; margin-right:auto;">
+        Feel free to close this dialog. Once your app is running again, you can load the management interface by clicking the "manage" button.
+    </div>
+    <div id="progressbar" style="height:12px; margin: 10px 4px 10px 4px; border:0;" class="progress"></div>
+    <div id="upgradestatus" style="display: none; height: 325px; overflow-x:hidden; overflow-y: scroll;"></div>
+</div>
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js" type="text/javascript"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.9.2/jquery-ui.min.js" type="text/javascript"></script>
+
+<script src="/stabile/static/js/bootstrap/jquery.ui.touch-punch.min.js"></script>
+<script src="/stabile/static/js/bootstrap/bootstrap.min.js"></script>
+<script src="/stabile/static/js/bootstrap/bootstrap-select.js"></script>
+<script src="/stabile/static/js/bootstrap/bootstrap-switch.js"></script>
+<script src="/stabile/static/js/bootstrap/flatui-checkbox.js"></script>
+<script src="/stabile/static/js/bootstrap/flatui-radio.js"></script>
+
+<script>
+    var counter = 0;
+    var callback =
+
+    $(document).ready(function(){
+        $("#progressbar").progressbar({value: 0});
+
+        var tminus = 60;
+        var stacksecs = document.getElementById("stacksecs");
+        var id = setInterval(function() {
+            tminus--;
+            counter += 100/tminus;
+            if(tminus < 0) {
+                clearInterval(id);
+            } else {
+                $("#progressbar").progressbar({value: counter});
+            }
+        }, 1000);
+
+        var handle = parent.dojo.subscribe("upgrade:update", function(task){
+            if (task.status) {
+                var elem = document.getElementById('upgradestatus');
+                elem.style.display = "block";
+                elem.innerHTML += "<pre id=\"u" + task.timestamp + "\">" + task.status + "</pre>\n";
+                elem = document.getElementById('upgradestatus');
+                elem.scrollTop = elem.scrollHeight;
+            }
+            if (task.title) {
+                document.getElementById('upgradetitle').innerHTML = task.title;
+            }
+            if (task.progress) {
+                counter = task.progress;
+                $("#progressbar").progressbar({value: counter});
+            }
+        });
+
+        window.onunload = function() {
+            console.log("unsubscribing upgrade:update");
+            parent.dojo.unsubscribe(handle);
+        }
+    });
+</script>
+</body>
+</html>

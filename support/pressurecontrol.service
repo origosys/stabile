@@ -1,0 +1,15 @@
+[Unit]
+DefaultDependencies=no
+Description=Stabile Pressurecontrol
+Wants=network-online.target
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pressurecontrol
+TimeoutSec=15
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

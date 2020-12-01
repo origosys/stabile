@@ -1,0 +1,40 @@
+<div>
+    <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
+
+        <button class="btn btn-success btn-sm pull-left shadow" onclick="users.grid.newItem()" id="usersNewButton" style="display:none">New user&hellip;</button>
+
+        <div class="pull-right" style="margin-left:10px;">
+            <form action="#users" method="get" onsubmit="document.getElementById('users_search_query').blur(); return false;">
+                <div id="users_search_query" class="searchQueryInput"
+                     data-dojo-type="stabile.ClearTextBox"
+                     data-dojo-props="placeHolder:'search by name', intermediateChanges:false">
+                </div>
+            </form>
+        </div>
+
+        <div class="pull-right">
+            <span style="vertical-align: sub; margin-left:10px">Show:</span>
+            <select id="users_status_filter_select" dojoType="dijit.form.Select">
+                <option value="all" selected="selected">All</option>
+                <option value="validated">Up</option>
+                <option value="not validated">NAT</option>
+                <option value="disabled">Down</option>
+                <option value="enabled">All</option>
+            </select>
+        </div>
+
+        <button title="Click to sync your users with origo.io." type="button" class="btn btn-info btn-xs shadow pull-right" onclick="users.syncUsers();" id="syncusers" style="display:none; margin-top: 5px; margin-right:8px;">Sync users</button>
+
+    </div>
+
+    <!-- end top button container  -->
+
+    <div id="users-grid" class="grid-div"></div>
+
+    <!-- end grid container -->
+
+    <div class="border_container_south">
+        <a href="#users" onClick="window['users'].grid.refresh();" title="refresh" class="pull-right float btn"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+    </div>
+</div>
+</div>

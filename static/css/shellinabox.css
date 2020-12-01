@@ -1,0 +1,14 @@
+body {
+    background-color: black;
+    color: greenyellow;
+}
+#vt100 #console, #vt100 #alt_console, #vt100 #cursor, #vt100 #lineheight {
+    font-family:	"Courier New", "Lucida Console", "Courier", monospace;
+    font-size:	11px;
+}
+#vt100 #kbd_button {
+    visibility: visible;
+}
+#kbd_img {
+    background-color: #808080;
+}

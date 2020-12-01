@@ -1,0 +1,5 @@
+/* CSS for embed.js */
+.irigo-tooltip-base .dijitButtonText, .irigo-tooltip-base .dijitArrowButtonInner{display: none;}
+.irigo-tooltip-base-icon {background: url("/stabile/static/docs/questionmark.png") no-repeat 0 0 transparent;height: 16px;width: 16px;vertical-align: top;}
+.dijitButtonNode {border: none;}
+

@@ -1,0 +1,75 @@
+#! /usr/bin/perl -w
+
+# All rights reserved and Copyright (c) 2020 Origo Systems ApS.
+# This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
+# The license file is part of this source code package and its content is also available at:
+# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+
+use strict;
+use Debconf::Client::ConfModule qw(:all);
+
+my $cmd = shift if $ARGV[0];
+
+# Debconf does not like us printing to STDOUT so we print to STDERR if we need to say something
+my $out = *STDERR;
+
+if ($cmd eq 'purge') {
+# Remove systemd units
+	my $service = "pressurecontrol";
+	print $out `systemctl stop $service`;
+	print $out `systemctl disable $service`;
+#	print $out `rm /etc/systemd/system/$service.service`;
+#	print $out `rm /etc/systemd/system/multi-user.target.wants/$service.service`;
+
+	$service = "movepiston";
+	print $out `systemctl stop $service`;
+	print $out `systemctl disable $service`;
+#	print $out `rm /etc/systemd/system/$service.service`;
+#	print $out `rm /etc/systemd/system/multi-user.target.wants/$service.service`;
+
+	print $out `systemctl daemon-reload`;
+
+# Remove database
+	`echo "DROP DATABASE steamregister;" | mysql`;
+
+# Unconfigure Apache
+	`rm "/etc/apache2/sites-available/stabile-ssl.conf"` if (-e "/etc/apache2/sites-available/stabile-ssl.conf");
+	`rm "/etc/apache2/sites-enabled/stabile-ssl.conf"` if (-e "/etc/apache2/sites-enabled/stabile-ssl.conf");
+	`perl -pi -e 's/.*include.+stabile.*\\\n//si;' /etc/apache2/sites-available/000-default.conf`;
+	`systemctl restart apache2`;
+	`rm /etc/apache2/ssl/stabile.*`;
+
+# Unconfigure dhcpd
+	`perl -pi -e 's/.*include.+stabile.*\\\n//si;' /etc/dhcp/dhcpd.conf`;
+
+# Unconfigure tftpd
+	`perl -pi -e 's/.*TFTP_DIRECTORY=.+stabile.*\\\n//si;' /etc/default/tftpd-hpa`;
+	`perl -pi -e 's/#(.*TFTP_DIRECTORY=.+)/\$1/i;' /etc/default/tftpd-hpa`;
+
+# Unconfigure nfs
+	`perl -pi -e 's/.*\\\/stabile.+\\\n//si;' /etc/exports`;
+
+# Unconfigure Guacamole
+	unlink("/etc/guacamole/extensions/guacamole-auth-stabile-0.9.14.jar") if (-e "/etc/guacamole/extensions/guacamole-auth-stabile-0.9.14.jar");
+
+# Unconfigure ntpd
+	`perl -pi -e 's/listen on 10.0.0.1\\\n//si;' /etc/openntpd/ntpd.conf`;
+
+# Remove directories
+	`rm /usr/share/stabile/openssl.config`;
+	`rm /usr/local/bin/config_data`if (-e "/usr/local/bin/config_data");
+	`rm /mnt/stabile/images/irigo/.htaccess` if (-e "/mnt/stabile/images/irigo/.htaccess");
+	`rm -r /etc/stabile`;
+	`rm -r /mnt/stabile`;
+	`rm -r /var/www/stabile` if (-e "/var/www/stabile");
+	`rm /usr/share/applications/stabile.desktop` if (-e "/usr/share/applications/stabile.desktop");
+
+# Clear debconf db
+#	set('stabile/hostname');
+#	set('stabile/initial_user');
+#	set('stabile/initial_password');
+
+# Clear debconf
+#	`echo PURGE | debconf-communicate stabile`;
+	purge();
+}

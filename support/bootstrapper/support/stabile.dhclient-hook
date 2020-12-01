@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# This script simply restarts Stabile node services when a new dhcp address is aquired
+systemctl restart movepiston

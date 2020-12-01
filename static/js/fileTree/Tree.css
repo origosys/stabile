@@ -1,0 +1,75 @@
+/*
+ *  mixed CheckBox Widgets CSS
+ *
+ *  Order of images in the sprite (from L to R):
+ *    checkbox  normal    - checked
+ *                        - unchecked
+ *                        - mixed
+ *              disabled  - checked
+ *                        - unchecked
+ *                        - mixed
+ *              hover     - checked
+ *                        - unchecked
+ *                        - mixed
+*/
+.mixedCheckBox,
+.mixedCheckBoxIcon {
+ background-image: url('spriteCheckbox.gif'); /* sprite image */
+ background-repeat: no-repeat;
+ width: 16px;
+ height: 16px;
+ margin: 0;
+ padding: 0;
+}
+
+.mixedCheckBox,
+.mixedCheckBoxIcon {
+ /* unchecked */
+ background-position: -16px;
+}
+
+.mixedCheckBoxChecked,
+.mixedCheckBoxIcon {
+ /* checked */
+ background-position: 0px;
+}
+
+.mixedCheckBoxDisabled {
+ /* disabled */
+ background-position: -48px;
+}
+
+.mixedCheckBoxCheckedDisabled {
+ /* disabled but checked */
+ background-position: -48px;
+}
+
+.mixedCheckBoxMixed {
+ /* checked & mixed */
+ background-position: -32px;
+}
+
+.mixedCheckBoxMixedDisabled {
+ /* mixed & Disabled*/
+ background-position: -64px;
+}
+
+.mixedCheckBoxHover {
+ /* hovering over an unchecked enabled checkbox */
+ background-position: -112px;
+}
+
+.mixedCheckBoxCheckedHover {
+ /* hovering over a checked enabled checkbox */
+ background-position: -96px;
+}
+
+.mixedCheckBoxMixedHover {
+ /* checked & mixed */
+ background-position: -128px;
+}
+
+.mixedCheckBox input {
+  /* hmm... Chrome overflows when input is height 16px */
+  height:14px;
+}

@@ -1,0 +1,52 @@
+<div>
+    <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
+        <span style="display:inline-block;">
+            <span style="vertical-align: top; font-weight:400; margin-left:10px;">
+              Default node identity:
+            </span>
+            <select dojoType="dijit.form.FilteringSelect"
+                    id="defaultidentity"
+                    name="defaultidentity"
+                    store="stores.nodeIdentities"
+                    searchAttr="name"
+                    disabled="true"
+                    style="border:0; width:150px; vertical-align:top;"
+            >
+            </select>
+            <button class="btn btn-xs btn-primary shadow" onclick="nodes.saveDefaultNodeIdentity();">Set</button>
+            <span style="vertical-align: top;  font-weight:400; margin-left:15px;">
+                Nodes sleep after:
+            </span>
+            <select dojoType="dijit.form.FilteringSelect"
+                    disabled="true"
+                    id="sleepafter"
+                    name="sleepafter"
+                    style="border:0; width:90px; vertical-align:top;">
+                <option selected value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes</option>
+                <option value="0">Never</option>
+            </select>
+        </span>
+        <a href="https://www.origo.io/info/stabiledocs/web/nodes/" rel="help" target="_blank" class="irigo-tooltip">help</a>
+
+        <div class="pull-right">
+            <div style="color:#AAAAAA;">
+                <span id="statsbox" style="font-size:90%;"></span>
+            </div>
+            <div style="color:#AAAAAA;">
+                Storage:
+                <span id="storagestatsbox" style="font-size:90%;"></span>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="nodes-grid" style="height:414px"></div>
+
+    <div class="border_container_south">
+        <div>
+            <a href="#nodes" onClick="window['nodes'].grid.refresh();" title="refresh" class="pull-right float btn"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+        </div>
+    </div>
+</div>

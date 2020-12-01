@@ -1,0 +1,80 @@
+<html>
+<head>
+<title>TreeGrid - Dojo</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+
+<style type="text/css">
+@import url("dojo/resources/dojo.css");
+@import url("dojo/resources/dnd.css");
+@import url("dojo.treetable.css");
+body {
+    padding: 20px;
+}
+</style>
+
+<script type="text/javascript" src="dojo/dojo.js"
+	    djConfig="parseOnLoad:true"></script>
+<script type="text/javascript" src="dojo.treetable.js"></script>
+<script type="text/javascript">
+
+/* test */
+var srcJson = "";
+
+var data = [
+    {'id': 1, 'pid': 0, title: 'Root', published: 'true', updated: '2009-09-19'}
+];
+
+function rand ( n )
+{
+  return ( Math.floor ( Math.random ( ) * n + 1 ) );
+}
+
+function getEl(id, pid)
+{
+    return {'id': id, 'pid': pid, title: 'Lorem item ' + id, published: 'true', updated: '2009-09-19'};
+}
+
+// generating test data
+for (var i = 2; i < 12; i++) {
+    data.push(getEl(i, 1));
+    for (var j = 1; j < 11; j++) {
+        data.push(getEl(i + '_' + j, i));
+        for (var k = 1; k < 11; k++) {
+            data.push(getEl(i + '_' + j + '_' + k, i + '_' + j));
+        }
+    }
+}
+
+var hNodes;
+var hTree;
+dojo.addOnLoad(function(){
+    hTree = new TreeTable({
+        renderTo: 'treegrid',
+        nodes: data,
+        indent: 20,
+        cm: [
+            {text: '#', width: '20px'},
+            {text: 'Title', width: '150px'}, 
+            {text: 'Published', 
+             data: 'published', 
+             renderer: function(node) {
+                return node.config.published == 'true' ? 'Yes' : 'No';
+             },
+             width: '60px'
+            }, 
+            {text: 'Updated At', data: 'updated'}
+        ],
+        titleWidth: '60%'
+    });
+    hTree.render();
+    hTree.node(1).expand();
+    hTree.colorize();
+});
+</script> 
+</head>
+
+<body>
+    <h3>Using 1000 nodes</h3>
+    <div id="treegrid" class="dijitReset"></div>
+</body>
+</html>

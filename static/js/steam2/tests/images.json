@@ -1,0 +1,25 @@
+[
+  {
+    "status":"unused",
+    "uuid": 1,
+    "type": "qcow2",
+    "path": "/foo",
+    "name": "foo",
+    "user": "user"
+  },
+  {
+    "status":"unused",
+    "uuid": 2,
+    "type": "qcow2",
+    "path": "/bar",
+    "name": "bar"
+  },
+  {
+    "status":"unused",
+    "uuid": 3,
+    "type":"qcow2",
+    "path":"/baz",
+    "name": "baz",
+    "user": "common"
+  }
+]

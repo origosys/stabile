@@ -1,0 +1,18 @@
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojo/resources/dojo.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dijit/themes/tundra/tundra.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dijit/themes/claro/claro.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/grid/resources/Grid.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/grid/resources/tundraGrid.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/grid/resources/claroGrid.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/form/resources/FileInput.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/form/resources/FileUploader.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/widget/Toaster/Toaster.css");
+@import url("https://ajax.googleapis.com/ajax/libs/dojo/1.7.2/dojox/widget/Wizard/Wizard.css");
+@import url("/stabile/static/js/fileTree/Tree.css");
+
+@import url("/stabile/static/css/d.css");
+@import url("https://ajax.googleapis.com/ajax/libs/jqueryui/1.9.1/themes/smoothness/jquery-ui.css");
+@import url("https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css");
+@import url("/stabile/static/font-awesome/css/font-awesome.min.css");
+@import url("/stabile/static/css/toastr.css");
+@import url("/stabile/static/css/custom.css");

@@ -1,0 +1,122 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+.text-input {
+    width: 100%;
+    background: #222;
+    color: white;
+}
+
+.text-input .text-input-field,
+.text-input .text-input-buttons {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.text-input .text-input-field {
+    width: 30%;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.text-input .text-input-buttons {
+    width: 70%;
+    text-align: right;
+}
+
+.text-input .target {
+
+    border: none;
+    border-radius: 0;
+
+    display: inline-block;
+    vertical-align: middle;
+    color: white;
+    font-size: 12pt;
+    width: 100%;
+    height: auto;
+    resize: none;
+    outline: none;
+
+    margin: 0;
+    padding: 0.25em;
+    padding-left: 0;
+    background: transparent;
+    overflow: hidden;
+
+}
+
+.text-input.open {
+    display: block;
+}
+
+.text-input .sent-history {
+    display: inline-block;
+    vertical-align: middle;
+    padding: 0.25em;
+    padding-right: 0;
+}
+
+.text-input .sent-history .sent-text {
+    display: inline-block;
+    vertical-align: baseline;
+    white-space: pre;
+    font-size: 12pt;
+
+    animation: fadeout 1s linear;
+    -webkit-animation: fadeout 1s linear;
+    opacity: 0;
+}
+
+.text-input .text-input-buttons button {
+
+    box-shadow: none;
+    padding: 0.25em;
+    max-width: 20%;
+    margin: 0.1em;
+    min-width: 3em;
+
+    background: #444;
+
+    border: 0.125em solid #666;
+    -moz-border-radius:    0.25em;
+    -webkit-border-radius: 0.25em;
+    -khtml-border-radius:  0.25em;
+    border-radius:         0.25em;
+
+    color: white;
+    font-weight: lighter;
+    text-align: center;
+
+    text-shadow:  1px  1px 0 rgba(0, 0, 0, 0.25),
+                  1px -1px 0 rgba(0, 0, 0, 0.25),
+                 -1px  1px 0 rgba(0, 0, 0, 0.25),
+                 -1px -1px 0 rgba(0, 0, 0, 0.25);
+
+}
+
+.text-input .text-input-buttons button:active {
+    background: #822;
+    border-color: #D44;
+}
+
+.text-input .text-input-buttons button.pressed {
+    background: #882;
+    border-color: #DD4;
+}

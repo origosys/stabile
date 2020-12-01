@@ -1,0 +1,90 @@
+                        BitTorrent Sync
+
+BitTorrent Sync lets you sync and share an unlimited number of files
+and folders across all of your trusted devices.
+
+How to start Sync
+-----------------
+
+After extracting this tarball, just run:
+
+  $ ./btsync
+
+to start the Sync daemon.
+Then go to localhost:8888 in a web browser to access the WebUI.
+
+IMPORTANT NOTE:
+To improve security, the LAN listening interface is off unless you configure it.
+By default the WebUI is only accessible on the computer running Sync
+(localhost:8888). In order to have the WebUI accessible across the
+LAN, use a configuration file or start Sync this way:
+
+  $ ./btsync --webui.listen 0.0.0.0:8888
+
+
+Some useful options
+-------------------
+
+--config <path to configuration file>
+		 Use a configuration file.
+
+--dump-sample-config
+		Print an example configuration file.
+
+--nodaemon
+		Do not start Sync as a daemon.
+
+--help
+		For more options
+
+
+Important changes in 1.4
+------------------------
+
+  * Secrets are now called Keys.
+    When we are referring to the cryptographic token which links
+    people’s folders together to synchronize, we no longer refer to
+    Secrets, we are now using the word Key.
+
+  * Links have been introduced as the preferred method of sharing. 
+
+    To add a Link to the WebUI, click on Enter Link and paste the link.
+    To copy a Link, click the “Share” button and click “Copy”, then 
+    return to the WebUI to approve anyone who has clicked the link!
+
+    A Link is a special URL which enables a user to: set a limit on 
+    the length of time a link is valid for, set a limit on the number
+    of uses of a link, and require approval of the recipient by the sender.
+    This Link contains a special introduction key, the size of the shared
+    folder as well as the shared folder’s name. 
+
+  * “Copy Key” is off by default.
+    If you prefer to use Keys, go to Preferences / Advanced and click 
+    the “Show pop-up menu, ‘Copy Key’ ” checkbox. Now the "Copy Key" option 
+    will appear in the folder options menu for each folder.
+
+  * WebUI only accessible by localhost by default.
+    See IMPORTANT NOTE in the "How to start Sync" section
+
+
+Known issue
+-----------
+
+When using https to access the WebUI, several reloads might be
+necessary to load the page fully.
+
+
+Downloading
+-----------
+
+Get the latest version of Sync at http://getsync.com/downloads
+
+
+Documentation
+-------------
+
+http://sync-help.bittorrent.com/
+http://forum.bittorrent.com/forum/107-bittorrent-sync/
+
+
+© 2014 BitTorrent, Inc.

@@ -610,7 +610,7 @@ define([
                 document.getElementById("wizardHelp").innerHTML = desc;
             } else {
                 document.getElementById("wizardHelp").innerHTML =
-                    'The master image was not found <a id="wizardHelpDefault" rel="help" target="_blank" class="irigo-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/new-stack/">help</a>';
+                    'You are about to install a new stack from a custom master image.';
                 q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();
             }
             dialog.show();

@@ -1252,7 +1252,10 @@ END
                 if ($tenderlist[$p] && $tenderpathslist[$p]) {
                     my $fuelpath = $tenderpathslist[$p] . "/$user/fuel";
                     unless (-e $fuelpath) {
-                        `mkdir "$fuelpath"` if ($tenderlist[$p] eq 'local'); # We only support fuel on local tender for now
+                        if ($tenderlist[$p] eq 'local') { # We only support fuel on local tender for now
+                            `mkdir "$fuelpath"`;
+                            `chmod 777 "$fuelpath"`;
+                        }
                     }
                     # Manuipulate NFS exports and related disk quotas
                     if ($tenderlist[$p] eq "local") {

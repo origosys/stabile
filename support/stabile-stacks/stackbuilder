@@ -395,7 +395,7 @@ if ($fuelpath) {
                 print "Trying to publish $uuid to the registry\n";
                 print "Hang on - this may take a while...\n";
                 $res = `curl -k "https://10.0.0.1/stabile/images?action=publish&uuid=$uuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2"`;
-                print $res;
+                print "$res\n";
             } else {
                 print "Something went wrong (did not get valid uuid $uuid) when trying to activate the image $imgpath - left it in your shared storage, please activate manually.\nUnable to publish app to the registry\n";
             }

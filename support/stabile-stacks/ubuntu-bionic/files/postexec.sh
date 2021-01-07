@@ -14,6 +14,10 @@ apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get -q -y install webmin
 >&2 echo "Done"
 
+# Install getssl
+curl --silent https://raw.githubusercontent.com/srvrco/getssl/master/getssl > /usr/local/bin/getssl
+chmod 711 /usr/local/bin/getssl
+
 # Install webmin module
 # Include all the modules we want installed for this app
 cd /tmp/files/

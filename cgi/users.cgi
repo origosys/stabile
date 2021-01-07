@@ -3,7 +3,7 @@
 # All rights reserved and Copyright (c) 2020 Origo Systems ApS.
 # This file is provided with no warranty, and is subject to the terms and conditions defined in the license file LICENSE.md.
 # The license file is part of this source code package and its content is also available at:
-# https://www.origo.io/info/stabiledocs/licensing/stabile-open-source-license
+# https://www.stabile.io/info/stabiledocs/licensing/stabile-open-source-license
 
 package Stabile::Users;
 
@@ -297,7 +297,7 @@ END
         $postreq->{'user'} = $tktuser;
         $postreq->{'enginetkthash'} = Digest::SHA::sha512_hex($tktkey);
 
-        my $content = $browser->post("https://www.origo.io/irigo/engine.cgi?action=listengines", $postreq)->content();
+        my $content = $browser->post("https://www.stabile.io/irigo/engine.cgi?action=listengines", $postreq)->content();
         if ($content =~ /ERROR:(.+)"/) {
             $postreply = qq|{"identifier": "url", "label": "name", "items": [{"url": "# $1", "name": "$enginename"}]}|;
         } else {
@@ -465,7 +465,7 @@ sub do_listenginebackups {
     if ($help) {
         return <<END
 GET::
-List the backups of this engine's configuration on origo.io.
+List the backups of this engine's configuration in the registry.
 END
     }
     if ($enginelinked) {
@@ -480,7 +480,7 @@ END
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = Digest::SHA::sha512_hex($tktkey);
 
-        my $content = $browser->post("https://www.origo.io/irigo/engine.cgi?action=listbackups", $postreq)->content();
+        my $content = $browser->post("https://www.stabile.io/irigo/engine.cgi?action=listbackups", $postreq)->content();
         if ($content =~ /\[\]/) {
             $postreply = qq|{"identifier": "path", "label": "name", "items": [{"path": "#", "name": "No backups"}]}|;
         } else {
@@ -497,7 +497,7 @@ sub Backupengine {
     if ($help) {
         return <<END
 GET::
-Backup this engine's configuration to origo.io.
+Backup this engine's configuration to the registry.
 END
     }
     my $backupname = "$enginename.$engineid.$pretty_time";
@@ -527,13 +527,13 @@ END
         my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
         my $enginetkthash = Digest::SHA::sha512_hex($tktkey);
 
-        my $res = `/usr/bin/curl -k -F engineid=$engineid -F enginetkthash=$enginetkthash -F filedata=@"/tmp/$backupname.tgz" https://www.origo.io/irigo/engine.cgi?action=backup`;
+        my $res = `/usr/bin/curl -k -F engineid=$engineid -F enginetkthash=$enginetkthash -F filedata=@"/tmp/$backupname.tgz" https://www.stabile.io/irigo/engine.cgi?action=backup`;
         if ($res =~ /OK: $backupname.tgz received/) {
-            $postreply .= "Status=OK Engine configuration saved to origo.io";
-            $main::syslogit->($user, "info", "Engine configuration saved to origo.io");
+            $postreply .= "Status=OK Engine configuration saved to the registry";
+            $main::syslogit->($user, "info", "Engine configuration saved to the registry");
             unlink("/tmp/$backupname.tgz");
         } else {
-            $postreply .= "Status=ERROR Problem backing configuration up to origo.io\n$res\n";
+            $postreply .= "Status=ERROR Problem backing configuration up to the registry\n$res\n";
         }
     }
     return $postreply;
@@ -544,7 +544,7 @@ sub Upgradeengine {
     if ($help) {
         return <<END
 GET::
-Try to upgrade this engine to latest release from origo.io
+Try to upgrade this engine to latest release from the registry
 END
     }
     $postreply = "Status=OK Requesting upgrade of Steamgine\n";
@@ -559,7 +559,7 @@ sub do_billengine {
     if ($help) {
         return <<END
 GET::
-Submit billing data for this engine to origo.io.
+Submit billing data for this engine to the registry.
 END
     }
     require LWP::Simple;
@@ -589,7 +589,7 @@ END
     $postreq->{'engineid'} = $engineid;
     $postreq->{'enginetkthash'} = $tkthash;
     $postreq->{'keywords'} = JSON::to_json(\%bill, {pretty=>1});
-    my $url = "https://www.origo.io/irigo/engine.cgi";
+    my $url = "https://www.stabile.io/irigo/engine.cgi";
     $content = $browser->post($url, $postreq)->content();
     $postreply = "Status=OK Billed this engine ($engineid)\n";
     $postreply .= "$postreq->{'keywords'}\n$content";
@@ -601,7 +601,7 @@ sub Linkengine {
     if ($help) {
         return <<END
 PUT:username,password,engineid,enginename,engineurl:
-Links engine to origo.io
+Links engine to the registry
 END
     }
     return "Status=Error Not allowed\n" unless ($isadmin || ($user eq $engineuser));
@@ -627,14 +627,14 @@ END
     $postreq->{'engineurl'} = $obj->{'engineurl'} if ($obj->{'engineurl'});
     if ($tktkey) {
         if ($action eq 'linkengine') {
-            $main::syslogit->($user, "info", "Linking engine with origo.io");
+            $main::syslogit->($user, "info", "Linking engine with the registry");
             $postreq->{'enginetktkey'} = $tktkey;
         } else {
             $postreq->{'enginetkthash'} = Digest::SHA::sha512_hex($tktkey);
         }
     }
-    if ($action eq "saveengine") { # Save request from origo.io - don't post back
-        # Pressurecontrol reads new configuration data from origo.io, simply reload it
+    if ($action eq "saveengine") { # Save request from the registry - don't post back
+        # Pressurecontrol reads new configuration data from the registry, simply reload it
         my $pressureon = !(`systemctl is-active pressurecontrol` =~ /inactive/);
         $postreply = ($pressureon)? "Status=OK Engine updating...\n":"Status=OK Engine not updating because pressurecontrol not active\n";
         $postreply .= `systemctl restart pressurecontrol` if ($pressureon);
@@ -642,7 +642,7 @@ END
         my $res;
         my $cfg = new Config::Simple("/etc/stabile/config.cfg");
         if ($action eq 'linkengine' || $action eq 'syncusers') {
-            # Send engine users to origo.io
+            # Send engine users to the registry
             my @vals = values %register;
             my $json = JSON::to_json(\@vals);
             $json =~ s/null/""/g;
@@ -655,7 +655,7 @@ END
                 $cfg->param("ENGINENAME", $postreq->{'enginename'});
                 $cfg->save();
             }
-            # Send entire engine config file to origo.io
+            # Send entire engine config file to the registry
             my %cfghash = $cfg->vars();
             foreach my $param (keys %cfghash) {
                 $param =~ /default\.(.+)/; # Get rid of default. prefix
@@ -666,7 +666,7 @@ END
                     $postreq->{$k} = URI::Escape::uri_escape($cval);
                 }
             }
-            # Send entire engine piston config file to origo.io
+            # Send entire engine piston config file to the registry
             my $nodeconfigfile = "/mnt/stabile/tftp/bionic/casper/filesystem.dir/etc/stabile/nodeconfig.cfg";
             if (-e $nodeconfigfile) {
                 my $pistoncfg = new Config::Simple($nodeconfigfile);
@@ -683,22 +683,22 @@ END
             }
         }
         if ($linkaction eq 'link' || $enginelinked) {
-            my $content = $browser->post("https://www.origo.io/irigo/engine.cgi?action=$linkaction", $postreq)->content();
+            my $content = $browser->post("https://www.stabile.io/irigo/engine.cgi?action=$linkaction", $postreq)->content();
             if ($content =~ /(Engine linked|Engine not linked|Engine unlinked|Engine updated|Unknown engine|Invalid credentials .+\.)/i) {
                 $res = "Status=OK $1";
                 my $linked = 1;
                 $linked = 0 unless ($content =~ /Engine linked/i || $content =~ /Engine updated/i);
                 $cfg->param("ENGINE_LINKED", $linked);
                 $cfg->save();
-            } elsif ($action eq 'syncusers' || $action eq 'linkengine') { # If we send user list to origo.io we get merged list back
+            } elsif ($action eq 'syncusers' || $action eq 'linkengine') { # If we send user list to the registry we get merged list back
                 if ($content =~ /^\[/) { # Sanity check to see if we got json back
                     $res .= "Status=OK Engine linked\n" if ($action eq 'linkengine');
-                    # Update engine users with users from origo.io
-                    $content = updateEngineUsers($content);
-                    $res .= "Status=OK Users synced with origo.io\n";
+                    # Update engine users with users from the registry
+                    $res .= updateEngineUsers($content);
+                    $res .= "Status=OK Users synced with registry\n";
                     $main::updateUI->({ tab => 'users', type=>'update', user=>$user});
                 }
-                $res .= "$content" unless ($content =~ /Status=OK/); # Only add if there are problems
+                $res .= "$content" unless ($res =~ /Status=OK/); # Only add if there are problems
             }
             $postreply = $res;
             $content =~ s/\n/ - /;
@@ -878,6 +878,7 @@ END
             `echo "delete from billing_images where userstoragepooltime like '$uname-%';" | mysql steamregister`;
             `echo "delete from billing_networks where useridtime like '$uname-%';" | mysql steamregister`;
         }
+        $main::updateUI->({tab => 'users', type=>'update', user=>$user});
 
     } else {
         $postreply .= "Stream=ERROR Cannot delete user $username - you cannot delete administrators!\n";
@@ -1175,7 +1176,7 @@ END
 
         if ($restorefile && !($restorefile =~ /\//)) {
             my $urifile = URI::Escape::uri_escape($restorefile);
-            my $uri = "https://www.origo.io/irigo/engine.cgi";
+            my $uri = "https://www.stabile.io/irigo/engine.cgi";
             my $cmd = qq|/usr/bin/curl -f --cookie -O -L -F action=getbackup -F restorefile=$urifile -F engineid=$engineid -F enginetkthash=$enginetkthash "$uri" > "/tmp/$restorefile"|;
             my $res = `$cmd`;
             if (-s "/tmp/$restorefile") {
@@ -1195,8 +1196,8 @@ END
                 my $defaultpath = $idreg{'default'}->{'path'} . "/casper/filesystem.dir/etc/stabile/nodeconfig.cfg";
                 untie %idreg;
                 $res .=  `cp $restoredir/stabile/nodeconfig.cfg $defaultpath`;
-                $main::syslogit->($user, "info", "Engine configuration $restorefile restored from origo.io");
-                $postreply .= "Status=OK Engine configuration $restorefile restored from origo.io - reloading UI\n";
+                $main::syslogit->($user, "info", "Engine configuration $restorefile restored from the registry");
+                $postreply .= "Status=OK Engine configuration $restorefile restored from the registry - reloading UI\n";
             } else {
                 $postreply .= "Status=ERROR Restore failed, $restorefile not found...\n";
             }
@@ -1566,7 +1567,7 @@ sub remove {
     }
 }
 
-# Update engine users with users received from origo.io
+# Update engine users with users received from the registry
 sub updateEngineUsers {
     my ($json_text) = @_;
     return unless ($isadmin || ($user eq $engineuser));
@@ -1581,7 +1582,8 @@ sub updateEngineUsers {
         memoryquota storagequota vcpuquota externalipquota rxquota txquota nodestoragequota
         accounts accountsprivileges privileges modified
     );
-    $res .= "Status=OK Updated users: ";
+    my $ures;
+    my $ucount = 0;
     foreach my $u (@ulist) {
         my $username = $u->{'username'};
         if (!$register{$username} && $u->{'password'}) {
@@ -1589,7 +1591,7 @@ sub updateEngineUsers {
                 username => $username,
                 password => $u->{'password'}
             };
-            $res .= " *";
+            $ures .= " *";
         }
         next unless ($register{$username});
         next if ($register{$username}->{'modified'} && $register{$username}->{'modified'} > $u->{'modified'});
@@ -1603,7 +1605,8 @@ sub updateEngineUsers {
             }
             delete $u->{$efield} if (defined $u->{$efield} && $u->{$efield} eq '' && $efield ne 'password')
         }
-        $res .= "$username ($u->{'fullname'}), ";
+        $ures .= "$username ($u->{'fullname'}), ";
+        $ucount++;
         my $uid = `id -u irigo-$username`; chomp $uid;
         if (!$uid) { # Check user has system account for disk quotas
             $main::syslogit->($user, "info", "Adding system user $username");
@@ -1611,14 +1614,15 @@ sub updateEngineUsers {
         }
 
     }
-    $res = substr $res, 0, -2;
+    $ures = substr($res, 0, -2) . "\n";
+    $res .= "Status=OK Synced $ucount users\n";
     return $res;
 }
 
 sub sendEngineUser {
     my ($username) = @_;
     if ($enginelinked) {
-    # Send engine user to origo.io
+    # Send engine user to the registry
         require LWP::Simple;
         my $browser = LWP::UserAgent->new;
         $browser->agent('stabile/1.0b');
@@ -1631,7 +1635,7 @@ sub sendEngineUser {
         $json =~ s/null/""/g;
 #        $json = uri_escape_utf8($json);
         $json = URI::Escape::uri_escape($json);
-        my $posturl = "https://www.origo.io/irigo/engine.cgi?action=update";
+        my $posturl = "https://www.stabile.io/irigo/engine.cgi?action=update";
         my $postreq = ();
         $postreq->{'POSTDATA'} = $json;
         $postreq->{'engineid'} = $engineid;

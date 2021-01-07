@@ -25,7 +25,7 @@ var server = {
       }
       if(a != ""){
           var msg =  [{message: a, type: "message",duration: 5000}];
-          IRIGO.toaster("message",msg);
+          IRIGO.toaster(msg);
       }
       return {status:status, message:a};
     },
@@ -54,7 +54,7 @@ var server = {
                     }
                 }
             });
-            IRIGO.toaster("message", [
+            IRIGO.toaster([
                 {
                     message: "Processing ...",
                     type: "message",

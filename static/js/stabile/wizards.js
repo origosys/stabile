@@ -434,7 +434,7 @@ wizards.server = {
 
 
         function saveFailed(e){
-            IRIGO.toaster("message", "A wizard error ocurred: " + e);
+            IRIGO.toaster("A wizard error ocurred: " + e);
         }
 
         function saveImageFailed(e){

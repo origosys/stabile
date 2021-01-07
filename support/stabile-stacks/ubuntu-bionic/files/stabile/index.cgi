@@ -14,7 +14,7 @@ if ((
 ; # OK
 } else {
     print "Content-type: text/html\n\n";
-    print qq|I'm sorry Dave, I'm afraid I can't do that $ENV{REMOTE_ADDR}, $ENV{HTTP_X_FORWARDED_FOR}\n|;
+    print qq|I'm sorry Dave, I'm afraid I can't do that $ENV{REMOTE_ADDR} $ENV{HTTP_X_FORWARDED_FOR}\n|;
     exit;
 }
 
@@ -261,7 +261,7 @@ $term_li = '' unless ($appinfo{terminallink});
 
 my $head = <<END
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="overflow-x: hidden;">
 <head>
     <meta charset="utf-8">
     <title>$appinfo{name}</title>
@@ -306,10 +306,10 @@ my $head = <<END
             line-height: 0.7;
         }
         .alert {
-            margin-top: 10px;
-            position:absolute;
+            margin: 10px auto 5px auto;
+        /*    position:absolute;
             top:420px;
-            left: 12px;
+            left: 12px; */
             width: 90%
         }
         td {

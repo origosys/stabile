@@ -31,12 +31,13 @@ END
     `echo "$interfaces" >> /etc/network/interfaces`;
     print `systemctl restart networking`;
 } else {
-    `perl -pi -e 's/address .+/address $ip/ unless (\$a); \$a=1;' /etc/network/interfaces`;
-    `perl -pi -e 's/netmask .+/netmask 255.255.255.0/ unless (\$a); \$a=1;' /etc/network/interfaces`;
-    `perl -pi -e 's/network .+/network $net.0/ unless (\$a); \$a=1;' /etc/network/interfaces`;
-    `perl -pi -e 's/broadcast .+/broadcast $net.255/ unless (\$a); \$a=1;' /etc/network/interfaces`;
-    `perl -pi -e 's/gateway .+/gateway $net.1/ unless (\$a); \$a=1;' /etc/network/interfaces`;
-    `perl -pi -e 's/dns-nameservers .+/dns-nameservers $net.1/ unless (\$a); \$a=1;' /etc/network/interfaces`;
+    `perl -pi -e 's/address 10\..+/address $ip/' /etc/network/interfaces`;
+    `perl -pi -e 's/network 10\..+/network $net.0/' /etc/network/interfaces`;
+    `perl -pi -e 's/broadcast 10\..+/broadcast $net.255/' /etc/network/interfaces`;
+    `perl -pi -e 's/gateway 10\..+/gateway $net.1/' /etc/network/interfaces`;
+    `perl -pi -e 's/dns-nameservers 10\..+/dns-nameservers $net.1/' /etc/network/interfaces`;
+    print `ifconfig ens3 0.0.0.0`; # This for some reason is necessary when a new address is assigned because of move
+    print `systemctl restart networking`;
 }
 my $if = `ifconfig`;
 if ($if =~ /10\.1\.1\.2/) {

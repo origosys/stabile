@@ -69,7 +69,7 @@ define([
           // Wait for applet init in 5 secs.
           waitCount += 500;
           if (waitCount > 5000) {
-              IRIGO.toaster("message", [{
+              IRIGO.toaster([{
                   message: '\If direct upload (Java) is not starting, please click here ->\
                 <object\
                 classid="java:plupload.Plupload.class"\

@@ -156,6 +156,10 @@ button.toast-close-button {
     background-color: #3498db;
 /*    background-color: #2f96b4; */
 }
+.toast-alert {
+  background-color: #3498db;
+  padding: 15px!important;
+}
 .toast-warning {
   background-color: #f89406;
 }

@@ -206,7 +206,7 @@ Image.fileTree = function(uuid, node){
 
 Image.restore = function(uuid, files){
     if(!files || !files['length']){
-        IRIGO.toaster("message", [{message: "Please pick some files to restore!"}]);
+        IRIGO.toaster([{message: "Please pick some files to restore!"}]);
         return null;
     }
     var load = function(){

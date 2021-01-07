@@ -139,8 +139,10 @@ my $info_ref = from_json($appinfo);
 my $status = $info_ref->{status};
 my $uuid = $info_ref->{uuid};
 my $dnsdomain = $info_ref->{dnsdomain};
+my $esc_dnsdomain = $dnsdomain;
+$esc_dnsdomain =~ s/\./\\./g;
 my $name = $info_ref->{name};
-$name =~ s/ //g;
+$name =~ s/ /-/g;
 
 if ($status eq 'upgrading') {
     print "Upgrading this server...\n";
@@ -210,7 +212,7 @@ if ($status eq 'upgrading') {
 
 } else {
     print "Server is $status. Looking for shellinabox...\n";
-    if (-e '$webminhome/stabile/tabs/servers/shellinaboxd') {
+    if (-e '$webminhome/stabile/shellinabox/shellinaboxd') {
 #        unless (`pgrep shellinaboxd`) {
         print "Opening ports for shellinabox...\n";
         # Disallow shellinabox access from outside
@@ -224,7 +226,7 @@ if ($status eq 'upgrading') {
         my $title = $externalip || $internalip;
         if (-e '$webminhome/stabile/tabs/servers/ShellInABox.js') {
             print "Updating terminal title to $title\n";
-            `perl -pi -e 's/^document.title = ".*";/document.title = "Term:$title";/' $webminhome/stabile/tabs/servers/ShellInABox.js`;
+            `perl -pi -e 's/^document.title = ".*";/document.title = "Term:$title";/' $webminhome/stabile/shellinabox/ShellInABox.js`;
         }
     }
     get_internalip();
@@ -259,19 +261,22 @@ RELOAD_CMD="systemctl reload $apache"
 END
 ;
                 print `echo '$getsslcfg' > /root/.getssl/$externalip.$dnsdomain/getssl.cfg'`;
-                print `letsencrypt -d $externalip.$dnsdomain --email=cert\@$dnsdomain --agree-tos --no-redirect --noninteractive --apache`;
+                `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
+                `echo "$internalip $externalip.$dnsdomain" >> /etc/hosts` unless (`grep '$externalip.$dnsdomain' /etc/hosts`); # necessary to allow getssl do its own checks
+                print `getssl -a`;
+#                print `letsencrypt -d $externalip.$dnsdomain --email=cert\@$dnsdomain --agree-tos --no-redirect --noninteractive --apache`;
             }
             if (-e "/etc/ssl/certs/stabile.crt") {
                 my $reloadapache;
                 if (!(`grep stabile /etc/$apache/sites-available/webmin-ssl.conf`)) {
-                    `perl -pi -e 's/SSLCertificateFile .+/SSLCertificateFile \/etc\/ssl\/certs\/stabile.crt/' /etc/$apache/sites-available/*ssl.conf`;
-                    `perl -pi -e 's/SSLCertificateKeyFile .+/SSLCertificateFile \/etc\/ssl\/certs\/stabile.key/' /etc/$apache/sites-available/*ssl.conf`;
-                    `perl -pi -e 's/#SSLCertificateChainFile .+/SSLCertificateFile \/etc\/ssl\/certs\/stabile.chain/' /etc/$apache/sites-available/*ssl.conf`;
+                    `perl -pi -e 's/SSLCertificateFile.+/SSLCertificateFile \/etc\/ssl\/certs\/stabile.crt/' /etc/$apache/sites-available/*ssl.conf`;
+                    `perl -pi -e 's/SSLCertificateKeyFile.+/SSLCertificateKeyFile \/etc\/ssl\/certs\/stabile.key/' /etc/$apache/sites-available/*ssl.conf`;
+                    `perl -pi -e 's/#SSLCertificateChainFile.+/SSLCertificateChainFile \/etc\/ssl\/certs\/stabile.chain/' /etc/$apache/sites-available/*ssl.conf`;
                     $reloadapache = 1;
                 }
-                `systemctl reload $apache` if ($reloadapache);
+            #    `systemctl reload $apache` if ($reloadapache);
             }
-            `systemctl reload apache2` if ($reloadapache);
+            #`systemctl reload apache2` if ($reloadapache);
         }
     }
 }

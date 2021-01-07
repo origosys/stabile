@@ -12,7 +12,9 @@ function(xhr, cookie){
         vcpuquota: null,
         externalipquota: null
     };
-    if (typeof IRIGO === 'undefined') IRIGO = [];
+    if (typeof IRIGO === 'undefined') {
+        IRIGO = {};
+    }
 
     user.load = function() {
         var url = "/stabile/users?action=listids";
@@ -85,6 +87,7 @@ function(xhr, cookie){
                 user.billto = response.items[0].billto;
                 user.appstoreurl = response.items[0].appstoreurl;
                 IRIGO.user = user;
+                if (!IRIGO.alerts) IRIGO.alerts = [];
             },
             error : function(response) {
                 console && console.log('An error occurred.', response);

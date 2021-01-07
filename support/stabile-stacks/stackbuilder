@@ -8,12 +8,16 @@ use Data::Dumper;
 use Getopt::Std;
 
 our %options=();
-Getopt::Std::getopts("rapd", \%options);
+Getopt::Std::getopts("rapdfsu", \%options);
 my $ofile = $ARGV[(scalar @ARGV)-1] if @ARGV;
-my $reinstall = 1 if ($options{r});
-my $noactivate = 1 if ($options{a});
-my $nopublish = 1 if ($options{p});
+my $rebuild = 1 if ($options{r});
+my $activate = 1 if ($options{a});
+my $publish = 1 if ($options{p});
+my $release = 1 if ($options{s});
 my $debug = 1 if ($options{d});
+my $force = 1 if ($options{f});
+my $unrelease = 1 if ($options{u});
+$release = 1 if ($unrelease);
 
 my $cwd = cwd();
 
@@ -26,13 +30,15 @@ unless ($ofile) {
         $ofile = $files[0];
         print "Using $ofile as stackfile\n";
     } else {
-        print "Usage: stackbuilder 'stackfile'\n";
+        print "Usage: stackbuilder [-a] [-p] [-r] [-d] [-f] 'stackfile'\n-a activate\n-p publish\n-r rebuild\n-s release\n-d debug\n-f force activate\n-u unrelease\n";
+        print "To force rebuild, activate, publish and release in one go use -rapsf\n";
         exit;
     }
 }
 unless (-e $ofile) {
     print "Stabile file not found: $ofile\n";
-    print "Usage: stackbuilder 'stackfile'\n";
+    print "Usage: stackbuilder [-a] [-p] [-r] [-d] [-f] 'stackfile'\n-a activate\n-p publish\n-r rebuild\n-s release\n-d debug\n-f force activate\n-u unrelease\n";
+    print "To force rebuild, activate, publish and release in one go use -rapsf\n";
     exit;
 }
 
@@ -76,7 +82,10 @@ my $summary = $config->get("SUMMARY") || '';
 my $description = $config->get("DESCRIPTION") || '';
 my $appid = $config->get("APPID") || '';
 my $dataimage = $config->get("DATAIMAGE") || '';
-my $fuelpath = '';
+my $fuelpath = ''; # Is set below if we are in a VM
+my $enginelinked = '';
+my $imageuuid = '';
+my $imageuser = '';
 
 # Check if we are on an admin server or on a regular VM
 unless (-e "/mnt/stabile/images" || -e "/stabile-images/images") {
@@ -85,11 +94,19 @@ unless (-e "/mnt/stabile/images" || -e "/stabile-images/images") {
     $fuelpath = `cat /proc/mounts | grep '/mnt/fuel'`;
     die "Unable to mount shared storage" unless ($fuelpath =~ /(\/mnt\/fuel\/pool\d+)/);
     $fuelpath = $1;
+    my $json = `curl --silent -k "https://10.0.0.1/stabile/users?action=listids"`;
+    my $json_obj = from_json($json);
+    $enginelinked = 1 if ($json_obj->{items}->[0]->{engine}->{enginelinked});
+    $json = `curl --silent -k "https://10.0.0.1/stabile/images?image=$dname.master.qcow2"`;
+    $json_obj = from_json($json);
+    $imageuuid = $json_obj->{uuid} if ($json_obj->{uuid} && $json_obj->{uuid} ne '--');
+    $imageuser = $json_obj->{user} if ($json_obj->{user} && $json_obj->{user} ne '--');
 }
 
-if (!$reinstall && -e "$cwd/$dname.master.qcow2") { # Master image already exists, try to activate and publish
-    print "Found $cwd/$dname.master.qcow2, trying to activate and publish app\n";
-
+if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists, try to activate and publish
+    print "Found $cwd/$dname.master.qcow2, not building (specify -r to force rebuild)\n";
+} elsif (!$rebuild && $imageuuid) {
+    print "$dname.master.qcow2 is already activated on engine by user $imageuser, not building (specify -r to force rebuild)\n";
 } else {
     # Load nbd
     print `rmmod nbd`;
@@ -99,13 +116,8 @@ if (!$reinstall && -e "$cwd/$dname.master.qcow2") { # Master image already exist
         # If app is based on another image, get a link to it, and mount it
         if ($baseimage) {
             my $basepath = "$cwd/$baseimage";
-            if (-e "$cwd/$baseimage") {
-                # If base image is available, do nothing
-            } elsif ($fuelpath) {
-                # If not make base image available in fuel
-                # First remove any existing base image link
-                print ">> $baseimage not found\n";
-                print ">> Asking Valve to link or copy $baseimage\n";
+            if ($fuelpath) {
+                print ">> Asking engine to link or copy $baseimage\n";
                 print qq|>> curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"|;
                 my $json = `curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"`;
                 print $json;
@@ -122,7 +134,7 @@ if (!$reinstall && -e "$cwd/$dname.master.qcow2") { # Master image already exist
                     print ">> Waiting for $basepath...\n";
                     sleep 1
                 }
-            } else {
+            } elsif (!(-e "$cwd/$baseimage")) {
                 print ">> You are trying to build an image which depends on a baseimage, $baseimage, which is not available\n";
                 exit;
             }
@@ -229,7 +241,7 @@ if (!$reinstall && -e "$cwd/$dname.master.qcow2") { # Master image already exist
     # Add user stabile
     print `chroot "/tmp/$dname" useradd stabile -b /home -s /bin/bash`;
     print `chroot "/tmp/$dname" mkdir /home/stabile`;
-    print `chroot "/tmp/$dname" chown statile:stabile /home/stabile`;
+    print `chroot "/tmp/$dname" chown stabile:stabile /home/stabile`;
 
 	# Run pre exec script
     # Stop local webmin from blocking port 10000
@@ -352,7 +364,7 @@ END
 }
 
 # Create data image if specified
-if ($dataimage && !(-e "$cwd/$dname-data.master.qcow2")) {
+if ($dataimage && !(-e "$cwd/$dname-data.master.qcow2") && (-e "$cwd/$dname.master.qcow2")) {
     print ">> Creating data image $dataimage in $cwd/$dname-data.master.qcow2...\n";
     print `qemu-img create -f qcow2 "$cwd/$dname-data.master.qcow2" $dataimage`;
     print `modprobe nbd max_part=63`;
@@ -373,7 +385,7 @@ if ($fuelpath) {
     $summary = uri_escape($summary);
     $description = uri_escape($description);
     $price = uri_escape($price);
-    $image2 = "$dname-data.master.qcow2" if ($dataimage);
+    my $image2 = "$dname-data.master.qcow2" if ($dataimage);
 
     my $imgpath = "$cwd/$dname.master.qcow2";
     # Move image unless already on shared storage
@@ -382,23 +394,58 @@ if ($fuelpath) {
         print "Moving $dname.master.qcow2 to $fuelpath\n";
         print `mv -v "$cwd/$dname.master.qcow2" $fuelpath`;
         $imgpath = "$fuelpath/$dname.master.qcow2";
+        if ($image2) {
+            print "Moving $dname-data.master.qcow2 to $fuelpath\n";
+            print `mv -v "$cwd/$dname-data.master.qcow2" $fuelpath`;
+        }
     }
 
-    unless ($noactivate) {
-        my $res = `curl --silent -k "https://10.0.0.1/stabile/images?action=activate&image=$imgpath&version=$version&name=$appname&managementlink=$managementlink&upgradelink=$upgradelink&terminallink=$terminallink&image2=$image2"`;
-        print $res;
-        $res =~ /(\S{8}-\S{4}-\S{4}-\S{4}-\S{12})$/;
-        my $uuid = $1;
-        chomp $uuid;
-        unless ($nopublish) {
-            if ($uuid) {
-                print "Trying to publish $uuid to the registry\n";
+    if ($activate) {
+        print "Trying to activate stack $dname\n";
+        if ($imageuuid && !$force) {
+            print "Not activating - this image has already been activated on this engine by user $imageuser. Specify -f if you want to force activation.\n";
+        } elsif (!(-e $imgpath)) {
+            print "Not activating - image not found. Specify -r if you want to force rebuild it.\n";
+        } else {
+            my $cmd = qq|curl --silent -k "https://10.0.0.1/stabile/images?action=activate&image=$imgpath&version=$version&name=$appname&managementlink=$managementlink&upgradelink=$upgradelink&terminallink=$terminallink&image2=$image2&force=$force"|;
+            my $res = `$cmd`;
+            print $res;
+            $res =~ /(\S{8}-\S{4}-\S{4}-\S{4}-\S{12})$/;
+            $imageuuid = $1;
+            chomp $imageuuid;
+        }
+    } elsif ( -e $imgpath) {
+        print "Your image has been built - now you should activate it (run stackbuilder again with '-a' option), in order to use it!\n";
+    }
+    if ($publish) {
+        if ($enginelinked) {
+            print "Trying to publish stack $dname\n";
+            if ($imageuuid) {
+                print "Uploading image with uuid $imageuuid to the registry\n";
                 print "Hang on - this may take a while...\n";
-                $res = `curl -k "https://10.0.0.1/stabile/images?action=publish&uuid=$uuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2"`;
-                print "$res\n";
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&force=$force"`;
+                print "$res";
             } else {
-                print "Something went wrong (did not get valid uuid $uuid) when trying to activate the image $imgpath - left it in your shared storage, please activate manually.\nUnable to publish app to the registry\n";
+                print "Something went wrong, did not get valid uuid $imageuuid - left it in your shared storage.\n";
             }
+        } else {
+            print "Not publishing - you are not in a VM, or the engine you are running on is not linked with the Registry.\n" if ($publish);
+        }
+    }
+    if ($release) {
+        if ($enginelinked) {
+            my $action = ($unrelease)?"unrelease":"release";
+            print "Trying to $action stack $dname\n";
+            if ($imageuuid) {
+                print "Moving image with uuid $imageuuid\n";
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=release&uuid=$imageuuid&force=$force&unrelease=$unrelease"`;
+                print "$res";
+            }
+            else {
+                print "Something went wrong, did not get valid uuid $imageuuid.\n";
+            }
+        } else {
+            print "Not releasing - you are not in a VM, or the engine you are running on is not linked with the Registry.\n" if ($publish);
         }
     }
 } else {

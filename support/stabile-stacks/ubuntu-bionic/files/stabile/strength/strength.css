@@ -50,7 +50,7 @@ div.item{
     -o-transition: border .25s linear, color .25s linear;
     transition: border .25s linear, color .25s linear;
     -webkit-backface-visibility: hidden;
-    width:420px;
+    width:100%;
     display:inline;
 }
 .passwordform input[type="password"]:focus,.passwordform input[type="text"]:focus{
@@ -67,7 +67,8 @@ div.item{
     transition: border 0.25s linear 0s, color 0.25s linear 0s;
 }
 .passwordform{
-    width: 525px;
+    width: 100%;
+	max-width:640px;
     /* margin: 0 auto; */
     position: relative;
 }
@@ -76,18 +77,17 @@ div.item{
 }
 .strength_meter{
     position: absolute;
-    left: 0;
     top: 1px;
     width: 100%;
     height: 43px;
     z-index:-1;
     border-radius:5px;
-    padding-right:13px;
+    padding-right:30px;
 }
 .button_strength {
     text-decoration: none;
     font-size: 13px;
-    float: left;
+	display: block;
 }
 .strength_meter div{
     width:0;
@@ -130,7 +130,7 @@ div.item{
 .strong{
     background-color: #C3FF88;
     border-color: #8DFF1C!important;
-    width:420px!important;
+    width:100%!important;
 }
 h1{
     font-size:50px;

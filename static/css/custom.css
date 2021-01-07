@@ -100,7 +100,7 @@ body.tundra  {
     width:600px;
 }
 @media screen and (max-width: 840px) {
-    #homeContent, #homeContent_splitter, #serverstab, #imagestab, #networkstab, #nodestab, #hometab_a {
+    #homeContent, #homeContent_splitter, #serverstab, #imagestab, #networkstab, #userstab, #nodestab, #hometab_a, .teaser {
         display:none;
     }
     .navbar-brand {

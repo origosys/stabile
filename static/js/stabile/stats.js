@@ -172,7 +172,7 @@ stats.data = {
 
         function loaded(response, request){
             if(!response.items){
-                IRIGO.toaster("message", [
+                IRIGO.toaster([
                     {
                         message: "No statistics available for server: " + item.name,
                         type: "message",
@@ -233,7 +233,7 @@ stats.data = {
             query:query,
             onComplete: loaded,
             onError: function(){
-                IRIGO.toaster("message", [
+                IRIGO.toaster([
                     {
                         message: "Error fetching data from server: " + item.name,
                         type: "message",

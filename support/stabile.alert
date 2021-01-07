@@ -263,8 +263,9 @@ sub updateClientUI {
         user=>$dbiuser,
         password=>$dbipasswd}) {return "Error connecting to DB"};
 
-    my $user = $domreg{$opt_g}->{'user'};
-    my $servername = $domreg{$opt_g}->{'name'};
+    my $serv = $domreg{$opt_g};
+    my $user = $serv->{'user'};
+    my $servername = $serv->{'name'};
     untie %domreg;
     if ($user) {
         my $lastcheck = ($ENV{'MON_LAST_SUCCESS'}>$ENV{'MON_LAST_FAILURE'})?$ENV{'MON_LAST_SUCCESS'}:$ENV{'MON_LAST_FAILURE'};

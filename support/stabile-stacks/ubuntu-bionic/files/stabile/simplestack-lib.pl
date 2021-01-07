@@ -278,7 +278,7 @@ sub get_results {
                 $d2 =~ tr/./-/;
                 if ($result && $result =~ /^[\[\{]/) {
                     my $fs = from_json($result);
-                    $res .= qq|<span>Storage mounted on $d:</span>\n|;
+                    $res .= qq|<div style="margin-bottom: 20px;">Storage mounted on $d:</div>\n|;
                     foreach my $fs (@{$fs}) {
                     	unless ($fs->{Filesystem} =~ /tmpfs/) {
                             my $fsname = $1 if ($fs->{Filesystem} =~ /\/dev\/(.+)/);
@@ -297,7 +297,7 @@ sub get_results {
                             } else {
                                 $bsize = $1 if ($bsize =~ /(\d+)/);
                                 my $boption = qq|<option value="$bsize">$bsize GB</option>|;
-                                $options = qq|<span class="resize-available glyphicon glyphicon-resize-full" aria-hidden="true" id="$fsname"></span> <select onchange='if (\$(this).val()!=$bsize) \$("#$d2-$fsname-resize").val(\$(this).val()); else \$("#$d2-$fsname-resize").val("");'>$boption$options</select>\n|;
+                                $options = qq|<span class="resize-available glyphicon glyphicon-resize-full" style="margin-left:20px;" aria-hidden="true" id="$fsname"></span> <select onchange='if (\$(this).val()!=$bsize) \$("#$d2-$fsname-resize").val(\$(this).val()); else \$("#$d2-$fsname-resize").val("");'>$boption$options</select>\n|;
                                 $options .= <<END
 <script>
 if (!\$("#$d2-$fsname-resize").length) {
@@ -309,7 +309,7 @@ END
                         	$res .= <<END
 <div class="row">
 <div class="col-sm-6 col-md-3">
-<div class="progress" style="height: 30px; width:100%; background-color:#CCC; border-radius:5px;" title="$fs->{Filesystem} is mounted on $fs->{Mounted}" rel="tooltip" data-placement="bottom">
+<div class="progress" style="height: 30px; margin-bottom:5px; width:100%; background-color:#CCC; border-radius:5px;" title="$fs->{Filesystem} is mounted on $fs->{Mounted}" rel="tooltip" data-placement="bottom">
   <div class="progress-bar progress-bar-$pclass" role="progressbar" style="width: $fs->{'Use%'};" aria-valuemin="0" aria-valuemax="100">
      <span style="position:absolute; left: 30px; font-size: 15px; margin-top: 8px;"><strong>$fsname:</strong> $fs->{Size}B total, $fs->{'Use%'} used.</span>
   </div>
@@ -362,7 +362,7 @@ sub list_simplestack_servers {
 sub dns_check {
     my $name = shift;
     my $check = `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscheck\&name=$name"`;
-    return ($check && $check =~ /^OK:/);
+    return ($check && $check =~ /Status=OK/);
 }
 
 1;

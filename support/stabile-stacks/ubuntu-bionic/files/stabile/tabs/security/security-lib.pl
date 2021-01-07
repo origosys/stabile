@@ -13,34 +13,42 @@ sub security {
         $limitssh = $1 if ($allow =~ /sshd: ?(.*) #stabile/);
 
         my $pwform = <<END
-    <div class="tab-pane active" id="security">
-    <div>
+    <div class="tab-pane active container" id="security" style="width:100%;">
+    <div style="margin-bottom: 20px;">
         Here you can manage basic security settings for the servers in your stack.
     </div>
-    <small>Set password for Linux user "stabile":</small>
-    <form class="passwordform" action="index.cgi?action=changelinuxpassword&tab=security" method="post" onsubmit="passwordSpinner();" accept-charset="utf-8" id="linform" autocomplete="off">
-        <span style="width:80%; display:inline-block;">
-            <input id="linuxpassword" type="password" name="linuxpassword" autocomplete="off" value="" class="password" onfocus="doStrength(this);">
-        </span>
-        <button class="btn btn-default" type="submit" id="password_button">Set!</button>
+    <form class="passwordform" id="passwordform" action="index.cgi?action=changelinuxpassword&tab=security" method="post" onsubmit="passwordSpinner(); return false;" accept-charset="utf-8" id="linform" autocomplete="off">
+    	<div class="small">Set password for Linux user "stabile":</div>
+	    <div class="row">
+    	    <div class="col-sm-10">
+        	    <input id="linuxpassword" type="password" name="linuxpassword" autocomplete="off" value="" class="password">
+   	     	</div>
+    	    <div class="col-sm-2">
+            	<button class="btn btn-default" type="submit" id="password_button">Set!</button>
+        	</div>
+    	</div>
     </form>
 END
 ;
 
         my $curip;
-        $curip = qq|<span style="float: left; font-size: 13px;">leave empty to disallow all access, your current IP is <a style="text-decoration: none;" href="#" onclick="\$('#limitssh').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#limitssh').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></span>| if ($ENV{HTTP_X_FORWARDED_FOR});
+        $curip = qq|<div style="font-size: 13px;">leave empty to disallow all access, your current IP is <a style="text-decoration: none;" href="#" onclick="\$('#limitssh').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#limitssh').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></div>| if ($ENV{HTTP_X_FORWARDED_FOR});
 
         my $curipwp;
-        $curipwp = qq|<span style="float: left; font-size: 13px;">leave empty to allow login from anywhere, your current IP is <a href="#" onclick="\$('#wplimit').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#wplimit').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></span>| if ($ENV{HTTP_X_FORWARDED_FOR});
+        $curipwp = qq|<div style="font-size: 13px;">leave empty to allow login from anywhere, your current IP is <a href="#" onclick="\$('#wplimit').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#wplimit').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></div>| if ($ENV{HTTP_X_FORWARDED_FOR});
 
         my $limitform = <<END
-    <small>Allow ssh and webmin login from:</small>
-    <form class="passwordform" action="index.cgi?action=limitssh&tab=security" method="post" onsubmit="limitSpinner();" accept-charset="utf-8" style="margin-bottom:26px;">
-        <span style="width:80%; display:inline-block;">
-            <input id="limitssh" type="text" name="limitssh" value="$limitssh" placeholder="IP address or network, e.g. '192.168.0.0/24 127.0.0.1'">
-        </span>
-        $curip
-        <button class="btn btn-default" type="submit" id="limit_button">Set!</button>
+    <form class="passwordform" id="limitsshform" action="index.cgi?action=limitssh&tab=security" method="post" onsubmit="limitSpinner(); return false;" accept-charset="utf-8" style="margin-bottom:26px;">
+	    <div class="small">Allow ssh and webmin login from:</div>
+	    <div class="row">
+ 	       <div class="col-sm-10">
+	            <input id="limitssh" type="text" name="limitssh" value="$limitssh" placeholder="IP address or network, e.g. '192.168.0.0/24 127.0.0.1'">
+	 	       $curip
+ 	       </div>
+  			<div class="col-sm-2">
+   		     	<button class="btn btn-default" type="submit" id="limit_button">Set!</button>
+            </div>
+        </div>
     </form>
     </div>
 END
@@ -62,9 +70,8 @@ END
     });
 
     function doStrength(item) {
-        return true;
-        console.log("Strengthening", '#'+ item.id);
-        \$('#'+ item.id).strength({
+        console.log("Strengthening", item);
+        \$(item).strength({
             strengthClass: 'strength',
             strengthMeterClass: 'strength_meter',
             strengthButtonClass: 'button_strength',
@@ -72,13 +79,32 @@ END
             strengthButtonTextToggle: 'Hide Password',
             id: item.id
         });
+        \$('item').val('');
     };
 
     function passwordSpinner() {
         \$("#password_button").prop("disabled", true ).html('Set! <i class="fa fa-cog fa-spin"></i>');
+        \$.post('index.cgi?action=changelinuxpassword&tab=security', \$('form#passwordform').serialize(), function(data) {}
+        ,'json'
+        ).done(function( data ) {
+            salert(data.message);
+            \$("#linuxpassword").val('').blur();
+            \$(".strength_meter > div").removeClass()
+            \$("#password_button").prop("disabled", false ).html('Set!');
+        }).fail(function() {
+            salert( "An error occurred :(" );
+        });
     }
     function limitSpinner() {
         \$("#limit_button").prop("disabled", true ).html('Set! <i class="fa fa-cog fa-spin"></i>');
+        \$.post('index.cgi?action=limitssh&tab=security', \$('form#limitsshform').serialize(), function(data) {}
+        ,'json'
+        ).done(function( data ) {
+            salert(data.message);
+            \$("#limit_button").prop("disabled", false ).html('Set!');
+        }).fail(function() {
+            salert( "An error occurred :(" );
+        });
     }
 
 END
@@ -140,14 +166,16 @@ END
             $message .= $rstatus unless ($rstatus =~ /OK:/);
             # Also allow Webmin to execute calls on remote servers
          #   `perl -pi -e 's/pass=.*/pass=$in{linuxpassword}/' /etc/webmin/servers/*.serv`; # We now use separate Webmin password
-            $message .=  "<div class=\"message\">The Linux password was changed!</div>";
+         #   $message .=  "<div class=\"message\">The Linux password was changed!</div>";
+            $message .= "The Linux password was changed!";
+        } else {
+            $message = "Please supply a password!";
         }
-        return $message;
+        return qq|Content-type: application/json\n\n{"message": "$message"}|;
 
     } elsif ($action eq 'limitssh' && defined $in{limitssh}) {
         my $limit = $in{limitssh};
         return set_limit($limit);
-
     }
 }
 
@@ -229,9 +257,9 @@ sub set_limit {
     {
         $limitssh = $1;
         if ($limitssh) {
-            $message .=  "<div class=\"message\">SSH and Webmin can be accessed from $limitssh!</div>";
+            $message .=  "SSH and Webmin can be accessed from $limitssh!";
         } else {
-            $message .=  "<div class=\"message\">SSH and Webmin access removed!</div>";
+            $message .=  "SSH and Webmin access removed!";
         }
     } else {
         $message .=  "<div class=\"message\">SSH has been manually configured - trying to reconfigure</div>";
@@ -254,7 +282,7 @@ sub set_limit {
     # Also reload on other servers
     run_command($cmd, $internalip) if (defined &run_command);
     chomp $message;
-    return $message;
+    return qq|Content-type: application/json\n\n{"message": "$message"}|;
 }
 
 1;

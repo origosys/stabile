@@ -52,7 +52,7 @@ perl -pi -e 's/images\/ubuntu-logo.png/tabs\/codiad\/logo-codiad.png/' /usr/shar
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
 # Remove "command" tab from Webmin UI
-#rm -r /usr/share/webmin/stabile/tabs/commands
+rm -r /usr/share/webmin/stabile/tabs/servers
 
 # Install cgi-node
 cd /usr/lib/cgi-bin

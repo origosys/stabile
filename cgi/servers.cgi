@@ -810,10 +810,12 @@ END
                         $mes = "Starting $dom->{'name'} ($dom->{'user'}, $dom->{'uuid'})\n";
                         print $mes if ($console);
                         $res .= $mes;
-#                        ($uiuuid, $uidisplayip, $uidisplayport, $postreply) = Start($dom->{'uuid'});
                         $postreply = Start($dom->{'uuid'});
                         print $postreply if ($console);
                         $res .= $postreply;
+#                        $mes = `REMOTE_USER=$dom->{'user'} $base/cgi/servers.cgi -a start -u $dom->{'uuid'}`;
+                        print $mes if ($console);
+                        $res .= $mes;
                         sleep 1;
                     }
                 }
@@ -831,7 +833,6 @@ END
                             print $mes if ($console);
                             $res .= $mes;
                             $mes = Stabile::Networks::Activate($networkuuid, 'activate');
-                            chomp $mes;
                             print $mes if ($console);
                             $res .= $mes;
                             sleep 1;
@@ -2002,7 +2003,7 @@ END
         $postmsg .= deletePackages($uuid);
         my $sname = $register{$uuid}->{'name'};
         utf8::decode($sname);
-        $postmsg .= deleteMonitors($uuid)?"Status=OK Deleted monitors for $sname\n":'';
+        $postmsg .= deleteMonitors($uuid)?" deleted monitors for $sname ":'';
 
         delete $register{$uuid};
         delete $xmlreg{$uuid};
@@ -2022,7 +2023,7 @@ END
 
         $main::syslogit->($user, "info", "Deleted domain $uuid from db");
         utf8::decode($name);
-        $postmsg .= "Status=OK Deleted server $name\n";
+        $postmsg .= " deleted server $name";
         $postreply = "[]";
         sleep 1;
     } else {
@@ -2112,7 +2113,7 @@ Supported parameters:
 uuid: UUID
 name: string
 user: string
-system: UUID of system this server belongs to
+system: UUID of stack this server belongs to
 autostart: true|false
 locktonode: true|false
 mac: MAC address of target node
@@ -2172,7 +2173,7 @@ END
         $uuid = $ug->create_str();
     };
     unless ($uuid && length $uuid == 36){
-        $postmsg = "Status=Error No valid uuid ($uuid), $obj->{image}\n";
+        $postmsg = "Status=Error No valid uuid ($uuid), $obj->{image}";
         return $postmsg;
     }
     $nicmac1 = $nicmac1 || $regserv->{'nicmac1'};
@@ -2363,8 +2364,8 @@ END
             $networkname3 = $networkname3 || '--';
             $nicmac3 = $nicmac3 || randomMac();
             #    $uiuuid = $uuid; # No need to update ui for new server with jsonreststore
-            $postmsg .= "OK Created new server: $name";
-            $postmsg .= "Status=OK uuid: $uuid\n" if ($console);
+            $postmsg .= "Status=OK Created new server: $name";
+            $postmsg .= ", uuid: $uuid" if ($console);
         }
         # Update status of images
         my @imgs = ($image, $image2, $image3, $image4);
@@ -2438,7 +2439,7 @@ END
             my $ug = new Data::UUID;
             $sysuuid = $ug->create_str();
             $valref->{'system'} = $sysuuid;
-            $postmsg .= "Status=OK sysuuid: $sysuuid\n" if ($console);
+            $postmsg .= "OK sysuuid: $sysuuid" if ($console);
         }
 
         # Remove domain uuid from old networks. Leave gateways alone - they get updated on next listing
@@ -2493,8 +2494,8 @@ END
         tied(%networkreg)->commit;
 
     } else {
-        $postmsg .= "Status=ERROR This image ($image) cannot be used ($imgdup)\n" if ($imgdup);
-        $postmsg .= "Status=ERROR This network ($networkname1) cannot be used ($netdup)\n" if ($netdup);
+        $postmsg .= "ERROR This image ($image) cannot be used ($imgdup) " if ($imgdup);
+        $postmsg .= "ERROR This network ($networkname1) cannot be used ($netdup)" if ($netdup);
     }
 
     my $domuser = $obj->{'user'};
@@ -2522,7 +2523,7 @@ END
                 $Stabile::Images::console = 1;
                 $main::updateUI->({tab=>"servers", user=>$user, message=>"Moving image $imagename to account: $domuser"});
                 my $nimage = Stabile::Images::Move($image, $domuser);
-                $postmsg .= $Stabile::Images::postreply;
+                chomp $nimage;
                 if ($nimage) {
                     $main::syslogit->($user, "info", "Moving $nimage to account: $domuser");
                     $register{$uuid}->{'image'} = $nimage;
@@ -2541,6 +2542,7 @@ END
                     if ($img && $img ne '--') {
                         $main::updateUI->({tab=>"servers", user=>$user, message=>"Moving $imgkey $imgname to account: $domuser"});
                         $nimage = Stabile::Images::Move($img, $domuser);
+                        chomp $nimage;
                         if ($nimage) {
                             $main::syslogit->($user, "info", "Moving $nimage to account: $domuser");
                             $register{$uuid}->{$imgkey} = $nimage;
@@ -2561,9 +2563,10 @@ END
                         my $net = $networks[$i];
                         my $netkey = $netkeys[$i];
                         my $netnamekey = $netnamekeys[$i];
-                        my $oldid = $networkreg{$net}->{'id'};
+                        my $regnet = $networkreg{$net};
+                        my $oldid = $regnet->{'id'};
                         next if ($net eq '' || $net eq '--');
-                        if ($networkreg{$net}->{'type'} eq 'gateway') {
+                        if ($regnet->{'type'} eq 'gateway') {
                             if ($oldid > 1) { # Private gateway
                                 foreach my $networkvalref (values %networkreg) { # use gateway with same id if it exists
                                     if ($networkvalref->{'user'} eq $domuser
@@ -2581,51 +2584,51 @@ END
                                     # Make a new gateway
                                     my $ug = new Data::UUID;
                                     my $newuuid = $ug->create_str();
-                                    Stabile::Networks::save($oldid, $newuuid, $networkreg{$net}->{'name'}, 'new', 'gateway', '', '', $networkreg{$net}->{'ports'}, 0, $domuser);
+                                    Stabile::Networks::save($oldid, $newuuid, $regnet->{'name'}, 'new', 'gateway', '', '', $regnet->{'ports'}, 0, $domuser);
                                     $register{$uuid}->{$netkey} = $newuuid;
-                                    $register{$uuid}->{$netnamekey} = $networkreg{$net}->{'name'};
+                                    $register{$uuid}->{$netnamekey} = $regnet->{'name'};
                                     $netdone = 1;
-                                    $main::updateUI->({tab=>"networks", user=>$user, message=>"Created gateway $networkreg{$net}->{'name'} for account: $domuser"});
-                                    $main::syslogit->($user, "info", "Created gateway $networkreg{$net}->{'name'} for account: $domuser");
+                                    $main::updateUI->({tab=>"networks", user=>$user, message=>"Created gateway $regnet->{'name'} for account: $domuser"});
+                                    $main::syslogit->($user, "info", "Created gateway $regnet->{'name'} for account: $domuser");
                                 }
                             } elsif ($oldid==0 || $oldid==1) {
                                 $netdone = 1; # Use common gateway
-                                $main::updateUI->({tab=>"networks", user=>$user, message=>"Reused network $networkreg{$net}->{'name'} for account: $domuser"});
+                                $main::updateUI->({tab=>"networks", user=>$user, message=>"Reused network $regnet->{'name'} for account: $domuser"});
                             }
                         } else {
                             my $newid = Stabile::Networks::getNextId('', $domuser);
                             $networkreg{$net}->{'id'} = $newid;
                             $networkreg{$net}->{'user'} = $domuser;
-                            if ($networkreg{$net}->{'type'} eq 'internalip'
-                                || $networkreg{$net}->{'type'} eq 'ipmapping') {
+                            if ($regnet->{'type'} eq 'internalip'
+                                || $regnet->{'type'} eq 'ipmapping') {
                                 # Deactivate network and assign new internal ip
-                                Stabile::Networks::Deactivate($networkreg{$net}->{'uuid'});
+                                Stabile::Networks::Deactivate($regnet->{'uuid'});
                                 $networkreg{$net}->{'internalip'} =
-                                    Stabile::Networks::getNextInternalIP('',$networkreg{$net}->{'uuid'}, $newid, $domuser);
+                                    Stabile::Networks::getNextInternalIP('',$regnet->{'uuid'}, $newid, $domuser);
                             }
                             $netdone = 1;
-                            $main::updateUI->({tab=>"networks", user=>$user, message=>"Moved network $networkreg{$net}->{'name'} to account: $domuser"});
-                            $main::syslogit->($user, "info", "Moved network $networkreg{$net}->{'name'} to account: $domuser");
+                            $main::updateUI->({tab=>"networks", user=>$user, message=>"Moved network $regnet->{'name'} to account: $domuser"});
+                            $main::syslogit->($user, "info", "Moved network $regnet->{'name'} to account: $domuser");
                         }
                     }
                     if ($netdone) {
                         # Finally move the server
                         $register{$uuid}->{'user'} = $domuser;
-                        $main::updateUI->({tab=>"servers", user=>$user, message=>"Moved server to account: $domuser"});
-                        $postmsg .= "Status=OK Moved server $name to account: $domuser\n";
+                        $postmsg .= "OK Moved server $name to account: $domuser";
                         $main::syslogit->($user, "info", "Moved server $name ($uuid) to account: $domuser");
+                        $main::updateUI->({tab=>"servers", user=>$user, type=>"update"});
                     } else {
-                        $postmsg .= "Status=ERROR Unable to move network to account: $domuser\n";
+                        $postmsg .= "ERROR Unable to move network to account: $domuser";
                         $main::updateUI->({tab=>"image", user=>$user, message=>"Unable to move network to account: $domuser"});
                     }
                 } else {
                     $main::updateUI->({tab=>"image", user=>$user, message=>"Could not move image to account: $domuser"});
                 }
             } else {
-                $postmsg .= "Status=ERROR No access to move server\n";
+                $postmsg .= "ERROR No access to move server";
             }
         } else {
-            $postmsg .= "Status=Error Unable to move $status server\n";
+            $postmsg .= "Error Unable to move $status server";
             $main::updateUI->({tab=>"servers", user=>$user, message=>"Please shut down before moving server"});
         }
         untie %userreg;
@@ -2751,7 +2754,7 @@ sub Move {
     if ($help) {
         return <<END
 GET:uuid,mac:
-Moves a server to a different node. Server must be running
+Moves a server to a different node (Qemu live migration). Server must be running
 END
     }
     my $dbstatus = $obj->{status};

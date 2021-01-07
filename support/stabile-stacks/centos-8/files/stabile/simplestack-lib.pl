@@ -362,7 +362,7 @@ sub list_simplestack_servers {
 sub dns_check {
     my $name = shift;
     my $check = `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscheck\&name=$name"`;
-    return ($check && $check =~ /^OK:/);
+    return ($check && $check =~ /Status=OK/);
 }
 
 1;

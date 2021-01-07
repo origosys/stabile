@@ -17,7 +17,7 @@
                         <span style="margin:7px 2px 0 0" class="pull-right">
                             <a href="https://www.origo.io/info/stabiledocs/web/dashboard/add-empty-stack/" rel="help" target="_blank" class="irigo-tooltip">help</a>
                             <a href="#home" id="home_add_empty" onclick="home.grid.addSystem();" title="Add empty Stack"><img src="/stabile/static/img/icons/server--plus.png" hspace="5"></a>
-                            <a href="#home" onclick="home.grid.refresh();home.updateVitals('update'); if (servers.grid.refresh){servers.grid.refresh();}" title="Refresh" class="pull-right float btn" style="position:absolute;right:26px;bottom:14px;z-index:500;"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
+                            <a href="#home" onclick="home.grid.refresh();home.updateVitals('update'); if (servers.grid.refresh){servers.grid.refresh();}" title="Refresh" class="pull-right float btn" style="position:absolute;right:26px;bottom:14px;z-index:500;margin-left:10px;"><img src="/stabile/static/img/ic_refresh_white_24dp_1x.png"></a>
                         </span>
 
                     </span>
@@ -167,7 +167,7 @@
                       <tr id="info_enginename_tr">
                           <td width="150"><b>Engine name:</b></td>
                           <td><span data-dojo-type="dijit.InlineEditBox" id="info_enginename_field" data-dojo-props="editor:'dijit.form.TextBox'"
-                                    onChange="home.updateEngine('updateengine');"></span>
+                                    onChange="home.updateEngine('updateenginename');"></span>
                           </td>
                       </tr>
                       <tr id="info_linkengine_tr" style="height:30px;">

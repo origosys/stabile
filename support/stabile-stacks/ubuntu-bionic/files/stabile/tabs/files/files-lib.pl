@@ -48,7 +48,7 @@ END
 # Generate and return javascript the UI for this tab needs
         my $js = <<END
     function openElfinder(sip, uuid, nfsname) {
-        var url = "/stabile/pipe/http://" + uuid + ":10000/origo/index.cgi?tab=files&action=elfinder&storageid=" + sip;
+        var url = "/stabile/pipe/http://" + uuid + ":10000/stabile/index.cgi?tab=files&action=elfinder&storageid=" + sip;
         if (nfsname) url += "&nfsname=" + nfsname;
         window.open(url, sip);
         return false;

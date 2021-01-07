@@ -115,6 +115,7 @@ sub Init {
     *do_unmount = \&privileged_action;
     *do_activate = \&privileged_action;
     *do_publish = \&privileged_action;
+    *do_release = \&privileged_action;
     *do_download = \&privileged_action;
     *do_linkmaster = \&privileged_action;
     *do_listbackups = \&privileged_action;
@@ -155,6 +156,7 @@ sub Init {
     *do_gear_unmount = \&do_gear_action;
     *do_gear_activate = \&do_gear_action;
     *do_gear_publish = \&do_gear_action;
+    *do_gear_release = \&do_gear_action;
     *do_gear_download = \&do_gear_action;
     *do_gear_linkmaster = \&do_gear_action;
     *do_gear_listbackups = \&do_gear_action;
@@ -188,12 +190,12 @@ sub Init {
 
     *Fullupdateregister = \&Updateregister;
 
-    @users;
+    @users; # global
     if ($fulllist) {
         @users = keys %userreg;
-        push @users, ("common");
+        push @users, "common";
     } else {
-        push @users, ($user, "common");
+        @users = ($user, "common");
     }
 
     untie %userreg;
@@ -267,7 +269,7 @@ sub getObj {
 
     my $obj;
     $action = $action || $h{'action'};
-    if ($action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|^download|^gear_publish|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice/) {
+    if ($action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|^release|^download|^gear_publish|^gear_release|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice/) {
         $obj = \%h;
         return $obj;
     }
@@ -355,7 +357,6 @@ sub getObj {
         domains        => $dbobj->{'domains'} || '--',
         domainnames    => $dbobj->{'domainnames'} || '--'
     };
-
     # Handle restore of files
     $obj->{'restorepath'} = $h{'restorepath'} if ($h{'restorepath'});
     $obj->{'files'} = $h{'files'} if ($h{'files'});
@@ -2119,7 +2120,7 @@ sub unlinkMaster {
 # }
 
 sub Move {
-    my ($path, $iuser, $istoragepool, $mac) = @_;
+    my ($path, $iuser, $istoragepool, $mac, $force) = @_;
     # Allow passing only image name if we are deleting an app master
     my $dspool = $stackspool;
     my $masteruser = $params{'masteruser'};
@@ -2135,16 +2136,16 @@ sub Move {
             }
         }
     }
-
-    $istoragepool = ($istoragepool eq '0' || $istoragepool)? $istoragepool: $register{$path}->{'storagepool'};
-    $mac = $mac || $register{$path}->{'mac'};
-    my $bschedule = $register{$path}->{'bschedule'};
-    my $name = $register{$path}->{'name'};
-    my $status = $register{$path}->{'status'};
-    my $type = $register{$path}->{'type'};
-    my $reguser = $register{$path}->{'user'};
-    my $regstoragepool = $register{$path}->{'storagepool'};
-    my $virtualsize = $register{$path}->{'virtualsize'};
+    my $regimg = $register{$path};
+    $istoragepool = ($istoragepool eq '0' || $istoragepool)? $istoragepool: $regimg->{'storagepool'};
+    $mac = $mac || $regimg->{'mac'};
+    my $bschedule = $regimg->{'bschedule'};
+    my $name = $regimg->{'name'};
+    my $status = $regimg->{'status'};
+    my $type = $regimg->{'type'};
+    my $reguser = $regimg->{'user'};
+    my $regstoragepool = $regimg->{'storagepool'};
+    my $virtualsize = $regimg->{'virtualsize'};
 
     my $newpath;
     my $newdirpath;
@@ -2171,7 +2172,6 @@ sub Move {
             }
         }
     }
-
     if (!$register{$path}) {
         $postreply .= "Status=ERROR Unable to move $path (invalid path, $path, $masteruser)\n" unless ($istoragepool eq '--' || $regstoragepool eq '--');
     } elsif ($type eq 'vmdk' && -s (substr($path,0,-5) . "-flat.vmdk") || -s (substr($path,0,-5) . "-s001.vmdk")) {
@@ -2179,7 +2179,6 @@ sub Move {
 # Moving an image to a different users dir
     } elsif ($iuser ne $reguser && ($status eq "unused" || $status eq "used")) {
         unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'users', key=>'username', CLOBBER=>1}, $Stabile::dbopts)) ) {return 0};
-
         my @accounts = split(/,\s*/, $userreg{$tktuser}->{'accounts'});
         my @accountsprivs = split(/,\s*/, $userreg{$tktuser}->{'accountsprivileges'});
         %ahash = ($tktuser, $userreg{$tktuser}->{'privileges'} || 'r' ); # Include tktuser in accounts hash
@@ -2215,7 +2214,8 @@ sub Move {
                         $postreply .= "Status=Error Target account $iuser cannot use node storage\n";
                     }
                 } else {
-                    my $upools = $userreg{$iuser}->{'storagepools'} || $Stabile::config->get('STORAGE_POOLS_DEFAULTS') || "0";
+                    my $reguser = $userreg{$iuser};
+                    my $upools = $reguser->{'storagepools'} || $Stabile::config->get('STORAGE_POOLS_DEFAULTS') || "0";
                     my @nspools = split(/, ?/, $upools);
                     my %ispools = map {$_=>1} @nspools; # Build a hash with destination users storagepools
                     if ($ispools{$regstoragepool}) { # Destination user has access to image's storagepool
@@ -2298,12 +2298,11 @@ sub Move {
     } else {
         $postreply .= "Status=ERROR Unable to move $path (bad status or pool $status, $reguser, $iuser, $regstoragepool, $istoragepool)\n" unless ($istoragepool eq '--' || $regstoragepool eq '--');
     }
-
     untie %userreg;
 
-    if ($alreadyexists) {
-        $postreply .= "Status=ERROR Image \"$name\" already exists\n";
-        return '';
+    if ($alreadyexists && !$force) {
+        $postreply = "Status=ERROR Image \"$name\" already exists in destination\n";
+        return $postreply;
     }
 # Request actual move operation
     elsif ($newpath) {
@@ -2315,7 +2314,6 @@ sub Move {
             my $fulldir = "$spools[$istoragepool]->{'path'}/$reguser$subdir";
             `/bin/mkdir -p "$fulldir"` unless -d $fulldir;
         }
-
         $uistatus = "moving";
         my $ug = new Data::UUID;
         my $tempuuid = $ug->create_str();
@@ -2341,7 +2339,15 @@ sub Move {
         if ($status eq "used" || $status eq "paused") {
             my $domuuid = $register{$path}->{'domains'};
             my $dom = $domreg{$domuuid};
-            $dom->{'image'} = $newdirpath;
+            if ($dom->{'image'} eq $oldpath) {
+                $dom->{'image'} = $newdirpath;
+            } elsif ($dom->{'image2'} eq $oldpath) {
+                $dom->{'image2'} = $newdirpath;
+            } elsif ($dom->{'image3'} eq $oldpath) {
+                $dom->{'image3'} = $newdirpath;
+            } elsif ($dom->{'image4'} eq $oldpath) {
+                $dom->{'image4'} = $newdirpath;
+            }
             $dom->{'mac'} = $mac if ($newstoragepool == -1);
             if ($dom->{'system'} && $dom->{'system'} ne '--') {
                 unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
@@ -2350,13 +2356,12 @@ sub Move {
                 untie %sysreg;
             }
         }
-
         my $cmd = qq|/usr/local/bin/steamExec $user $uistatus $status "$oldpath" "$newpath"|;
-        $postreply = `$cmd`;
+        `$cmd`;
         $main::syslogit->($user, "info", "$uistatus $type image $name ($oldpath -> $newpath) ($regstoragepool -> $istoragepool) ($register{$newdirpath}->{uuid})");
-        return $newdirpath;
+        return "$newdirpath\n";
     } else {
-        return '';
+        return $postreply;
     }
 
 }
@@ -2575,7 +2580,6 @@ END
     push (@busers, @billusers) if (@billusers); # We include images from 'child' users
     untie %userreg;
     unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac', CLOBBER=>1}, $Stabile::dbopts)) ) {return 0};
-
     foreach my $u (@busers) {
         my @regkeys = (tied %register)->select_where("user = '$u'");
         foreach my $k (@regkeys) {
@@ -2691,7 +2695,17 @@ END
     }
 
     if ($uuidfilter || $curimg) {
-        $json_text = to_json($uservalues[0], {pretty => 1}) if (@uservalues);
+        if (scalar @uservalues > 1) { # prioritize user's own images
+            foreach my $val (@uservalues) {
+                if ($val->{'user'} eq 'common') {
+                    next;
+                } else {
+                    $json_text = to_json($val, {pretty => 1});
+                }
+            }
+        } else {
+            $json_text = to_json($uservalues[0], {pretty => 1}) if (@uservalues);
+        }
     } else {
         $json_text = to_json(\@uservalues, {pretty => 1}) if (@uservalues);
     }
@@ -3501,8 +3515,8 @@ sub Activate {
     my ($curimg, $action, $argref) = @_;
     if ($help) {
         return <<END
-GET:image, name, managementlink, upgradelink, terminallink:
-Activate an image from fuel storage, making it available for regular engine use.
+GET:image, name, managementlink, upgradelink, terminallink, force:
+Activate an image from fuel storage, making it available for regular use.
 END
     }
     my %uargs = %{$argref};
@@ -3512,6 +3526,7 @@ END
     my $terminallink = URI::Escape::uri_unescape($uargs{'terminallink'});
     my $version = URI::Escape::uri_unescape($uargs{'version'}) || '1.0b';
     my $image2 =  URI::Escape::uri_unescape($uargs{'image2'});
+    my $force = $uargs{'force'};
 
     return "Status=ERROR image must be in fuel storage ($curimg)\n" unless ($curimg =~ /^\/mnt\/fuel\/pool(\d+)\/(.+)/);
     my $pool = $1;
@@ -3526,7 +3541,8 @@ END
     my $imagepath = $tenderpathslist[$pool] . "/$user/fuel/$ipath";
     my $newpath = $tenderpathslist[$pool] . "/$user/$npath";
     return "Status=ERROR image not found ($imagepath)\n" unless (-e $imagepath);
-    return "Status=ERROR image already exists in destination ($newpath)\n" if (-e $newpath);
+    return "Status=ERROR image already exists in destination ($newpath)\n" if (-e $newpath && !$force);
+    return "Status=ERROR image is in use ($newpath)\n" if (-e $newpath && $register{$newpath} && $register{$newpath}->{'status'} ne 'unused');
 
     my $virtualsize = `qemu-img info "$imagepath" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
     chomp $virtualsize;
@@ -3545,7 +3561,8 @@ END
         my $image2path = $tenderpathslist[$pool] . "/$user/fuel/$ipath";
         $newpath2 = $tenderpathslist[$pool] . "/$user/$npath";
         return "Status=ERROR image2 not found ($image2path)\n" unless (-e $image2path);
-        return "Status=ERROR image2 already exists in destination ($newpath2)\n" if (-e $newpath2);
+        return "Status=ERROR image2 already exists in destination ($newpath2)\n" if (-e $newpath2 && !$force);
+        return "Status=ERROR image2 is in use ($newpath2)\n" if (-e $newpath2 && $register{$newpath2} && $register{$newpath2}->{'status'} ne 'unused');
 
         my $virtualsize2 = `qemu-img info "$image2path" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
         chomp $virtualsize2;
@@ -3603,7 +3620,7 @@ END
             type => 'qcow2',
             status => 'unused',
             installable => 'true',
-            managementlink => $managementlink || '/stabile/pipe/http://{uuid}:10000/origo/',
+            managementlink => $managementlink || '/stabile/pipe/http://{uuid}:10000/stabile/',
             upgradelink => $upgradelink,
             terminallink => $terminallink,
             version => $version,
@@ -3620,12 +3637,13 @@ sub Publish {
     my ($uuid, $action, $parms) = @_;
     if ($help) {
         return <<END
-GET:image,appid,appstore:
-Publish image as app to origo.io.
+GET:image,appid,appstore,force:
+Publish a stack to registry. Set [force] if you want to force overwrite images in registry - use with caution.
 END
     }
     my $res;
     $uuid = $parms->{'uuid'} if ($uuid =~ /^\// || !$uuid);
+    my $force = $parms->{'force'};
 
     if ($isreadonly) {
         $res .= "Status=ERROR Your account does not have the necessary privilege.s\n";
@@ -3649,19 +3667,19 @@ END
             if ($imagereg{$uuid}->{'storagepool'} ne '0') {
                 $res .= "Status=OK Moving image: " . Move($imagereg{$uuid}->{'path'}, $user, 0) . "\n";
             } else {
-                $res .= "Status=OK Image is already available in app store\n";
+                $res .= "Status=OK Image is already available in registry\n";
             }
         } else {
-            $console = 1;
-            my $link = Download($imagereg{$uuid}->{'path'});
-            chomp $link;
-            $parms->{'downloadlink'} = $link;
-            $res .= "Status=OK Asking appstore to download app $parms->{'APPID'} image: $link\n";
+        #    $console = 1;
+        #    my $link = Download($imagereg{$uuid}->{'path'});
+        #    chomp $link;
+        #    $parms->{'downloadlink'} = $link; # We now upload instead
+        #    $res .= "Status=OK Asking registry to download $parms->{'APPID'} image: $link\n";
             if ($appstores) {
                 $parms->{'appstore'} = $appstores;
             } elsif ($appstoreurl =~ /www\.(.+)\//) {
                 $parms->{'appstore'} = $1;
-                $res .= "Status=OK Adding App Store: $1\n";
+                $res .= "Status=OK Adding registry: $1\n";
             }
         }
 
@@ -3669,15 +3687,90 @@ END
         $parms = Hash::Merge::merge($parms, \%imgref);
         my $postdata = to_json($parms);
         my $postres = $main::postToOrigo->($engineid, 'publishapp', $postdata);
-        chomp $postres;
-        $res .= "Status=OK $postres";
+        $res .= $postres;
         my $appid;
         $appid = $1 if ($postres =~ /appid: (\d+)/);
         my $path = $imagereg{$uuid}->{'path'};
-        $register{$path}->{'appid'} = $appid if ($appid && $register{$path} && !$register{$path}->{'appid'});
-        $res .= "Status=OK updated appid for $path to $appid\n" if ($appid);
+        if ($appid) {
+            $register{$path}->{'appid'} = $appid if ($register{$path});
+            $res .= "Status=OK Received appid $appid for $path, uploading image to registry, hang on...\n";
+            my $upres .= $main::uploadToOrigo->($engineid, $path, $force);
+            $res .= $upres;
+            my $image2 = $register{$path}->{'image2'} if ($register{$path});
+            if ($upres =~ /Status=OK/ && $image2 && $image2 ne '--') { # Stack has a data image
+                $res .= $main::uploadToOrigo->($engineid, $image2, $force);
+            }
+        } else {
+            $res .= "Status=Error Did not get an appid\n";
+        }
     } else {
         $res .= "Status=ERROR You can only publish a master image.\n";
+    }
+    return $res;
+}
+
+sub Release {
+    my ($uuid, $action, $parms) = @_;
+    if ($help) {
+        return <<END
+GET:image,appid,appstore,force,unrelease:
+Releases a stack in the registry, i.e. moves it from being a private stack only owner and owner's users can see and use to being a public stack, everyone can use. Set [force] if you want to force overwrite images in registry - use with caution.
+END
+    }
+    my $res;
+    $uuid = $parms->{'uuid'} if ($uuid =~ /^\// || !$uuid);
+    my $force = $parms->{'force'};
+    my $unrelease = $parms->{'unrelease'};
+
+    if (!$uuid || !$imagereg{$uuid}) {
+        $res .= "Status=ERROR At least specify master image uuid [uuid or path] to release.\n";
+    } elsif (!$isadmin) {
+        $res .= "Status=ERROR Your account does not have the necessary privileges.\n";
+    } elsif ($imagereg{$uuid}->{'path'} =~ /.+\.master\.qcow2$/ && $imagereg{$uuid}->{'appid'}) {
+        my $action = 'release';
+        my $targetuser = 'common';
+        if ($unrelease) {
+            $action = 'unrelease';
+            $targetuser = $user;
+        }
+        if ($appstores) {
+            $parms->{'appstore'} = $appstores;
+        } elsif ($appstoreurl =~ /www\.(.+)\//) {
+            $parms->{'appstore'} = $1;
+            $res .= "Status=OK Adding registry: $1\n";
+        }
+        $parms->{'appid'} = $imagereg{$uuid}->{'appid'};
+        $parms->{'force'} = $force if ($force);
+        $parms->{'unrelease'} = $unrelease if ($unrelease);
+        my $postdata = to_json($parms);
+        my $postres = $main::postToOrigo->($engineid, 'releaseapp', $postdata);
+        $res .= $postres;
+        my $appid;
+        $appid = $1 if ($postres =~ /Status=OK Moved (\d+)/);
+        my $path = $imagereg{$uuid}->{'path'};
+        if ($appid) {
+            $res.= "Now moving local stack to $targetuser\n";
+            # First move data image
+            my $image2 = $register{$path}->{'image2'} if ($register{$path});
+            my $newimage2 = $image2;
+            if ($image2 && $image2 ne '--' && $register{$image2}) { # Stack has a data image
+                if ($unrelease) {
+                    $newimage2 =~ s/common/$register{$image2}->{'user'}/;
+                } else {
+                    $newimage2 =~ s/$register{$image2}->{'user'}/common/;
+                }
+                $register{$path}->{'image2'} = $newimage2;
+                tied(%register)->commit;
+                $res .= Move($image2, $targetuser, '', '', 1);
+            }
+            # Move image
+            $res .= Move($path, $targetuser, '', '', 1);
+            $res .= "Status=OK $action $appid\n";
+        } else {
+            $res .= "Status=Error $action failed\n";
+        }
+    } else {
+        $res .= "Status=ERROR You can only $action a master image that has been published.\n";
     }
     return $res;
 }
@@ -4798,7 +4891,7 @@ END
                         $usedmaster = 1 if ($valref->{'master'} eq $master && $valref->{'path'} ne $path); # Check if another image is also using this master
                     }
                 }
-
+                $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$obj->{'uuid'}, status=>$uistatus});
                 $register{$path} = {
                     master=>"",
                     name=>"$iname",
@@ -4822,7 +4915,6 @@ END
                     $res .= `/usr/bin/qemu-img convert -O qcow2 "$path" "$temppath"`;
                     $res .= `if [ -f "$temppath" ]; then /bin/mv -v "$temppath" "$path"; fi`;
                 }
-
                 if ($master && !$usedmaster) {
                     $register{$master}->{'status'} = 'unused';
                     $main::syslogit->('info', "Freeing master $master");
@@ -4831,6 +4923,7 @@ END
                 $register{$path}->{'status'} = $status;
 
                 $postreply .= "Status=OK $uistatus $obj->{type} image: $obj->{name}\n";
+                $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$obj->{'uuid'}, status=>$status});
                 $main::syslogit->($user, "info", "$uistatus $obj->{type} image: $obj->{name}: $uuid");
                 1;
             } or do {$postreply .= "Status=ERROR $@\n";}
@@ -4939,7 +5032,6 @@ END
                 sleep 1; # Needed to give updateUI a chance to reload
                 $main::updateUI->({tab=>"images", uuid=>$newuuid, user=>$user, type=>"update", name=>$obj->{name}});
                 $main::syslogit->($user, "info", "Created $obj->{type} image: $obj->{name}: $newuuid");
-#                $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$newuuid, status=>'unused', message=>"OK"});
                 updateBilling("New image");
             } else {
                 $postreply .= "Status=ERROR Problem creating image: $obj->{name} of size $obj->{virtualsize}\n";

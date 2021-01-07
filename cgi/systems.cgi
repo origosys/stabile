@@ -3067,10 +3067,10 @@ sub buildSystem {
                  console => 1
              });
 
-        $postreply .= $res;
-        $sysuuid = $1 if ($res =~ /OK sysuuid: (.+)/);
+        $postreply .= "$res\n";
+        $sysuuid = $1 if ($res =~ /sysuuid: (.+)/);
         my $serveruuid;
-        $serveruuid = $1 if ($res =~ /OK uuid: (.+)/);
+        $serveruuid = $1 if ($res =~ /uuid: (.+)/);
         my $sys = $register{$sysuuid};
         if ($sysuuid && $i==$ioffset) {
             $register{$sysuuid} = {

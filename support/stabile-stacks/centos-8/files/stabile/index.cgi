@@ -14,7 +14,7 @@ if ((
 ; # OK
 } else {
     print "Content-type: text/html\n\n";
-    print qq|I'm sorry Dave, I'm afraid I can't do that $ENV{REMOTE_ADDR}, $ENV{HTTP_X_FORWARDED_FOR}\n|;
+    print qq|I'm sorry Dave, I'm afraid I can't do that $ENV{REMOTE_ADDR} $ENV{HTTP_X_FORWARDED_FOR}\n|;
     exit;
 }
 

@@ -38,12 +38,12 @@ define([
                 // destroy the existing and its children
                 //dijit.byId('createSystemDialog').destroyRecursive();
                 dialog = dijit.byId('createSystemDialog');
-                dialog.set("title", "Install Stack");
+                dialog.set("title", "Install Stack <a href=\"https://www.origo.io/info/stabiledocs/web/dashboard/new-stack/settings/\" rel=\"help\" target=\"_blank\" class=\"irigo-tooltip\">help</a>");
                 systembuilder.system.done = false;
                 systembuilder.system.reshowing = true;
             } else {
                 dialog = new dijit.Dialog({
-                    title: "Install Stack",
+                    title: "Install Stack <a href=\"https://www.origo.io/info/stabiledocs/web/dashboard/new-stack/settings/\" rel=\"help\" target=\"_blank\" class=\"irigo-tooltip\">help</a>",
                     id: 'createSystemDialog',
                     style: "width: 90%; left:5%; overflow: auto;"
                 });
@@ -63,9 +63,8 @@ define([
             function step_one(){
                 var one = [
                     '<form onsubmit="systembuilder.system.build();return false;" class="wizardForm" id="wizardForm" dojoType="dijit.form.Form">',
-                    '<table border="0" style=" left: 170px; position: absolute; top: 18px;">',
+                    '<table border="0" style="margin:0 8px 20px 8px;">',
                     '<tr id="tr_master"><td class="wizardLabel">',
-                        '<a href="https://www.origo.io/info/stabiledocs/web/dashboard/new-stack/settings/" rel="help" target="_blank" class="irigo-tooltip">help</a> ',
                         '<label>Select Stack to install:</label>',
                         '</td><td class="wizardLabel">',
                         '<select id="wizard_master" />',
@@ -414,6 +413,7 @@ define([
                 var appid = item[0].appid[0];
                 if (appid && appid!='--') { // && IRIGO.user.enginelinked) {
                     console.log("loading app", appid);
+                    systembuilder.currentManagementlink = item[0].managementlink;
                     systembuilder.system.prepareSystem(appid);
                 } else {
                     console.log("loading unknown app", item[0].managementlink[0]);
@@ -423,12 +423,15 @@ define([
                         usys.upgradelink = item[0].upgradelink[0];
                         if (item[0].terminallink) usys.terminallink = item[0].terminallink[0];
                         if (item[0].image2) usys.image2 = item[0].image2[0];
+                        systembuilder.currentManagementlink = item[0].managementlink[0];
                         systembuilder.system.loadSystem(usys);
                     } else {
+                        systembuilder.currentManagementlink = '';
                         systembuilder.system.loadSystem();
                     }
                 }
             } else {
+                systembuilder.currentManagementlink = '';
                 console.log("no master selected");
             }
         },
@@ -593,10 +596,13 @@ define([
             }
             if (sys_tpl && sys_tpl.managementlink && sys_tpl.managementlink!='' && sys_tpl.upgradelink && sys_tpl.upgradelink!='') {
                 dijit.byId('wizard_managementlink').set("value", sys_tpl.managementlink);
-                document.getElementById("wizardTitle").innerHTML += " <span class=\"alert alert-info small\" title=\"This stack may be managed by clicking the 'manage' button after installing\" style=\"float:right; font-size:13px; padding:8px\">This stack is manageable and upgradable</span>";
+                document.getElementById("wizardTitle").innerHTML += " <span class=\"alert alert-info small teaser\" title=\"This stack may be managed by clicking the 'manage' button after installing\" style=\"float:right; font-size:13px; padding:8px\">This stack is manageable and upgradable</span>";
             } else if (sys_tpl && sys_tpl.managementlink && sys_tpl.managementlink!='') {
                 dijit.byId('wizard_managementlink').set("value", sys_tpl.managementlink);
-                document.getElementById("wizardTitle").innerHTML += " <span class=\"alert alert-info small\" title=\"This stack may be managed by clicking the 'manage' button after installing\" style=\"float:right; font-size:13px; padding:8px\">This stack is manageable</span>";
+                document.getElementById("wizardTitle").innerHTML += " <span class=\"alert alert-info small teaser\" title=\"This stack may be managed by clicking the 'manage' button after installing\" style=\"float:right; font-size:13px; padding:8px\">This stack is manageable</span>";
+            } else if (systembuilder.currentManagementlink) {
+                dijit.byId('wizard_managementlink').set("value", systembuilder.currentManagementlink);
+                document.getElementById("wizardTitle").innerHTML += " <span class=\"alert alert-info small teaser\" title=\"This stack may be managed by clicking the 'manage' button after installing\" style=\"float:right; font-size:13px; padding:8px\">This stack is manageable</span>";
             }
             document.getElementById("wizardTitle").innerHTML = "<h3>" + document.getElementById("wizardTitle").innerHTML + "</h3>";
             if (sys_tpl && sys_tpl.name) {
@@ -606,7 +612,7 @@ define([
                     if (thumb.indexOf("http") != 0) thumb = "https://www.origo.io" + thumb;
                     desc += '<div style="text-align:center; margin-bottom:20px;"><img style="max-height:80px;" src="' + thumb + '"></div>';
                 }
-                desc += sys_tpl.description;
+                desc += sys_tpl.description || 'This stack is waiting for a nice description from its owner...';
                 document.getElementById("wizardHelp").innerHTML = desc;
             } else {
                 document.getElementById("wizardHelp").innerHTML =
@@ -695,7 +701,7 @@ define([
         },
 
         upgrade: function(internalip) {
-            IRIGO.toaster("message", [{
+            IRIGO.toaster([{
                 message: "Hang on, upgrading your app...",
                 type: "message",
                 duration: 2000
@@ -709,7 +715,7 @@ define([
                 handleAs : "json",
                 load: function(response) {
                     if (response.message) {
-                        IRIGO.toaster("message", [{
+                        IRIGO.toaster([{
                             message: response.message,
                             type: "message",
                             duration: 2000
@@ -823,7 +829,7 @@ define([
                         home.monitoringGrid.refresh();
                         home.updateUsage();
 
-                        var oq = /\S+=ERROR (Over quota .+)/.exec(data);
+                        var oq = /\S+=ERROR (Over quota .+)/i.exec(data);
                         var overquota;
                         if (oq && oq.length>1) overquota = oq[1];
 
@@ -832,19 +838,21 @@ define([
                             console.log("Over quota", overquota);
                             dialog.hide();
                         } else if (managementlink && start) {
-                            var n = /Status=OK Network .* saved: (\S+)/.exec(data);
-                            var errors = /\S+=ERROR (.+)/.exec(data);
+                            var n = /Status=OK Network .* saved: (\S+)/is.exec(data);
+                            var errors = /\S+=ERROR (.+)/i.exec(data);
                             if (errors && errors.length>1) {
                                 IRIGO.toast("Error: " + errors[1]);
                                 dialog.hide();
                             } else if (n && n.length>1) {
+                                console.log("managing", data, n);
                                 var l = managementlink.replace(/\{uuid\}/, n[1]);
                                 if (!$('#createSystemDialog').is(":hidden")) systembuilder.system.manage(l, null, name, sysuuid);
                             } else {
-                                console.log("management link", data, n);
+                                console.log("not managing", data, n);
                                 dialog.hide();
                             }
                         } else {
+                            console.log("not managing", managementlink, start);
                             dialog.hide();
                         }
 
@@ -864,6 +872,7 @@ define([
                 var deferred = dojo.xhrPost(xhrArgs);
                 //console.log("Building system", master, name, memory, vcpus, instances, network);
             } else {
+                console.log("systembulder done");
                 dialog.hide();
             }
 

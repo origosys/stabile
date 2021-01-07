@@ -15,16 +15,11 @@ sub codiad {
         } else {
             ;# "Already patched\n";
         }
-
         my $form;
-
-
         # Redirect to upgrade page if still upgrading
         if (-e "/tmp/restoring") {
             $form .=  qq|<script>loc=document.location.href; setTimeout(function(){document.location=loc;}, 1500); </script>|;
         }
-
-
         $form .= <<END
     <div class="tab-pane" id="codiad">
         <div>

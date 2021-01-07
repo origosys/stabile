@@ -9,10 +9,10 @@ perl -pi -e "s/sda/vda/g;" /etc/fstab
 # Simple script to start shellinabox
 bash -c 'echo "[Unit]
 DefaultDependencies=no
-Description=Shellinabox for Origo Compute
+Description=Shellinabox for Origo Stabile
 
 [Service]
-ExecStart=/usr/share/webmin/stabile/tabs/servers/shellinaboxd -b -t -n --no-beep --static-file=favicon.ico:/usr/share/webmin/stabile/images/icons/favicon.ico --static-file=ShellInABox.js:/usr/share/webmin/stabile/tabs/servers/ShellInABox.js
+ExecStart=/usr/share/webmin/stabile/shellinabox/shellinaboxd -b -t -n --no-beep --static-file=favicon.ico:/usr/share/webmin/stabile/images/icons/favicon.ico --static-file=ShellInABox.js:/usr/share/webmin/stabile/shellinabox/ShellInABox.js
 TimeoutSec=15
 RemainAfterExit=yes
 Type=forking
@@ -21,10 +21,6 @@ Type=forking
 WantedBy=multi-user.target" > /etc/systemd/system/stabile-shellinabox.service'
 chmod 664 /etc/systemd/system/stabile-shellinabox.service
 systemctl enable stabile-shellinabox.service
-
-# Install getssl
-curl --silent https://raw.githubusercontent.com/srvrco/getssl/master/getssl > /usr/local/bin/getssl
-chmod 711 /usr/local/bin/getssl
 
 # For debugging - remove before release
 #echo "stabile:stabile" | chpasswd

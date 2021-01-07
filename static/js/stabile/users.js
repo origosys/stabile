@@ -61,7 +61,11 @@ define([
         ],
 
         dialogStructure : [
-            { field : "username", name : "Username",    type : "dijit.form.ValidationTextBox", attrs: {required:"true"}},
+            { field : "username", name : "Username",    type : "dijit.form.ValidationTextBox", attrs: {
+                    required: "true",
+                    onChange: "if ((this.value.indexOf('@')!=-1) && $('#email').val()=='') {$('#email').val(this.value);}"
+                }
+            },
             { field : "password", name : "Password",    type : "dijit.form.TextBox", attrs: {type:"password"}},
             { field : "fullname", name : "Full name", type: "dijit.form.ValidationTextBox", attrs: {regExp: ".+", required:true}},
             { field : "email", name : "Email", type: "dijit.form.ValidationTextBox", attrs: {regExp: ".+", required:true}},

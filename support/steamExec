@@ -78,7 +78,7 @@ if (lc($arg1) eq "backupallimages" ) {
      backupAllImages();
 } elsif (lc($arg1) eq "backupengine" ) {
      if ($config->get('ENGINE_LINKED')) {
-         debuglog("Backing up engine configuragion...");
+         debuglog("Backing up engine configuration...");
          print `echo users/backupengine | stash`;
      } else {
          print "Engine not linked. Not backing up configuration.\n";
@@ -557,50 +557,50 @@ if (lc($arg1) eq "backupallimages" ) {
             my $macip = $1;
             $localpath = $2;
             $localpath2 = $path1;
-            my $md5sum;
-            my $md5sum2;
+        #    my $md5sum;
+        #    my $md5sum2;
 
             my $esc_path1 = shell_esc_chars($path1);
             my $esc_localpath = shell_esc_chars($localpath);
             my $esc_path2 = "$macip:$esc_localpath";
 
             $res .= qq[Moving: /usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"\n];
-            $md5sum = (split(" ", `/usr/bin/md5sum "$path1"`))[0];
-            $res .= "MD5: $md5sum\n";
+        #    $md5sum = (split(" ", `/usr/bin/md5sum "$path1"`))[0];
+        #    $res .= "MD5: $md5sum\n";
             $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"`;
             $res .= `$sshcmd $macip "/bin/chmod 666 $esc_localpath"`;
-            $md5sum2 = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath"`))[0];
-            $res .= "MD5: $md5sum2\n";
+        #    $md5sum2 = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath"`))[0];
+        #    $res .= "MD5: $md5sum2\n";
             $localstatus = $oldstatus;
             $localstatus2 = "unused";
-            if ($md5sum && ($md5sum eq $md5sum2)) {
+        #    if ($md5sum && ($md5sum eq $md5sum2)) {
                 unlink $path1;
-                $localstatus2 = ""; # The image being left behind is removed from db after moving to new location
-            }
+                $localstatus2 = "removed"; # The image being left behind is removed from db after moving to new location
+        #    }
     # From node
         } elsif ($path1 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
             my $macip = $1;
             $localpath2 = $2;
             $localpath = $path2;
-            my $md5sum;
-            my $md5sum2;
+        #    my $md5sum;
+        #    my $md5sum2;
 
             my $esc_localpath = shell_esc_chars($localpath);
             my $esc_localpath2 = shell_esc_chars($localpath2);
             my $esc_path1 = "$macip:$esc_localpath2";
             my $esc_path2 = shell_esc_chars($path2);
 
-            $md5sum = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath2"`))[0];
-            $res .= "MD5: $md5sum\n";
+        #    $md5sum = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath2"`))[0];
+        #    $res .= "MD5: $md5sum\n";
             $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" "$esc_path1" $esc_path2`;
-            $md5sum2 = (split(" ", `/usr/bin/md5sum "$path2"`))[0];
-            $res .= "MD5: $md5sum2\n";
+        #    $md5sum2 = (split(" ", `/usr/bin/md5sum "$path2"`))[0];
+        #    $res .= "MD5: $md5sum2\n";
             $localstatus = $oldstatus;
             $localstatus2 = "unused";
-            if ($md5sum && ($md5sum eq $md5sum2)) {
+        #    if ($md5sum && ($md5sum eq $md5sum2)) {
                 `$sshcmd $macip "/usr/bin/unlink $esc_localpath2"`;
-                $localstatus2 = ""; # The image being left behind is removed from db after moving to new location
-            }
+                $localstatus2 = "removed"; # The image being left behind is removed from db after moving to new location
+        #    }
         # Update billing
             $newvirtualsize = getVirtualSize($path2);
             $newvirtualsize2 = 0;
@@ -799,17 +799,23 @@ if (lc($arg1) eq "backupallimages" ) {
     }
 
     sleep 1;
-    updateImageStatus($localpath, $localstatus, $newvirtualsize, $newbackupsize) if ($localpath);
-    updateImageStatus($localpath2, $localstatus2, $newvirtualsize2, $newbackupsize2) if ($localpath2);
+    if ($localpath) {
+        debuglog("done: $arg1 : $localstatus : $localpath");
+        updateImageStatus($localpath, $localstatus, $newvirtualsize, $newbackupsize);
+    }
+    if ($localpath2) {
+        debuglog("done2: $arg1 : $localstatus2 : $localpath2");
+        updateImageStatus($localpath2, $localstatus2, $newvirtualsize2, $newbackupsize2);
+    }
 
-    updateClientUI($arg1, $localpath, $localstatus, $dsnap1);
+#    updateClientUI($arg1, $localpath, $localstatus, $dsnap1);
     my $uires = $main::updateUI->({user=>$arg1, tab=>"images", path=>$localpath, status=>$localstatus, snap1=>$dsnap1, type=>"update"});
 #    debuglog("Updating UI with user=>$arg1 path=>$localpath, status=>$localstatus, $uires");
 
     if ($localpath2 && ($status =~ /cloning|copying|converting|moving|restoring/)) {
 #        updateClientUI($arg1, $localpath2, $localstatus2);
         $uires = $main::updateUI->({user=>$arg1, tab=>"images", path=>$localpath2, status=>$localstatus, type=>"update"});
-#        debuglog("Updating UI with user=>$arg1 path=>$localpath2, status=>$localstatus, $uires");
+#        debuglog("Updating UI with user=>$arg1 path=>$localpath2, status=>$localstatus2, $uires");
     }
 
     print $res if ($res);
@@ -821,6 +827,7 @@ if (lc($arg1) eq "backupallimages" ) {
 exit 0;
 
 sub updateClientUI {
+    return; # obsolete
     my ($username, $dpath, $dstatus, $snap1) = @_;
     if ($username) {
 
@@ -952,12 +959,12 @@ sub updateImageStatus {
 	my $newvsize = $_[2]; # Size of image has changed
 	my $newbsize = $_[3]; # Size of image's backup has changed
 	return unless ($imagepath);
-    if (-e $imagepath) {
-        print "Updating image $imagepath, $imagestatus, $newvsize, $newbsize\n";
-    } else {
-        print "Not updating image (not found) $imagepath, $imagestatus, $newvsize, $newbsize\n";
-        return;
-    }
+    # if (-e $imagepath) {
+    #     print "Updating image $imagepath, $imagestatus, $newvsize, $newbsize\n";
+    # } else {
+    #     print "Not updating image (not found) $imagepath, $imagestatus, $newvsize, $newbsize\n";
+    #     return;
+    # }
 
     unless (tie %imagereg,'Tie::DBI', {
         db=>'mysql:steamregister',
@@ -1016,6 +1023,7 @@ sub updateImageStatus {
         syslogit('info', "Deleting $imagepath from DB (no status)");
         delete $imagereg{$imagepath};
     }
+    tied(%imagereg)->commit;
     untie %imagereg;
     if ((defined $newvsize) || (defined $newbsize)) {
         updateBilling($imageuser) if ($arg1 !~ /\//);

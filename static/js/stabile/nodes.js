@@ -346,7 +346,7 @@ nodes.saveDefaultNodeIdentity = function(){
         url: "/stabile/nodes?action=setdefaultnodeidentity&hid=" + hypervisorId + "&sleepafter=" + sleepafter,
         load: function(response) {
             // FIXME: clean up this when ready at the server side
-            IRIGO.toaster("message", [{
+            IRIGO.toaster([{
                 message: response,
                 type: "message",
                 duration: 5000

@@ -128,6 +128,7 @@ define([
                     "items": [{restorefile:dijit.byId("enginerestore").value, engineuser:user.engineuser}]
                 };
             } else if (!user.enginelinked) {
+                if (!dojo.byId('irigouser')) return;
                 irigouser = dojo.byId('irigouser').value;
                 irigopwd = dojo.byId('irigopwd').value;
                 data = [{user:irigouser, pwd:irigopwd, enginename:enginename,
@@ -139,8 +140,9 @@ define([
             }
             if (!action) {
                 $('#linkenginebutton').html('Update&hellip; <i class="fa fa-cog fa-spin"></i>');
-            } else if (action == 'updateengine') {
-                if (enginename == IRIGO.user.enginename) return; // do nothing if enginename not changes
+            } else if (action == 'updateenginename') {
+                if (enginename == IRIGO.user.enginename) return; // do nothing if enginename not changed
+                else action = 'updateengine';
             } else {
                 $('#' + action + 'button').html($('#' + action + 'button').html() + '&hellip; <i class="fa fa-cog fa-spin"></i>');
             }
@@ -200,7 +202,7 @@ define([
                         else
                         	message = response;
                     }
-                    IRIGO.toaster("message", [{
+                    IRIGO.toaster([{
                         message: message,
                         type: "message",
                         duration: 3000
@@ -274,7 +276,7 @@ define([
             if (!user.enginelinked) {
                 home.linkEngineDialog.set('title',"Link this engine to Stabile Registry " + helplink);
             } else {
-                home.linkEngineDialog.set('title',"Update Engine linking in registry " + helplink);
+                home.linkEngineDialog.set('title',"Engine linking " + helplink);
             }
             var one = [
                 '<form method="#home" onsubmit="home.updateEngine();return false;" class="wizardForm" id="linkengineForm" dojoType="dijit.form.Form">',
@@ -287,7 +289,7 @@ define([
                 '<tr id="tr_enginename"><td class="wizardLabel">',
                 '<label>Engine name:</label>',
                 '</td><td class="wizardLabel">',
-                '<input id="enginename" style="width:280px;" value="' + (user.enginename?user.enginename:user.username+"'s Engine") + '" />',
+                '<input id="enginename" style="width:280px;" readonly disabled value="' + (user.enginename?user.enginename:user.username+"'s Engine") + '" />',
                 '</td></tr>'].join('');
             if (!user.enginelinked) {
                 one += [
@@ -317,7 +319,7 @@ define([
                 '<tr id="tr_engineuser"><td class="wizardLabel" >',
                 '<label>Engine owner:</label>',
                 '</td><td class="wizardLabel">',
-                '<input id="enginenuser" style="width:280px;" readonly disabled value="' + (user.engineuser?user.engineuser:'') + '" />',
+                '<input id="engineuser" style="width:280px;" readonly disabled value="' + (user.engineuser?user.engineuser:'') + '" />',
                 '</td></tr>',
                 '<tr id="tr_enginerestore"><td class="wizardLabel">',
                 '<label>Restore config and DB:</label>',
@@ -327,6 +329,7 @@ define([
                 ' onClick="home.restoreEngine();"',
                 '>',
                 'Restore&hellip;',
+
                 '</button>',
                 '</td></tr>',
                 '<tr><td colspan="2">&nbsp;</td></tr>',
@@ -334,13 +337,14 @@ define([
                 '<button id="updateenginebutton" class="btn btn-sm btn-success linkengine" type="button"',
                 ' onClick="home.updateEngine(\'updateengine\');"',
                 '>',
-                'Update',
+                'Push config',
                 '</button> ',
-                // '<button id="backupenginebutton" class="btn btn-sm btn-primary linkengine" type="button"',
-                // ' onClick="home.updateEngine(\'backupengine\');"',
-                // '>',
-                // 'Backup config',
-                // '</button> ',
+
+                '<button id="backupenginebutton" class="btn btn-sm btn-primary linkengine" type="button"',
+                ' onClick="home.updateEngine(\'backupengine\');"',
+                '>',
+                'Backup config and DB',
+                '</button> ',
                 '<button id="linkenginebutton" class="btn btn-sm btn-danger linkengine" type="button"',
                 ' onClick="home.updateEngine();"',
                 '>',
@@ -1836,7 +1840,7 @@ define([
                 });
             }
             else{
-                IRIGO.toaster("message", [{
+                IRIGO.toaster([{
                     message: "Nothing new to commit!",
                     type: "message",
                     duration: 3000
@@ -2013,28 +2017,28 @@ define([
             var issystem = item.issystem;
             var remove_button = grid.actionButton({'action':"delete_system", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title': 'remove system', 'type': 'system'});
+                'title': 'remove system', 'type': 'stack'});
             var delete_button = grid.actionButton({'action':"removesystem", 'uuid':uuid, 'confirm': true,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title': 'completely delete system and delete associated servers, images and connections', 'type': 'system'});
+                'title': 'completely delete stack and delete associated servers, images and connections', 'type': 'stack'});
             var start_button = grid.actionButton({'action':"start", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "start/resume" + (item.issystem?" all":""), 'type': 'system'});
+                'title' : "start/resume" + (item.issystem?" all":""), 'type': 'stack'});
             var shutdown_button = grid.actionButton({'action':"shutdown", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "shutdown" + (item.issystem?" all":""), 'type': 'system'});
+                'title' : "shutdown" + (item.issystem?" all":""), 'type': 'stack'});
             var suspend_button = grid.actionButton({'action':"suspend", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "suspend" + (item.issystem?" all":""), 'type': 'system'});
+                'title' : "suspend" + (item.issystem?" all":""), 'type': 'stack'});
             var resume_button = grid.actionButton({'action':"resume", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "resume" + (item.issystem?" all":""), 'type': 'system'});
+                'title' : "resume" + (item.issystem?" all":""), 'type': 'stack'});
             var destroy_button = grid.actionButton({'action':"destroy", 'uuid':uuid, 'confirm': true,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "pull the plug" + (item.issystem?" on all":""), 'type': 'system'});
+                'title' : "pull the plug" + (item.issystem?" on all":""), 'type': 'stack'});
             var backup_button = grid.actionButton({'action':"backup", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title' : "backup" + (item.issystem?" all":""), 'type': 'system'});
+                'title' : "backup" + (item.issystem?" all":""), 'type': 'stack'});
 
 
             var buttons = "";
@@ -2296,7 +2300,7 @@ define([
                 )
             }
             console.log(msg);
-            IRIGO.toaster("message", [{message: msg, type: "message",duration: 2000}]);
+            IRIGO.toaster([{message: msg, type: "message",duration: 2000}]);
 
         }
     }
@@ -2313,7 +2317,7 @@ define([
                 setTimeout(function() {document.location = url},700)
                 var msg = "Switching to engine " + url;
                 console.log(msg, url);
-                IRIGO.toaster("message", [{message: msg, type: "message",duration: 2000}]);
+                IRIGO.toaster([{message: msg, type: "message",duration: 2000}]);
             }
         }
     }
@@ -2783,6 +2787,7 @@ Engine linked to Stabile Registry: " + ((user.enginelinked)?"yes":"no") + ((user
             }]);
             if (rawdata.length<2) home.chart_cpu.updateOptions({xaxis:{ max: 1 }});
             else if (rawdata[rawdata.length-2][0] == null) home.chart_cpu.updateOptions({xaxis:{ max: rawdata[rawdata.length-2][1] }}); // update x-axis to compensate for possible missing last data point
+            home.chart_cpu.resetSeries(); // reset zoom - for some reason it gets bungled for this chart
         } else {
             home.chart_cpu.updateOptions({noData:{text:"No data"}, series:[]})
         }
@@ -2850,6 +2855,7 @@ Engine linked to Stabile Registry: " + ((user.enginelinked)?"yes":"no") + ((user
           data.push({"x": item[1], "y": item[0]})
         }
       )
+//      return {series: [{name: "name", data: data}]};
       return data;
     };
 

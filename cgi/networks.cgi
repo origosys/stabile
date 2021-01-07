@@ -447,6 +447,21 @@ END
     return $res;
 }
 
+sub do_dnsupdate {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET:name:
+Updates CNAME records pointing to a A record, to point to the given 'name' in the the subdomain belonging to the the registering engine.
+END
+    }
+
+    my $res;
+    $res .= header('text/plain') unless $console;
+    $res .= "Status=" . $main::dnsUpdate->($engineid, $params{'name'}, $user);
+    return $res;
+}
+
 sub do_dnscheck {
     my ($uuid, $action) = @_;
     if ($help) {
@@ -461,7 +476,9 @@ END
     $res .= header('text/plain') unless $console;
     my $name = $params{'name'};
     $name = $1 if ($name =~ /(.+)\.$dnsdomain$/);
-    if ($name =~ /^\S+$/ && !(`host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/)
+    if (!$enginelinked) {
+        $res .= "Status=ERROR You cannot create DNS records - your engine is not linked.\n";
+    } elsif ($name =~ /^\S+$/ && !(`host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/)
         && $name ne 'www'
         && $name ne 'mail'
         && $name ne 'info'
@@ -491,7 +508,7 @@ END
 
     my $res;
     $res .= header('text/plain') unless $console;
-    $res .= "Status=" . $main::dnsDelete->($engineid, $params{'name'}, $user);
+    $res .= $main::dnsDelete->($engineid, $params{'name'}, $user);
     return $res;
 }
 
@@ -631,6 +648,10 @@ END
     			    } elsif ($action eq "activateall") {
     				    $caction = "activate";
         			}
+                    # TODO: investigate why this is necessary - if we don't do it, networks are not activated
+                    $user = $valref->{'user'};
+                    do_list($uuid, 'list');
+
                     my $res = Activate($uuid, $caction);
                     if ($res =~ /\w+=(\w+) / ) {
                         $register{$uuid}->{'status'} = $1 unless (uc $1 eq 'ERROR');
@@ -824,7 +845,7 @@ END
 #    }
 
     if ($running) {
-        $main::syslogit->($user, 'info', "Killing dnsmasq 1: $id");
+        $main::syslogit->($user, 'info', "HUPing dnsmasq 1: $id");
         eval {`/usr/bin/pkill -HUP -f "stabile-$id.pid"`; 1;} or do {$error .= "Status=ERROR Problem configuring dhcp for $name $@\n";};
     } else {
         eval {`/usr/sbin/dnsmasq $options`;1;} or do {$error .= "Status=ERROR Problem configuring dhcp for $name $@\n";};
@@ -879,7 +900,7 @@ sub removeDHCPAddress {
 
     if ($keepup) {
         if ($running) {
-            $main::syslogit->($user, 'info', "Killing dnsmasq 2: $id");
+            $main::syslogit->($user, 'info', "HUPing dnsmasq 2: $id");
             eval {`/usr/bin/pkill -HUP -f "stabile-$id.pid"`; 1;} or do {$error .= "Status=ERROR Problem configuring dhcp for $name $@\n";};
         }
     } else {
@@ -1031,7 +1052,7 @@ END
                 } else {
                     $postreply .= "Status=OK Allocated external IP: $externalip\n" unless ($regnet->{'externalip'} eq $externalip);
                     if ($dodns) {
-                        $postreply .= "Status=OK Trying to register DNS " . $main::dnsCreate->($engineid, $externalip, $externalip, 'A') . "\n" unless (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
+                        $postreply .= "Status=OK Trying to register DNS " . $main::dnsCreate->($engineid, $externalip, $externalip, 'A') unless (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
                     }
                 }
                 $internalip = getNextInternalIP($internalip, $uuid, $id);
@@ -1308,6 +1329,10 @@ END
                 $externalip =~ /\d+\.\d+\.\d+\.(\d+)/; my $ipend = $1;
                 eval {`/sbin/ifconfig $extnic:$id-$ipend $externalip/$extsubnet up`; 1;}
                     or do {$e=1; $postreply .= "Status=ERROR Problem adding interface $@\n";};
+                unless (`ip addr show dev $extnic` =~ /$externalip/) {
+                    $e=10;
+                    $postreply .= "Status=ERROR Problem adding interface\n";
+                }
                 if ($ports && $ports ne "--") { # Port mapping is defined
                     my @portslist = split(/, ?| /, $ports);
                     foreach $port (@portslist) {
@@ -1327,33 +1352,37 @@ END
 
                         if ($port>1 || $port<65535) {
                             eval {`/sbin/iptables -A PREROUTING -t nat -p tcp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
-                                or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                                or do {$e=2; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                             eval {`/sbin/iptables -A PREROUTING -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
-                                or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                                or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                         }
                     }
                     # When receiving packet from client, if it's been routed (, and outgoing interface) is the external interface, map.
 #                    eval {`/sbin/iptables -I POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
                     unless ($Stabile::disablesnat) {
                         eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
-                            or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            or do {$e=4; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                     }
                     eval {`/sbin/iptables -D INPUT -d $externalip -j DROP`; 1;} # Drop traffic to all other ports
-                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                        or do {$e=5; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                     eval {`/sbin/iptables -A INPUT -d $externalip -j DROP`; 1;} # Drop traffic to all other ports
-                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                        or do {$e=6; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                 } else {
                     eval {`/sbin/iptables -A PREROUTING -t nat -d $externalip -j DNAT --to $internalip`; 1;}
-                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                        or do {$e=7; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
 
                     # When receiving packet from client, if it's been routed (, and outgoing interface is the external interface), map.
 #                    eval {`/sbin/iptables -I POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
                     unless ($Stabile::disablesnat) {
                         eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
-                            or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            or do {$e=8; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                     }
                 }
-                $astatus = "up" unless ($e);
+                if ($e) {
+                    $main::syslogit->($user, 'info', "Problem $action network $uuid ($name, $id): $@");
+                } else {
+                    $astatus = "up"
+                }
             }
         } elsif ($type eq "externalip") {
             my $route = `/sbin/ip route`;

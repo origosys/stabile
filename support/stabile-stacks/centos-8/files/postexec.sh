@@ -3,6 +3,10 @@
 # This script is executed in the image chroot
 echo "Performing post-install operations"
 
+# Install getssl
+curl --silent https://raw.githubusercontent.com/srvrco/getssl/master/getssl > /usr/local/bin/getssl
+chmod 711 /usr/local/bin/getssl
+
 # Install webmin module
 # Include all the modules we want installed for this app
 cd /tmp/files/

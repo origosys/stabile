@@ -42,11 +42,10 @@ END
     `cp /etc/sysconfig/network-scripts/ifcfg-eth0 /root/ifcfg-eth0.bak`;
     `echo "$interfaces" > /etc/sysconfig/network-scripts/ifcfg-eth0`;
 } else {
-    `perl -pi -e 's/IPADDR=.+/IPADDR=$ip/ unless (\$a); \$a=1;' /etc/sysconfig/network-scripts/ifcfg-eth0`;
-    `perl -pi -e 's/NETMASK=.+/NETMASK=255.255.255.0/ unless (\$a); \$a=1;' /etc/sysconfig/network-scripts/ifcfg-eth0`;
-    `perl -pi -e 's/NETWORK=.+/NETWORK=$net.0/ unless (\$a); \$a=1;' /etc/sysconfig/network-scripts/ifcfg-eth0`;
-    `perl -pi -e 's/BROADCAST=.+/BROADCASE=$net.255/ unless (\$a); \$a=1;' /etc/sysconfig/network-scripts/ifcfg-eth0`;
-    `perl -pi -e 's/GATEWAY=.+/GATEWAY=$net.1/ unless (\$a); \$a=1;' /etc/sysconfig/network-scripts/ifcfg-eth0`;
+    `perl -pi -e 's/IPADDR=10\..+/IPADDR=$ip/' /etc/sysconfig/network-scripts/ifcfg-eth0`;
+    `perl -pi -e 's/NETWORK=10\..+/NETWORK=$net.0/' /etc/sysconfig/network-scripts/ifcfg-eth0`;
+    `perl -pi -e 's/BROADCAST=10\..+/BROADCASE=$net.255/' /etc/sysconfig/network-scripts/ifcfg-eth0`;
+    `perl -pi -e 's/GATEWAY=10\..+/GATEWAY=$net.1/' /etc/sysconfig/network-scripts/ifcfg-eth0`;
 }
 #my $if = `ifconfig`;
 #if (!($if =~ /$ip/)) {

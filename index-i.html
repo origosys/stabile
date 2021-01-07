@@ -196,7 +196,7 @@
                   //}, dom.byId('toaster'));
 
               IRIGO.toast = function(message) {
-                  IRIGO.toaster("message", [{
+                  IRIGO.toaster([{
                       message: message,
                       type: "message",
                       duration: 3000
@@ -217,7 +217,7 @@
               }
 
                   dojo.subscribe('message', function(obj){
-                     if (obj.message) IRIGO.toaster("message", [{message: obj.message}]);
+                     if (obj.message) IRIGO.toaster([{message: obj.message}]);
                   });
 
                   homepane = new ContentPane({id: 'homepane', title: 'Dashboard', href: "static/html/home.html", style:"min-height: 450px; height:80vh;",

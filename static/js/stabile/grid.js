@@ -345,7 +345,7 @@ var grid = {
                 });
             }
             else{
-                IRIGO.toaster("message", [{
+                IRIGO.toaster([{
                     message: "Nothing to commit!",
                     type: "message",
                     duration: 3000

@@ -5,7 +5,7 @@ REBASE=1
 BASESUITE=
 SIZE=39936
 NAME=centos-8
-APPNAME=CentOS 8 Server
+APPNAME=CentOS 8
 DIR=files
 DIRTARGET=/tmp
 TAR=
@@ -19,3 +19,16 @@ SERVICE=
 TERMINALLINK=pipe/http://{uuid}:4200
 MANAGEMENTLINK=pipe/http://{uuid}:10000/stabile/
 DATAIMAGE=20G
+LOGO=https://www.stabile.io/images/apps/centos-logo.png
+THUMBNAIL=https://www.stabile.io/images/apps/centos-logo.png
+SUMMARY=This is a lean install of the CentOS Server 8.2 with Stabile API integration.
+DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-weight Origo Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.</div>\
+	<ul>\
+		<li>Install your very own powerful CentOS Linux Server on SSD with one click.</li>\
+		<li>Easily scale out with more servers.</li>\
+		<li>Access to console from web UI during boot sequence (unlike AWS and Azure which don't provide this).</li>\
+		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the advanced web UI</li>\
+		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
+		<li>Size the server (after installation) as you like, and only pay for the minutes your servers are running.</li>\
+	</ul>\
+	<div>In minutes, you'll have your own Linux Server up and running, which is easy to maintain and can run all of your server applications. Remember that you only pay for the actual time the server is running. If you start it, and change your mind after a few minutes, you'll only be paying cents.</div>

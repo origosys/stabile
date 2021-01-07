@@ -57,7 +57,7 @@ var ui_update = {
                 } else if(ev.type == "update") {
                     if (ev.message) {
                         console.log("Also got ui message", ev);
-                        IRIGO.toaster("message", [{message: ev.message}]);
+                        IRIGO.toaster([{message: ev.message}]);
                     }
                     console.log("publishing", ev.tab + ":update", ev);
                     topic.publish(ev.tab + ":update", ev);
@@ -71,7 +71,7 @@ var ui_update = {
                     loggedin = false;
                 } else if(ev.type == "message" && ev.message){
                     console.log("Got ui message", ev.message);
-                    IRIGO.toaster("message", [{message: ev.message}]);
+                    IRIGO.toaster([{message: ev.message}]);
                 } else if (ev.type == "serial" && ev.serial) {
                     ui_update.lastev = ev.serial;
                 }

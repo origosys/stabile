@@ -17,7 +17,7 @@ ed.form = function(args) {
       form: dojo.byId(id),
       handleAs: "json",
       load: function(data) {
-        IRIGO.toaster("message", [{
+        IRIGO.toaster([{
             message: data.message,
             type: "message",
             duration: 2000
@@ -35,7 +35,7 @@ ed.form = function(args) {
         }
       },
       error: function(error) {
-        IRIGO.toaster("message", [
+        IRIGO.toaster([
             {
               message: error.responseText,
               type: "error",
@@ -44,7 +44,7 @@ ed.form = function(args) {
       }
     };
 
-    IRIGO.toaster("message", [{
+    IRIGO.toaster([{
         message: "Processing ...",
         type: "message",
         duration: 500

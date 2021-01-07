@@ -191,6 +191,7 @@ $postreq->{'engineid'} = $uuid;
 $postreq->{'enginetkthash'} = sha512_hex($tktkey);
 
 my $linked = $cfg->param('ENGINE_LINKED');
+my $pullconfigs = $cfg->param('PULL_CONFIGS');
 print "Engine is marked as linked\n" if ($linked);
 my $content;
 if ($linked) {
@@ -249,7 +250,7 @@ if ($linked) {
                 my @vals = $cfg->param($k); my $val = join(", ", @vals);
                 if ($val ne $v) {
                     print "Received modified config: $line\n";
-                    $cfg->param($k, $v);
+                    $cfg->param($k, $v) if ($pullconfigs || $k eq 'ENGINEUSER');
                 } else {
                     #print "Unmodified config line received: $line, $val[0]\n";
                 }
@@ -264,7 +265,7 @@ if ($linked) {
                             print "Not changing NIC on non-default nodeidentity $cfgkey: $line\n";
                         } else {
                             print "Received modified node config ($cfgkey): $line\n";
-                            $nodeconfigs{$cfgkey}->param($k, $v) ;
+                            $nodeconfigs{$cfgkey}->param($k, $v) if ($pullconfigs);
                             if ($k =~ /READ_LIMIT|WRITE_LIMIT/) {
                                 print `echo /nodes/reloadall | stash`;
                             }
@@ -274,7 +275,7 @@ if ($linked) {
             }
         }
     }
-    foreach my $nodecfg (values %nodeconfigs) {$nodecfg->save()};
+    foreach my $nodecfg (values %nodeconfigs) {$nodecfg->save() if ($pullconfigs)};
 } else {
 	$postreq = {};
 }
@@ -302,9 +303,9 @@ if ($pid) {
             chomp $cookiebase;
 
             my $apachecfg = '/etc/apache2/sites-available/stabile-ssl';
-            $apachecfg = '/etc/apache2/sites-available/stabile-ssl.conf' if -e ('/etc/apache2/sites-available/stabile-ssl.conf');
             $apachecfg = '/etc/apache2/conf.d/stabile-ssl.conf' if -e ('/etc/apache2/conf.d/stabile-ssl.conf');
             $apachecfg = '/etc/apache2/conf-available/stabile-ssl.conf' if -e ('/etc/apache2/conf-available/stabile-ssl.conf');
+            $apachecfg = '/etc/apache2/sites-available/stabile-ssl.conf' if -e ('/etc/apache2/sites-available/stabile-ssl.conf');
             system("perl -pi -e 's/(.*TKTAuthCookieName.*\\n)//' $apachecfg");
             system("perl -pi -e 's/(.*TKTAuthDomain.*\\n)//' $apachecfg");
             if ($cookiebase) {
@@ -452,12 +453,13 @@ if ($pid) {
             my $host = $c->sockhost;
             my $response;
             if ($uri =~ /^\/\/(https?:\/\/?)?(\S{36})(:\d+)?(.*)/) {
-                my $prot = $1;
-                $prot = "$prot/" unless ($prot =~ /\/\//);
-                my $geturi = ($prot||'http://') . "$2$3$4";
+                my $prot = $1||'http://';
                 my $networkuuid = $2;
-                my $baseuri = "$baseurl/pipe/$2$3/";
+                my $uriport = $3;
                 my $uripath = $4;
+                my $baseuri = "$baseurl/pipe/$networkuuid$uriport/";
+                $prot = "$prot/" unless ($prot =~ /\/\//);
+                my $geturi = $prot . "$networkuuid$uriport$uripath";
                 $host = $2 if ($uripath =~ /(\?|\&)host=(.+)\&/ || $uripath =~ /(\?|\&)host=(.+)/);
                 my $user = $request->header('STEAM_USER');
                 my $networkuser = $networks{$networkuuid}->{'user'};
@@ -510,7 +512,7 @@ if ($pid) {
                         }
                         ${$response->content_ref} =~ s/\{internalip\}/$ip/gi;
                         ${$response->content_ref} =~ s/\{externalip\}/$extip/gi;
-                        # \w is included to avoid matching url's staring with //, which should be left alone
+                        # \w is included to avoid matching url's starting with //, which should be left alone
                         ${$response->content_ref} =~ s/(href|src|action|value)=('|")\/(\w)/$1=$2$baseuri$3/gi;
                         # This is purely to fixup javascript in Wordpress install.php
                         ${$response->content_ref} =~ s/\\\/home/../;

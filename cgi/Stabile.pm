@@ -188,6 +188,38 @@ $main::postToOrigo = sub {
     return $ret;
 };
 
+$main::uploadToOrigo = sub {
+    my ($engineid, $filepath, $force) = @_;
+    my $tktcfg = ConfigReader::Simple->new($Stabile::auth_tkt_conf, [qw(TKTAuthSecret)]);
+    my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+    my $ret;
+
+    if (!$filepath || !(-e $filepath)) {
+        $ret = "Status=Error Invalid file path\n";
+    } elsif ($tktkey && $engineid) {
+        my $browser = LWP::UserAgent->new;
+        $browser->timeout(15 * 60); # 15 min
+        $browser->agent('pressurecontrol/1.0b');
+        $browser->protocols_allowed( [ 'http','https'] );
+        my $fname = $1 if ($filepath =~ /.*\/(.+\.qcow2)$/);
+        return "Status=Error Invalid file\n" unless ($fname);
+        my $postreq = [
+            'file'          => [ $filepath ],
+            'filename'      => $fname,
+            'engineid'      => $engineid,
+            'enginetkthash' => sha512_hex($tktkey),
+            'appuser'       => $user,
+            'force'         => $force
+        ];
+        my $posturl = "https://www.origo.io/irigo/engine.cgi?action=uploadimage";
+        my $content = $browser->post($posturl, $postreq, 'Content_Type' => 'form-data')->content();
+        $ret .= $content;
+    } else {
+        $ret .= "Status=Error Unable to get engine tktkey...";
+    }
+    return $ret;
+};
+
 $main::postAsyncToOrigo = sub {
     my ($engineid, $postaction, $json_text) = @_;
     my $tktcfg = ConfigReader::Simple->new($Stabile::auth_tkt_conf, [qw(TKTAuthSecret)]);
@@ -257,10 +289,10 @@ $main::dnsCreate = sub {
                 if ($register{$regkeys[0]}->{'user'} eq $username) {
                     ; # OK
                 } else {
-                    return "ERROR Invalid value $checkval, not allowed\n";
+                    return "Status=ERROR Invalid value $checkval, not allowed\n";
                 }
             } elsif (scalar @regkeys >1) {
-                return "ERROR Invalid value $checkval\n";
+                return "Status=ERROR Invalid value $checkval\n";
             }
             untie %networkreg;
         }
@@ -311,7 +343,7 @@ $main::dnsCreate = sub {
         return $res;
 
     } else {
-        return "ERROR Invalid dns data $name, $value, $type. " . ($enginelinked?"":" Engine is not linked!") . "\n";
+        return "ERROR Problem creating dns record with data $name, $value. " . ($enginelinked?"":" Engine is not linked!") . "\n";
     }
 };
 
@@ -331,7 +363,7 @@ $main::dnsDelete = sub {
             $checkname = $1 if ($checkname =~ /(.+)\.$/);
             $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
             $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
-            return "ERROR Invalid value $checkname\n" unless ($checkval);
+            return "Status=ERROR Invalid value $checkname\n" unless ($checkval);
         }
 
         unless (tie %networkreg,'Tie::DBI', {
@@ -361,6 +393,66 @@ $main::dnsDelete = sub {
         my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
         my $tkthash = sha512_hex($tktkey);
         my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnsdelete";
+
+        my $postreq = ();
+        $postreq->{'engineid'} = $engineid;
+        $postreq->{'enginetkthash'} = $tkthash;
+        $postreq->{'name'} = $name;
+        $postreq->{'domain'} = $dnsdomain;
+        $content = $browser->post($posturl, $postreq)->content();
+        $content =~ s/://g;
+        return $content;
+    } else {
+        return "ERROR Invalid data $name." . ($enginelinked?"":" Engine is not linked!") . "\n";
+    }
+};
+
+$main::dnsUpdate = sub {
+    my ($engineid, $name, $username) = @_;
+    $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
+
+    # Only allow deletion of records corresponding to user's own networks when username is supplied
+    # When username is not supplied, we assume checking has been done
+    my $checkval;
+    if ($username) {
+        if ($name =~ /\d+\.\d+\.\d+\.\d+/) {
+            $checkval = $name;
+        } else {
+            my $checkname = $name;
+            # Remove trailing period
+            $checkname = $1 if ($checkname =~ /(.+)\.$/);
+            $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
+            $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+            return "Status=ERROR Invalid value $checkname\n" unless ($checkval);
+        }
+
+        unless (tie %networkreg,'Tie::DBI', {
+            db=>'mysql:steamregister',
+            table=>'networks',
+            key=>'uuid',
+            autocommit=>0,
+            CLOBBER=>0,
+            user=>$dbiuser,
+            password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
+        my @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
+        if ($isadmin || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username)) {
+            ; # OK
+        } else {
+            return "ERROR Invalid user for $checkval, not allowed\n";
+        }
+        untie %networkreg;
+    }
+
+    $main::syslogit->($user, "info", "Updating DNS entries for $name $dnsdomain");
+    if ($enginelinked && $name) {
+        require LWP::Simple;
+        my $browser = LWP::UserAgent->new;
+        $browser->agent('Stabile/1.0b');
+        $browser->protocols_allowed( [ 'http','https'] );
+        my $tktcfg = ConfigReader::Simple->new($Stabile::auth_tkt_conf, [qw(TKTAuthSecret)]);
+        my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+        my $tkthash = sha512_hex($tktkey);
+        my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnsupdate";
 
         my $postreq = ();
         $postreq->{'engineid'} = $engineid;
@@ -435,6 +527,8 @@ $main::updateUI = sub {
         my $domuuid = $pars->{domuuid};
         my $dstatus = $pars->{status};
         my $message = $pars->{message};
+        $message =~ s/"/\\"/g;
+        $message =~ s/'/\\'/g;
         my $newpath = $pars->{newpath};
         my $displayip = $pars->{displayip};
         my $displayport = $pars->{displayport};
@@ -487,9 +581,8 @@ $main::updateUI = sub {
                 ($master?",\"master\":\"$master\"":"") .
                 ($snap1?",\"snap1\":\"$snap1\"":"") .
                 ($username?",\"username\":\"$username\"":"") .
-                ($path?",\"path\":\"$path\"":"");
-
-            $newtasks .= ",\"sender\":\"$sender\"}, ";
+                ($path?",\"path\":\"$path\"":"") .
+                ",\"sender\":\"$sender\"}, ";
         }
     }
     $newtasks = $1 if ($newtasks =~ /(.+)/); #untaint
@@ -646,15 +739,15 @@ sub do_gear_action {
 sub preInit {
 # Set global vars: $user, $tktuser, $curuuid and if applicable: $curdomuuid, $cursysuuid, $curimg
 # Identify and validate user, read user prefs from DB
-    unless ( tie(%userreg,'Tie::DBI', Hash::Merge::merge({table=>'users', key=>'username'}, $Stabile::dbopts)) ) {throw Error::Simple("Stroke=Error User register could not be  accessed")};
+    unless ( tie(%userreg,'Tie::DBI', Hash::Merge::merge({table=>'users', key=>'username'}, $Stabile::dbopts)) ) {throw Error::Simple("Status=Error User register could not be  accessed")};
 
     $user = $user || $Stabile::user || $ENV{'REMOTE_USER'};
     $user = 'irigo' if ($package eq 'steamexec');
     $remoteip = $ENV{'REMOTE_ADDR'};
     # If request is coming from a running server from an internal ip, identify user requesting access
     if (!$user && $remoteip && $remoteip =~ /^10\.\d+\.\d+\.\d+/) {
-        unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks', CLOBBER=>3}, $Stabile::dbopts)) ) {throw Error::Simple("Stroke=Error Network register could not be accessed")};
-        unless ( tie(%domreg,'Tie::DBI', Hash::Merge::merge({table=>'domains', CLOBBER=>3}, $Stabile::dbopts)) ) {throw Error::Simple("Stroke=Error Domain register could not be accessed")};
+        unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks', CLOBBER=>3}, $Stabile::dbopts)) ) {throw Error::Simple("Status=Error Network register could not be accessed")};
+        unless ( tie(%domreg,'Tie::DBI', Hash::Merge::merge({table=>'domains', CLOBBER=>3}, $Stabile::dbopts)) ) {throw Error::Simple("Status=Error Domain register could not be accessed")};
         my @regkeys = (tied %networkreg)->select_where("internalip = '$remoteip'");
         foreach my $k (@regkeys) {
             my $network = $networkreg{$k};

@@ -114,12 +114,12 @@ sub sqlvalidate {
         } elsif ($password && $register{$username}->{'password'} eq $password) {
             $valid = 1;
             eval {syslogit('info', "Adding system user $username: " . `/usr/sbin/useradd -m "irigo-$username"`); 1;};
+			`echo "[User]\nSystemAccount=true" > /var/lib/AccountsService/users/irigo-$username`; # Don't show in login screen
     #		eval {`/bin/echo irigo-$username:$password | /usr/sbin/chpasswd`; 1;}; # Doesn't work on Lucid, so we go through the hoops below...
             my $np = `/bin/echo irigo-$username:$password | /usr/sbin/chpasswd -S`; # -S option not supported on older versions
             $np =~ /irigo-$username:(.+)/;
             my $cpass = $1;
             eval {`/usr/sbin/usermod -p '$cpass' irigo-$username`; 1;};
-    #		$register{$username}->{'password'} = md5_base64($password);
             $register{$username}->{'password'} = sha512_base64($password);
     #        unless(-d "$basedir$username"){
     #            umask "0000";

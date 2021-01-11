@@ -98,7 +98,11 @@ if (-e "/tmp/internalip") {
 # Don't route packets to pistons
 print `/sbin/iptables -D FORWARD -i $datanic+ -o $datanic+ -d 10.0.0.0/24 -j DROP`;
 print `/sbin/iptables -A FORWARD -i $datanic+ -o $datanic+ -d 10.0.0.0/24 -j DROP`;
-
+# Masquerade
+my $masq = `/sbin/iptables -L -n -t nat`;
+unless ($masq =~ "MASQUERADE.+all.+--.+0\.0\.0\.0/0") {
+    `/sbin/iptables --table nat --append POSTROUTING --out-interface $datanic -s 10.0.0.0/8 -j MASQUERADE`;
+}
 # Make sure webmin conf is readable
 `chmod 644 /etc/webmin/miniserv.conf`;
 # Make sure log is readable and writable

@@ -65,26 +65,26 @@ define([
                     '<form onsubmit="systembuilder.system.build();return false;" class="wizardForm" id="wizardForm" dojoType="dijit.form.Form">',
                     '<table border="0" style="margin:0 8px 20px 8px;">',
                     '<tr id="tr_master"><td class="wizardLabel">',
-                        '<label>Select Stack to install:</label>',
+                        '<label>Select&nbsp;Stack to&nbsp;install:</label>',
                         '</td><td class="wizardLabel">',
                         '<select id="wizard_master" />',
                         '</td></tr>',
                     '</table>',
-                    '<div dojoType="dijit.layout.StackContainer" style="overflow:auto; padding:0 10px 10px 10px; height: 72vh;" id="wizardContainer">',
+                    '<div dojoType="dijit.layout.StackContainer" style="overflow:auto; padding:0 10px 10px 10px;" id="wizardContainer">',
 
                     '<div dojoType="dijit.layout.ContentPane" id="wizardSubForm0">',
-                    '<div style="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; padding-top:15%; border: 0px solid;"><h3>',
+                    '<div><h3>',
                     '<img src="/stabile/static/img/loader.gif" style="vertical-align:middle; margin-right:20px;" alt="loading..." />',
                     '</h3></div>',
                     '</div>',
 
                     '<div dojoType="dijit.layout.ContentPane" id="wizardSubForm1">',
-                    '<div style="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; padding-top:15%; border: 0px solid;"><h3>',
+                    '<div nostyle="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; padding-top:15%; border: 0px solid;"><h3>',
                     '<img src="/stabile/static/img/loader.gif" style="vertical-align:middle; margin-right:20px;" alt="loading..." />',
                     'Loading app settings...',
                     '</h3></div>',
                     '</div>',
-                    '<div dojoType="dijit.layout.ContentPane" style="left:0;" id="wizardSubForm2">',
+                    '<div dojoType="dijit.layout.ContentPane" nostyle="left:0;" id="wizardSubForm2">',
                     '<p id="wizardTitle"></p>',
                     '<p class="well well-sm" id="wizardHelp" style="max-height:50vh; overflow:auto; width: 100%;">',
                     '<table border="0">',
@@ -666,7 +666,7 @@ define([
                     title: systemname,
                     id: 'createSystemDialog',
                     resizable: true,
-                    style: "width: 90%; left:5%; overflow: auto;"
+                    style: "width: 90%; overflow: auto;"
                 });
                 dialog.connect(dialog, "hide", function(e){
                     if (dojo.byId("manageSystemIframe")) dojo.byId("manageSystemIframe").src = '';

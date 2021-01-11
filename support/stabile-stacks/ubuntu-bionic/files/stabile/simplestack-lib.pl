@@ -308,14 +308,14 @@ END
                             }
                         	$res .= <<END
 <div class="row">
-<div class="col-sm-6 col-md-3">
+<div class="col-sm-6 col-md-6">
 <div class="progress" style="height: 30px; margin-bottom:5px; width:100%; background-color:#CCC; border-radius:5px;" title="$fs->{Filesystem} is mounted on $fs->{Mounted}" rel="tooltip" data-placement="bottom">
   <div class="progress-bar progress-bar-$pclass" role="progressbar" style="width: $fs->{'Use%'};" aria-valuemin="0" aria-valuemax="100">
      <span style="position:absolute; left: 30px; font-size: 15px; margin-top: 8px;"><strong>$fsname:</strong> $fs->{Size}B total, $fs->{'Use%'} used.</span>
   </div>
 </div>
 </div>
-<div class="col-sm-3 col-md-3" style="padding-left:0;">
+<div class="col-sm-3 col-md-3" style="padding-left:0; margin-bottom:4px;">
 $options
 </div>
 </div>

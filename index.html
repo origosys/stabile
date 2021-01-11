@@ -193,11 +193,6 @@
                           }
                       }
                   });
-                  //new Toaster({
-                  //    id:'toaster',
-                  //    positionDirection:"tr-down",
-                  //    messageTopic: 'message'
-                  //}, dom.byId('toaster'));
 
                   IRIGO.toasthistory = function() {
                       if (IRIGO.alerts.length>0) {
@@ -340,7 +335,14 @@
                   $('#clear_activity_button').on('click', function () {
                       clearActivity();
                   });
-
+                  $(document).on('click', function(evt) { // Hidi Dojo dialogs when clicking outside
+                      console.log("click", evt.target.className);
+                      if (evt.target.className.indexOf("dijitDialogUnderlay")!=-1) {
+                          $.each($(".dijitDialog"), function( index, value ) {
+                              dijit.byId(value.id).hide();
+                          });
+                      }
+                  });
 
                   $('#hometab').on('shown.bs.tab', function (e) {location="#home";});
                   $('#serverstab').on('shown.bs.tab', function (e) {location="#servers";});

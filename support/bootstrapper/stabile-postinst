@@ -698,10 +698,27 @@ network:
             addresses: ['10.0.0.1/24']
 END
 ;
+	my $enp2s0_systemd = <<END
+[Match]
+Name=$internalnic
+
+[Link]
+RequiredForOnline=no
+
+[Network]
+ConfigureWithoutCarrier=true
+Address=10.0.0.1/24
+END
+;
+
 	if ($internalnic ne $externalnic) { # Let pressurecontrol bring up virtual nic with 10.0.0.1 if only one nic
 		if (-d "/etc/netplan") {
-			$ret = `echo "$enp2s0_netplan" >> "/etc/netplan/$internalnic.yaml"` unless (-e "/etc/netplan/$internalnic.yaml");
-			$ret .= `netplan apply`;
+	#		$ret = `echo "$enp2s0_netplan" >> "/etc/netplan/$internalnic.yaml"` unless (-e "/etc/netplan/$internalnic.yaml");
+	#		$ret .= `netplan apply`;
+	# We now use systemd to support cases without active link
+			$ret = `echo "$enp2s0_systemd" >> "/etc/systemd/network/10-$internalnic.network"` unless (-e "/etc/systemd/network/10-$internalnic.network");
+			$ret .= `systemctl enable systemd-networkd.service`;
+			$ret .= `systemctl restart systemd-networkd.service`;
 		} else {
 			$ret = `echo "$enp2s0" >> /etc/network/interfaces` unless (`grep enp2s0 /etc/network/interfaces`);
 			$ret .= `ifup enp2s0`;

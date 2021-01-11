@@ -142,7 +142,7 @@ var grid = {
                     }
                 }
                 
-                if (action == 'delete' && (type == 'servers' || type == 'images'|| type == 'networks'|| type == 'nodes'|| type == 'users')) {
+                if ((action == 'delete' || action=='deleteentirely') && (type == 'servers' || type == 'images'|| type == 'networks'|| type == 'nodes'|| type == 'users')) {
                     if(window[type].grid.dialog.isOpen()){window[type].grid.dialog.hide();}
                     store.deleteItem(item);
                     store.save({onComplete: function(){

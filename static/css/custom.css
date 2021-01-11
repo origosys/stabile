@@ -34,6 +34,9 @@ body.inframe {
 .info-engine {
     display:none;
 }
+.attribution {
+    margin: 0 5px 5px 5px;
+}
 .inframe #manage_system_button,
 .inframe #terminal_button,
 .inframe #new_app_button,
@@ -117,10 +120,10 @@ body.tundra  {
     }
     .float {
         padding: 4px!important;
-        left: 110px!important;
+/*        left: 110px!important;
         top: 6px!important;
         right: auto!important;
-        bottom: auto!important;
+        bottom: auto!important; */
     }
 }
 
@@ -876,6 +879,9 @@ label {
     -moz-border-radius:3pt;
     -webkit-border-radius:4pt;
 }
+.wizardForm {
+    width:100%!important;
+}
 .wizardRow {
     display: none;
 }
@@ -889,13 +895,17 @@ label {
     color: grey !important;
     font-size: 13px;
 }
+#wizardContainer {
+    height: 64vh!important;
+}
 #wizardTitle {
     margin-top:0;
     margin-bottom: 0;
 }
 #wizardSubForm0 {
     left:0!important;
-    margin:20px;
+    width:100%!important;
+    height: 100% !important;
 }
 #wizardSubForm2 {
     height: auto!important;
@@ -1129,6 +1139,9 @@ box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
 #createSystemDialog .dijitDialogTitleBar {
     border-bottom:none !important;
 }
+#createSystemDialog .dijitDialogPaneContent {
+    overflow-x: hidden;
+}
 #createSystemDialog {
     top: 50px !important;
 }
@@ -1200,7 +1213,7 @@ box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
 	padding:0 0 0 0;
 }
 .dialogFormTable td {
-    min-width:116px;
+/*    min-width:120px;*/
 }
 #dialogForm .dijitTextBox {
     width:90%;

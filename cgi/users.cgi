@@ -1611,6 +1611,7 @@ sub updateEngineUsers {
         if (!$uid) { # Check user has system account for disk quotas
             $main::syslogit->($user, "info", "Adding system user $username");
             `/usr/sbin/useradd -m "irigo-$username"`;
+            `echo "[User]\nSystemAccount=true" > /var/lib/AccountsService/users/irigo-$username`; # Don't show in login screen
         }
 
     }

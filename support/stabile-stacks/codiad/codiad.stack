@@ -21,4 +21,41 @@ MEMORY=1024
 LOGO=https://www.stabile.io/images/apps/logo-codiad.png
 THUMBNAIL=https://www.stabile.io/images/apps/logo-codiad.png
 SUMMARY=Codiad is a web-based IDE framework with a small footprint and minimal requirements.
-DESCRIPTION=Codiad is a web-based IDE framework with a small footprint and minimal requirements.
+DESCRIPTION=<section>\
+    <h2>Features</h2>\
+    <p style="margin-bottom:20px;">Codiad was built with simplicity in mind, allowing for fast, interactive development without the massive overhead of some of the larger desktop editors. That being said even users of IDE's\
+        such as Eclipse, NetBeans and Aptana are finding Codiad's simplicity to be a huge benefit. While simplicity was key, we didn't skimp on features and have a team of dedicated developer actively adding more.\
+    </p>\
+    <ul class="pull-left" style="margin-left:40px;">\
+        <li>Support for 40+ languages</li>\
+        <li>Plugin Library</li>\
+        <li>Error checking & notifications</li>\
+        <li>Mutliple user support</li>\
+        <li>Editor screen splitting</li>\
+        <li>LocalStorage redundancy</li>\
+        <li>Advanced searching tools</li>\
+        <li>Smart auto-complete</li>\
+    </ul>\
+    <ul style="display:inline-block; margin-left:40px;">\
+        <li>Real-Time Collaborative editing</li>\
+        <li>Over 20 Syntax color themes</li>\
+        <li>Completely Open-Source</li>\
+        <li>Easily customized source</li>\
+        <li>Runs on your own server</li>\
+        <li>Quick-Download backups</li>\
+        <li>Maximum editor screen space</li>\
+        <li>i18n Language Support</li>\
+    </ul>\
+    <div style="clear:both;"></div>\
+    <p>...and with a team of passionate collaborators the list keeps growing.</p>\
+    <h2>Interface</h2>\
+    <p style="margin-bottom:20px;">Codiad consists of three panels; a left panel which houses the file manager and active files, center panel which is where editors reside, and a right panel which contains system and other controls. The right & left side panels collapse providing maximum real-estate to the editor.</p>\
+    <p style="text-align:center;"><img src="https://www.origo.io/images/apps/codiad_screenshot_12_27.png" alt="Codiad Screenshot" class="responsive" style="width:80%"></p>\
+    <br><br>\
+    <h2>Requirements</h2>\
+    <p>Codiad requires a minimal server installation with Apache2, PHP 5+ and basic r/w access to several directories. There is no database requirement</p>\
+    <p>The application will work in modern browsers including Chrome, Firefox, and IE9+.</p>\
+    <h2>Getting Started</h2>\
+    <p>Installation of Codiad requires uploading the files and making several directories and a config file writeable. There is no database and no other server components are required. PHP 5.3 or above is recommended, however, the system will work with any version of PHP over v.5.</p>\
+    <p>For more information please <strong><a href="https://github.com/Codiad/Codiad/wiki/Installation">read the installation instructions</a></strong> on the Wiki.</p>\
+    </section>

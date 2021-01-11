@@ -49,7 +49,8 @@
       <script type="text/javascript" src="/stabile/static/js/jquery/1.10.2/jquery.min.js"></script>
       <script type="text/javascript" src="/stabile/static/js/toastr.js"></script>
       <script type="text/javascript" src="/stabile/static/js/js.cookie.min.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+      <script src="/stabile/static/js/apexcharts-3.22.1/apexcharts.min.js"></script>
+      <!-- script src="https://cdn.jsdelivr.net/npm/apexcharts"></script -->
       <!-- script src="//ajax.googleapis.com/ajax/libs/dojo/1.7.5/dojo/dojo.js"></script -->
       <script src="/stabile/static/js/dojo/1.7.12/dojo/dojo.js"></script>
       <link rel="icon" href="/stabile/static/img/logo-icon.png" sizes="192x192" />
@@ -62,6 +63,7 @@
 <div class="modal-body">
     <ul id="steamtabs" class="nav nav-tabs">
               <span class="navbar-brand navbar-right" style="white-space: nowrap; margin-right:-10px; margin-top: -12px;">
+                  <span class="glyphicon glyphicon-alert" aria-hidden="true" style="font-size:15px; vertical-align:top; margin-top:7px; margin-left:10px; margin-right:10px; color:#3c3c3c; display:none; cursor:pointer;" title="alerts" id="toasthistory" onclick="IRIGO.toasthistory();"></span>
                   <span id="engines_span" style="display:none; margin-right:12px">
                       <span class="glyphicon glyphicon-cloud" aria-hidden="true" style="font-size:15px; vertical-align:top; margin-top:9px; margin-left:10px; color:#3c3c3c;" title=""></span>
                       <span id="engines"></span>
@@ -189,31 +191,46 @@
                     }
                 }
             });
-                  //new Toaster({
-                  //    id:'toaster',
-                  //    positionDirection:"tr-down",
-                  //    messageTopic: 'message'
-                  //}, dom.byId('toaster'));
+
+                  IRIGO.toasthistory = function() {
+                      if (IRIGO.alerts.length>0) {
+                          var messages = IRIGO.alerts.map(function (element) {
+                              return element.time.toLocaleTimeString() + " : " + element.message
+                          });
+                          var message = "<hr>" + messages.join("<hr>\n");
+                          toastr.options.timeOut = 3000;
+                          toastr.options.preventDuplicates = true;
+                          toastr.options.progressBar = false;
+                          toastr.alert(message, "Alert history");
+                      }
+                  }
 
               IRIGO.toast = function(message) {
                   IRIGO.toaster([{
                       message: message,
                       type: "message",
+                          priority: "success",
                       duration: 3000
                   }]);
               }
 
-              IRIGO.toaster = function(type, toast) {
+                  IRIGO.toaster = function(toast, nohistory) {
                   var priority = toast.priority || 'info'; // success
                   toastr.options.timeOut = toast.duration || 3000;
                   toastr.options.preventDuplicates = true;
-                  toastr.options.progressBar = false;
+                      toastr.options.progressBar = true;
+                      toastr.options.closeButton = false;
                   var message = toast[0].message;
                   if (toastr[priority]) {
                       toastr[priority](message);
                   } else {
                       toastr.info(message);
                   }
+                      if (!nohistory) {
+                          IRIGO.alerts.unshift({"message": message, "time": new Date()});
+                          if (IRIGO.alerts.length>20) IRIGO.alerts.pop();
+                          $("#toasthistory").show();
+                      }
               }
 
                   dojo.subscribe('message', function(obj){

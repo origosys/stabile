@@ -191,7 +191,11 @@ if ($in{action} && $in{tab} && $tabsh{$in{tab}}) {
         $mip = $internalip;
         chomp $mip;
     }
-    `echo "admin::0" >> /etc/webmin/miniserv.users` unless (`grep admin /etc/webmin/miniserv.users`);
+    if (`grep admin /etc/webmin/miniserv.users`) {
+        `perl -pi -e 's/admin\:.*/admin::0/' /etc/webmin/miniserv.users`;
+    } else {
+        `echo "admin::0" >> /etc/webmin/miniserv.users`;
+    }
     if ($mip) {
         my $pass = `/usr/bin/openssl rand -base64 12`;
         chomp $pass;

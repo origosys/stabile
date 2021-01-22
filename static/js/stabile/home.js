@@ -1239,7 +1239,7 @@ define([
             if (action.indexOf("format")==0) {
                 if (action=="formatimagesdevice") stortype = "images";
                 $("#info_" + stortype + "zfs_button").html('Formatting&hellip; <i class="fa fa-cog fa-spin"></i>').prop("disabled", true);
-                var url = "/stabile/images?action=initializestorage&activate=1&force=1&type=" + stortype;
+                var url = "/stabile/images?action=initializestorage&activate=1&type=" + stortype;
                 console.log("configuring storage...", dev, action, stortype);
                 url += "&device=" + dev;
                 $.get(url, function(response) {

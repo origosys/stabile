@@ -2,8 +2,10 @@
 
 use JSON;
 
-my $dnsdomain = `curl -k https://$gw/stabile/networks?action=getdnsdomain`;
-chomp $dnsdomain;
+my $dnsdomain_json = `curl -k https://$gw/stabile/networks?action=getdnsdomain`;
+my $dom_obj = from_json ($dnsdomain_json);
+my $dnsdomain =  $dom_obj->{'domain'};
+my $dnssubdomain = $dom_obj->{'subdomain'};
 $dnsdomain = '' unless ($dnsdomain =~  /\S+\.\S+$/ || $dnsdomain =~  /\S+\.\S+\.\S+$/);
 my $esc_dnsdomain = $dnsdomain;
 $esc_dnsdomain =~ s/\./\\./g;
@@ -62,7 +64,7 @@ sub wordpress {
 
     } elsif ($action eq 'js') {
         # Generate and return javascript the UI for this tab needs
-        my $dom = ($dnsdomain)?"$externalip.$dnsdomain":$externalip;
+        my $dom = ($dnsdomain)?"$externalip.$dnssubdomain.$dnsdomain":$externalip;
         my $js = <<END
         \$('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
             var site = e.target.id;
@@ -312,7 +314,7 @@ END
             # Create WordPress database
             `echo "create database $db;" | mysql`;
             # Create DNS entry if not a FQDN
-            $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$wp\&value=$externalip.$dnsdomain"` unless ($wp =~ /\./);
+            $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$wp\&value=$externalip"` unless ($wp =~ /\./);
 
             # Create aliases
             if (defined $in{"wpaliases_new"}) {
@@ -325,7 +327,7 @@ END
                     unless (-e $link) {
                         $message .= `cd /etc/wordpress; ln -s "$target" "$link"`;
                         # Create DNS entry if not a FQDN
-                        $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$alias\&value=$externalip.$dnsdomain"` unless ($alias =~ /\./);
+                        $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$alias\&value=$externalip"` unless ($alias =~ /\./);
                         $message .=  "<div class=\"message\">alias $target -> $link was created!</div>";
                     }
                 }
@@ -385,7 +387,7 @@ END
                     } elsif (($aliases{$alias} || $aliases{$newdom}) && !(-e $link)) {
                         $message .= `cd /etc/wordpress; ln -s "config-$dom.php" "$link"`;
                         # Create DNS entry if not a FQDN
-                        $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$alias\&value=$externalip.$dnsdomain"` unless ($alias =~ /\./);
+                        $message .= `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$alias\&value=$externalip"` unless ($alias =~ /\./);
                         #                    $message .=  "<div class=\"message\">Alias $alias created!</div>";
                         # Re-read directory
                     } else {
@@ -499,7 +501,7 @@ END
                         my $sans = join ",", @domains;
                         $message .= "Running getssl...";
                         `mv /root/.getssl.bak /root/.getssl` if (-e "/root/.getssl.bak");
-                        `mkdir -p /root/.getssl/$externalip.$dnsdomain` unless (-e "/root/.getssl");
+                        `mkdir -p /root/.getssl/$externalip.$dnssubdomain.$dnsdomain` unless (-e "/root/.getssl");
                         my $getsslcfg = <<END
 CA="https://acme-v02.api.letsencrypt.org"
 PRIVATE_KEY_ALG="rsa"
@@ -511,12 +513,12 @@ CA_CERT_LOCATION="/etc/ssl/certs/stabile.chain"
 RELOAD_CMD="systemctl reload apache2"
 END
                         ;
-                        `echo '$getsslcfg' > "/root/.getssl/$externalip.$dnsdomain/getssl.cfg"`;
+                        `echo '$getsslcfg' > "/root/.getssl/$externalip.$dnssubdomain.$dnsdomain/getssl.cfg"`;
                         `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
                         my $hsans = $sans;
                         $hsans =~ s/,/ /;
-                        `echo "$internalip $externalip.$dnsdomain $hsans" >> /etc/hosts`; # necessary to allow getssl do its own checks
-                        my $sslres = `getssl -f  -U $externalip.$dnsdomain | tee /tmp/getssl.out \&2>1`;
+                        `echo "$internalip $externalip.$dnssubdomain.$dnsdomain $hsans" >> /etc/hosts`; # necessary to allow getssl do its own checks
+                        my $sslres = `getssl -f  -U $externalip.$dnssubdomain.$dnsdomain | tee /tmp/getssl.out \&2>1`;
                         unless ($sslres =~ /error/i) {
                             if (-e "/etc/ssl/certs/stabile.crt") {
                                 $message .= "<div class=\"message\">";
@@ -525,7 +527,7 @@ END
                                 $message .= `perl -pi -e 's/#SSLCertificateChainFile.+/SSLCertificateChainFile \\/etc\\/ssl\\/certs\\/stabile.chain/g' $confs`;
                                 $message .= "</div>";
                                 `systemctl reload apache2`;
-                                $message .= "<div class=\"message\">Let's encrypt centificates were installed for $externalip.$dnsdomain $sans</div>";
+                                $message .= "<div class=\"message\">Let's encrypt centificates were installed for $externalip.$dnssubdomain.$dnsdomain $sans</div>";
                             } else {
                                 $message .= "<div class=\"message\">Unable to obtain Let's encrypt centificates - certificates are not in place</div>";
                             }
@@ -637,7 +639,7 @@ sub getWPtab {
         my $allow = `cat /usr/share/wordpress/.htaccess`;
         my $wplimit;
         $wplimit = $1 if ($allow =~ /allow from (.+) \#stabile/);
-        my $wpletsencrypt = (-e "/root/.getssl/$externalip.$dnsdomain/getssl.cfg")?" checked":'';
+        my $wpletsencrypt = (-e "/root/.getssl/$externalip.$dnssubdomain.$dnsdomain/getssl.cfg")?" checked":'';
         my $wpredirect = (`grep RewriteRule /etc/apache2/sites-available/000-default.conf`)?"checked":"";
         my $renewbtn = ($wpletsencrypt)?qq|<button onclick="\$('#wpletsencryptcheck').val('2'); salert('Hang on - this could take a minute or two...'); spinner(this); \$(this.form).submit();" class="btn btn-info btn-sm">renew</button>|:'';
 
@@ -649,9 +651,15 @@ sub getWPtab {
     <form class="passwordform" action="index.cgi?action=wplimit\&tab=wordpress\&show=wp-security" method="post" accept-charset="utf-8" style="margin-bottom:36px;" autocomplete="off">
         <div>
             <small>Limit wordpress login for all sites to:</small>
-            <input id="wplimit" type="text" name="wplimit" value="$wplimit" placeholder="IP address or network, e.g. '192.168.0.0/24 127.0.0.1'">
-            $curipwp
-            <button class="btn btn-default" type="submit" onclick="spinner(this);">Set!</button>
+            <div class="row">
+                <div class="col-sm-10">
+                    <input id="wplimit" type="text" name="wplimit" value="$wplimit" placeholder="IP address or network, e.g. '192.168.0.0/24 127.0.0.1'">
+                    $curipwp
+                </div>
+                <div class="col-sm-2">
+                    <button class="btn btn-default" type="submit" onclick="spinner(this);">Set!</button>
+                </div>
+            </div>
         </div>
     </form>
     <form class="passwordform" action="index.cgi?action=wpletsencrypt\&tab=wordpress\&show=wp-security" method="post" accept-charset="utf-8" autocomplete="off">
@@ -690,16 +698,24 @@ END
             <small>The website's domain name:</small>
             <input class="wpdomain" id="wpdomain_$wpname" type="text" name="wpdomain_$wpname" value="$wp" disabled autocomplete="off">
         </div>
-        <div>
-            <small>Aliases for the website:</small>
-            <input class="wpalias" id="wpaliases_$wpname" type="text" name="wpaliases_$wpname" value="$wpaliases" autocomplete="off" />
-            <input type="hidden" id="wpaliases_h_$wpname" name="wpaliases_h_$wpname" value="$wpaliases" autocomplete="off" />
-            <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wpaliases'); submit();" rel="tooltip" data-placement="top" title="Aliases that are not FQDNs will be created in the $dnsdomain domain as [alias].$dnsdomain">Set!</button>
+        <small>Aliases for the website:</small>
+        <div class="row">
+            <div class="col-sm-10">
+                <input class="wpalias" id="wpaliases_$wpname" type="text" name="wpaliases_$wpname" value="$wpaliases" autocomplete="off" />
+                <input type="hidden" id="wpaliases_h_$wpname" name="wpaliases_h_$wpname" value="$wpaliases" autocomplete="off" />
+            </div>
+            <div class="col-sm-2">
+                <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wpaliases'); submit();" rel="tooltip" data-placement="top" title="Aliases that are not FQDNs will be created in the $dnsdomain domain as [alias].$dnsdomain">Set!</button>
+            </div>
         </div>
-        <div>
-            <small>Set password for WordPress user '$wpuser':</small>
-            <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" class="password">
-            <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wppassword'); submit();">Set!</button>
+        <small>Set password for WordPress user '$wpuser':</small>
+        <div class="row">
+            <div class="col-sm-10">
+                <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" class="password">
+            </div>
+            <div class="col-sm-2">
+                <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wppassword'); submit();">Set!</button>
+            </div>
         </div>
     <div style="height:10px;"></div>
 END
@@ -722,10 +738,14 @@ END
             <small>Aliases for the website:</small>
             <input class="wpdomain" id="wpaliases_$wpname" type="text" name="wpaliases_$wpname" value="$wpaliases" autocomplete="off">
         </div>
-        <div>
-            <small>Set password for WordPress user 'admin':</small>
-            <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" disabled class="disabled" placeholder="Password can be set after creating website">
-            <button class="btn btn-default disabled" disabled>Set!</button>
+        <small>Set password for WordPress user 'admin':</small>
+        <div class="row">
+            <div class="col-sm-10">
+                <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" disabled class="disabled" placeholder="Password can be set after creating website">
+            </div>
+            <div class="col-sm-2">
+                <button class="btn btn-default disabled" disabled>Set!</button>
+            </div>
         </div>
     <div style="height:10px;"></div>
 END

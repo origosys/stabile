@@ -93,6 +93,7 @@ $backupretention = $Stabile::config->get('Z_BACKUP_RETENTION') || "";
 $enginelinked = $Stabile::config->get('ENGINE_LINKED') || "";
 $downloadmasters = $Stabile::config->get('DOWNLOAD_MASTERS') || "";
 $disablesnat = $Stabile::config->get('DISABLE_SNAT') || "";
+our $engineid = $Stabile::config->get('ENGINEID') || "";
 
 $Stabile::dbopts = {db=>'mysql:steamregister', key=>'uuid', autocommit=>0, CLOBBER=>2, user=>$dbiuser, password=>$dbipasswd};
 $Stabile::auth_tkt_conf = "/etc/apache2/conf-available/auth_tkt_cgi.conf";
@@ -262,18 +263,34 @@ $main::postAsyncToOrigo = sub {
 $main::dnsCreate = sub {
     my ($engineid, $name, $value, $type, $username) = @_;
     my $res;
+    my $dnssubdomain = substr($engineid, 0, 8);
+    $type = uc $type;
+    $type || 'CNAME';
     $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
+    # $name =$1 if ($name =~ /(.+)\.$dnssubdomain/);
+    if ($type eq 'A') { # Look for initial registrations and format correctly
+        if (!$name && $value) { # If no name provided assume we are creating initial A-record
+            $name = $value;
+        } elsif ($name =~ /^(\d+\.\d+\.\d+\.\d+)/) { # Looks like an IP address - must be same as value
+            if ($1 eq $value) { # Keep some order in registrations
+                $name = "$value.$dnssubdomain"; # The way we format initial registrations
+            } else {
+                $name = '';
+            }
+        }
+    }
     # Only allow creation of records corresponding to user's own networks when username is supplied
     # When username is not supplied, we assume checking has been done
     if ($username) {
         my $checkval = $value;
-        # Remove trailing period
+        # Remove any trailing period
         $checkval = $1 if ($checkval =~ /(.+)\.$/);
-
         if ($type eq 'A') {
             $checkval = $value;
         } else {
+            $checkval = $1 if ($checkval =~ /(\d+\.\d+\.\d+\.\d+)\.$dnssubdomain\.$dnsdomain$/);
             $checkval = $1 if ($checkval =~ /(\d+\.\d+\.\d+\.\d+)\.$dnsdomain$/);
+            $checkval = $1 if ($checkval =~ /(\d+\.\d+\.\d+\.\d+)$/);
         }
         if ($checkval) {
             unless (tie %networkreg,'Tie::DBI', {
@@ -295,8 +312,17 @@ $main::dnsCreate = sub {
                 return "Status=ERROR Invalid value $checkval\n";
             }
             untie %networkreg;
+            if ($type eq 'A') {
+                $name = "$checkval.$dnssubdomain";
+            } else {
+                $value = "$checkval.$dnssubdomain";
+            }
         }
     }
+
+    if (`host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/) {
+        return "Status=ERROR $name is already registered\n";
+    };
 
     if ($enginelinked && $name && $value) {
         require LWP::Simple;
@@ -309,15 +335,6 @@ $main::dnsCreate = sub {
         my $tkthash = sha512_hex($tktkey);
         my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnscreate";
 
-#        my $postreq = ();
-#        $postreq->{'engineid'} = $engineid;
-#        $postreq->{'enginetkthash'} = $tkthash;
-#        $postreq->{'name'} = $name;
-#        $postreq->{'value'} = $value;
-#        $postreq->{'type'} = $type if ($type);
-#        $content = $browser->post($posturl, $postreq)->content();
-#        return $content;
-
         my $async = HTTP::Async->new;
         my $post = POST $posturl,
             [   engineid => $engineid,
@@ -325,7 +342,7 @@ $main::dnsCreate = sub {
                 name => $name,
                 domain => $dnsdomain,
                 value => $value,
-                type => $type || 'CNAME'
+                type => $type
             ];
         # We fire this asynchronously and hope for the best. Waiting for an answer is just too erratic for now
         $async->add( $post );
@@ -349,8 +366,10 @@ $main::dnsCreate = sub {
 
 $main::dnsDelete = sub {
     my ($engineid, $name, $username) = @_;
+    my $dnssubdomain = substr($engineid, 0, 8);
     $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
-
+    $name =$1 if ($name =~ /(.+)\.$dnssubdomain/);
+    $name = "$1.$dnssubdomain" if ($name =~ /^(\d+\.\d+\.\d+\.\d+)$/);
     # Only allow deletion of records corresponding to user's own networks when username is supplied
     # When username is not supplied, we assume checking has been done
     my $checkval;
@@ -361,8 +380,13 @@ $main::dnsDelete = sub {
             my $checkname = $name;
             # Remove trailing period
             $checkname = $1 if ($checkname =~ /(.+)\.$/);
-            $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
-            $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+            if ($checkname =~ /^(\d+\.\d+\.\d+\.\d+)$/) {
+                $checkname = "$checkname.$dnssubdomain.$dnsdomain";
+                $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+            } else {
+                $checkname = "$checkname.$dnsdomain";
+                $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+            }
             return "Status=ERROR Invalid value $checkname\n" unless ($checkval);
         }
 
@@ -464,6 +488,53 @@ $main::dnsUpdate = sub {
         return $content;
     } else {
         return "ERROR Invalid data $name." . ($enginelinked?"":" Engine is not linked!") . "\n";
+    }
+};
+
+$main::dnsList = sub {
+    my ($engineid, $username) = @_;
+    if ($enginelinked) {
+        require LWP::Simple;
+        my $browser = LWP::UserAgent->new;
+        $browser->agent('Stabile/1.0b');
+        $browser->protocols_allowed( [ 'http','https'] );
+        my $tktcfg = ConfigReader::Simple->new($Stabile::auth_tkt_conf, [qw(TKTAuthSecret)]);
+        my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+        my $tkthash = sha512_hex($tktkey);
+        my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnslist";
+
+        my $postreq = ();
+        $postreq->{'engineid'} = $engineid;
+        $postreq->{'enginetkthash'} = $tkthash;
+        $postreq->{'domain'} = $dnsdomain;
+        $content = $browser->post($posturl, $postreq)->content();
+        $content =~ s/://g;
+        return $content;
+    } else {
+        return "ERROR Engine is not linked!\n";
+    }
+};
+
+$main::dnsClean = sub {
+    my ($engineid, $username) = @_;
+    if ($enginelinked) {
+        require LWP::Simple;
+        my $browser = LWP::UserAgent->new;
+        $browser->agent('Stabile/1.0b');
+        $browser->protocols_allowed( [ 'http','https'] );
+        my $tktcfg = ConfigReader::Simple->new($Stabile::auth_tkt_conf, [qw(TKTAuthSecret)]);
+        my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
+        my $tkthash = sha512_hex($tktkey);
+        my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnsclean";
+        my $postreq = ();
+        $postreq->{'engineid'} = $engineid;
+        $postreq->{'enginetkthash'} = $tkthash;
+        $postreq->{'domain'} = $dnsdomain;
+        $content = $browser->post($posturl, $postreq)->content();
+        $content =~ s/://g;
+        return $content;
+    } else {
+        return "ERROR Engine is not linked!\n";
     }
 };
 

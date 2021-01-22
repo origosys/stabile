@@ -21,13 +21,15 @@ MEMORY=1024
 LOGO=https://www.stabile.io/images/apps/wplogo.png
 THUMBNAIL=https://www.stabile.io/images/apps/wplogo.png
 SUMMARY=A no-nonsense way to run your own WordPress with support for multiple, independent sites.
-DESCRIPTION=<div>This is our take on an easy-to-use, multi-site WordPress server.</div>\
+DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site WordPress server.</h4>\
 	<ul>\
-		<li>Install your own powerful WordPress Server with one click.</li>\
-		<li>Manage multiple sites on the same server with our user-friendly control panel.</li>\
+		<li>Install your own WordPress Server with one click.</li>\
+		<li>Manage multiple sites on the same server with the user-friendly control panel.</li>\
 		<li>If you don't have your own domain, the app can automatically register your sites under the stabile.io domain.</li>\
 		<li>Size the server as you like if you need more memory or vCPUs.</li>\
-		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the advanced web UI</li>\
+		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the web UI</li>\
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
-	</ul>
+	</ul>\
+	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>
+
 

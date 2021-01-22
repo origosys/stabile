@@ -281,6 +281,7 @@ while ($running) {
                    eval {print `mount -o hard,intr,nolock,noatime,nfsvers=3,tcp,timeo=1200,rsize=1048600,wsize=1048600,bg $host $path`; 1;} or do {print $@;};
                }
             }
+            `chmod 777 /mnt/stabile/*`;
         }
         if ($identity eq "kvm") {
             logit('info', "Bringing up KVM piston $nmac");
@@ -481,7 +482,7 @@ sub updatePistonInfo {
     my $storfree = "0";
     my $esc_path = ($identity eq 'local_kvm')?$tenderpathslist[0]:'/mnt/stabile/node';
     my $storinfo = `df -kl $esc_path`;
-    if ($storinfo =~ m/\s+(\d+)\s+(\d+)\s+(\d+).+\n/si) {
+    if (!($storinfo=~/aufs/) && $storinfo =~ m/\s+(\d+)\s+(\d+)\s+(\d+).+\n/si) {
         $stortotal = $1;
         $storfree = $3;
     }

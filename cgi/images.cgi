@@ -49,7 +49,6 @@ my $nodestorageovercommission = $Stabile::config->get('NODE_STORAGE_OVERCOMMISSI
 my $engineid = $Stabile::config->get('ENGINEID') || "";
 my $valve001id = '995e86b7-ae85-4ae0-9800-320c1f59ae33';
 my $stackspool = '/mnt/stabile/images001';
-my $dbh;
 
 our %ahash; # A hash of accounts and associated privileges current user has access to
 #our %options=();
@@ -81,8 +80,6 @@ sub Init {
     unless ( tie(%register,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {return "Unable to access image register"};
     unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {return "Unable to access network register"};
     unless ( tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', CLOBBER=>1}, $Stabile::dbopts)) ) {return "Unable to access image uuid register"};
-#    $dbh = (tied %register)->dbh();
-#    $dbh->{'mysql_enable_utf8'} = 1;
     unless ( tie(%domreg,'Tie::DBI', Hash::Merge::merge({table=>'domains'}, $Stabile::dbopts)) ) {return "Unable to access domain register"};
 
     # simplify globals initialized in Stabile.pm
@@ -207,7 +204,6 @@ sub Init {
     # Enumerate and define the storage pools a user has access to
     my @spl = split(/,\s*/, $storagepools);
     my $reloadnfs;
-
     foreach my $p (@spl) {
         if ($tenderlist[$p] && $tenderpathslist[$p] && $tendernameslist[$p]) {
             my %pool = ("hostpath", $tenderlist[$p],
@@ -221,7 +217,7 @@ sub Init {
             $spools[$p] = \%pool;
 
             # Directory / mount point must exist
-            unless (-d $tenderpathslist[$p]) {throw Error::Simple("Status=Error $tenderpathslist[$p] could not be accessed")};
+            unless (-d $tenderpathslist[$p]) {return "Status=Error $tenderpathslist[$p] could not be accessed"};
 
             # TODO: This section should be moved to pressurecontrol
             if ($tenderlist[$p] eq "local") {
@@ -237,17 +233,17 @@ sub Init {
                 $main::syslogit->($user, 'info', "Mounting $tenderpathslist[$p] from $tenderlist[$p]");
                 eval {
                     system("/bin/mount -o intr,noatime,nfsvers=3 $tenderlist[$p] $tenderpathslist[$p]");
-                    1;} or {throw Error::Simple("Status=Error $tenderpathslist[$p] could not be mounted")};
+                    1;} or {return "Status=Error $tenderpathslist[$p] could not be mounted"};
             }
 
             # Create user dir if it does not exist
             unless(-d "$tenderpathslist[$p]/$user"){
                 umask "0000";
-                mkdir "$tenderpathslist[$p]/$user" or {throw Error::Simple("Status=Cannot create user dir for $user in  $tenderpathslist[$p]")};
+                mkdir "$tenderpathslist[$p]/$user" or {return "Status=Cannot create user dir for $user in  $tenderpathslist[$p]"};
             }
             unless(-d "$tenderpathslist[$p]/common"){
                 umask "0000";
-                mkdir "$tenderpathslist[$p]/common" or {throw Error::Simple("Status=Cannot create common dir for $user in $tenderpathslist[$p]")};
+                mkdir "$tenderpathslist[$p]/common" or {return "Status=Cannot create common dir for $user in $tenderpathslist[$p]"};
             }
         }
     }
@@ -3160,6 +3156,7 @@ END
     my $zpools = `$cmd`;
     my $zdev;
     my %zdevs;
+
     # Now parse the rather strange output with every other line representing physical dev
     foreach my $line (split "\n", $zpools) {
         my ($zname, $zsize, $zalloc) = split "\t", $line;
@@ -3181,12 +3178,16 @@ END
                 ) {
                     delete $filesystems{$zdev->{name}}; # Don't include backup devs in images listing and vice-versa
                 } else {
-                    $filesystems{$zdev->{name}}->{dev} = $dev;
-                    $filesystems{$zdev->{name}}->{nametype} =~ s/zfs/zfs pool on $dev/;
+                    if ($filesystems{$zdev->{name}}->{dev}) {
+                        $filesystems{$zdev->{name}}->{dev} .= " $dev";
+                    } else {
+                        $filesystems{$zdev->{name}}->{dev} = $dev;
+                    }
+        #            $filesystems{$zdev->{name}}->{nametype} =~ s/zfs/zfs pool/;
                 }
             }
             $zdevs{$dev} = $zdev->{name};
-            $zdev = '';
+        #    $zdev = '';
         }
     }
 
@@ -5226,7 +5227,7 @@ END
     return "Status=Error Storage device not found\n" unless ($stordevice);
     my $mp = $devices{$dev}->{mounted};
     my $newstordir;
-    my $oldstordir;
+    # my $oldstordir;
     if ($devices{$dev}->{type} eq 'zfs') {
         my $cmd = qq|zfs list stabile-$type/$type -Ho mountpoint|;
         my $zmp = `$cmd`;
@@ -5257,18 +5258,46 @@ END
         $cfg->param('STORAGE_BACKUPDIR', $newstordir);
         $cfg->save();
     } elsif ($type eq 'images') {
-        $oldstordir = $stordir;
-        $tenderlist[0] = 'local';
-        $cfg->param('STORAGE_POOLS_ADDRESS_PATHS', @tenderlist);
-        $tendernameslist[0] = 'Default';
-        $cfg->param('STORAGE_POOLS_NAMES', @tendernameslist);
-        $tenderpathslist[0] = $newstordir;
-        $cfg->param('STORAGE_POOLS_LOCAL_PATHS', @tenderpathslist);
+
+    # Handle shared storage config
+    #    $oldstordir = $stordir;
+        my $i = 0;
+        for($i = 0; $i <= $#tenderpathslist; $i++) {
+            my $dir = $tenderpathslist[$i];
+            last if ($dir eq $newstordir);
+        }
+        # $tenderpathslist[0] = $newstordir;
+        splice(@tenderpathslist, $i,1); # Remove existing entry
+        unshift(@tenderpathslist, $newstordir); # Then add the new path
+        $cfg->param('STORAGE_POOLS_LOCAL_PATHS', join(',', @tenderpathslist));
+
+        # $tenderlist[0] = 'local';
+        splice(@tenderlist, $i,1);
+        unshift(@tenderlist, 'local');
+        $cfg->param('STORAGE_POOLS_ADDRESS_PATHS', join(',', @tenderlist));
+
+        # $tendernameslist[0] = 'Default';
+        splice(@tendernameslist, $i,1);
+        unshift(@tendernameslist, 'Default');
+
+        if ($i) { # We've actually changed storage device
+            my $oldstorname = $tenderpathslist[1];
+            $oldstorname = $1 if ($oldstorname =~ /.*\/(.+)/);
+            $tendernameslist[1] = "$oldstorname on $imagesdevice"; # Give the previous default pool a fitting name
+
+            $storagepools = "$storagepools,$i" unless ($storagepools =~ /,\s*$i,?/ || $storagepools =~ /,\s*$i$/ || $storagepools =~ /^$i$/);
+            $cfg->param('STORAGE_POOLS_DEFAULTS', $storagepools);
+        }
+        $cfg->param('STORAGE_POOLS_NAMES', join(',', @tendernameslist));
+
         $cfg->save();
 
+
+    # Handle node storage configs
         unless ( tie(%idreg,'Tie::DBI', Hash::Merge::merge({table=>'nodeidentities',key=>'identity',CLOBBER=>3}, $Stabile::dbopts)) ) {return "Unable to access id register"};
-        my @nodeconfigs;
         # Build hash of known node config files
+        my @nodeconfigs;
+        push @nodeconfigs, "/etc/stabile/nodeconfig.cfg";
         foreach my $valref (values %idreg) {
             my $nodeconfigfile = $valref->{'path'} . "/casper/filesystem.dir/etc/stabile/nodeconfig.cfg";
             next if ($nodeconfigs{$nodeconfigfile}); # Node identities may share basedir and node config file
@@ -5277,27 +5306,31 @@ END
             }
         }
         untie %idreg;
-        push @nodeconfigs, "/etc/stabile/nodeconfig.cfg";
         foreach my $nodeconfig (@nodeconfigs) {
             my $nodecfg = new Config::Simple($nodeconfig);
-            my $ltenders = $nodecfg->param('STORAGE_SERVERS_ADDRESS_PATHS');
-            my @ltenderlist = split(/,\s*/, $ltenders);
-            $ltenderlist[0] = "10.0.0.1:$newstordir";
-            $nodecfg->param('STORAGE_SERVERS_ADDRESS_PATHS', @ltenderlist);
-            my $ltenderpaths = $nodecfg->param('STORAGE_SERVERS_LOCAL_PATHS');
-            my @ltenderpathslist = split(/,\s*/, $ltenderpaths);
-            $ltenderpathslist[0] = $newstordir;
-            $nodecfg->param('STORAGE_SERVERS_LOCAL_PATHS', @ltenderpathslist);
+            my @ltenderlist = $nodecfg->param('STORAGE_SERVERS_ADDRESS_PATHS');
+            my $ltenders = join(", ", @ltenderlist);
+            next if ($ltenders =~ /10\.0\.0\.1:$newstordir$/ || $ltenders =~ /10\.0\.0\.1:$newstordir,/); # This entry already exists
+            #my @ltenderlist = split(/,\s*/, $ltenders);
+            #$ltenderlist[0] = "10.0.0.1:$newstordir";
+            unshift(@ltenderlist, "10.0.0.1:$newstordir");
+            $nodecfg->param('STORAGE_SERVERS_ADDRESS_PATHS', join(',', @ltenderlist));
+            my @ltenderpathslist = $nodecfg->param('STORAGE_SERVERS_LOCAL_PATHS');
+            my $ltenderpaths = join(", ", @ltenderpathslist);
+            #my @ltenderpathslist = split(/,\s*/, $ltenderpaths);
+            #$ltenderpathslist[0] = $newstordir;
+            unshift(@ltenderpathslist, $newstordir);
+            $nodecfg->param('STORAGE_SERVERS_LOCAL_PATHS', join(',', @ltenderpathslist));
             $nodecfg->save();
         }
         unless (`grep "$newstordir 10" /etc/exports`) {
             `echo "$newstordir 10.0.0.0/255.255.255.0(sync,no_subtree_check,no_root_squash,rw)" >> /etc/exports`;
             `/usr/sbin/exportfs -r`; #Reexport nfs shares
         }
-        $oldstordir =~ s/\//\\\//g;
-        `perl -pi -e 's/$oldstordir 10.*\\\n//s;' /etc/exports` if ($oldstordir);
-    }
-    if ($type eq 'images') {
+# We no longer undefine storage pools - we add them
+#        $oldstordir =~ s/\//\\\//g;
+#        `perl -pi -e 's/$oldstordir 10.*\\\n//s;' /etc/exports` if ($oldstordir);
+
         `mkdir "$newstordir/common"` unless (-e "$newstordir/common");
         `cp "$stordir/ejectcdrom.xml" "$newstordir/ejectcdrom.xml"` unless (-e "$newstordir/ejectcdrom.xml");
         `cp "$stordir/mountvirtio.xml" "$newstordir/mountvirtio.xml"` unless (-e "$newstordir/mountvirtio.xml");
@@ -5306,20 +5339,23 @@ END
     Updatedownloads();
 
     # Update /etc/cgconfig.conf
-    my $physdev = $devices{$dev}->{dev};
-    # It seems that cgroups cannot handle individual partitions for blkio
-    $physdev = $1 if ($physdev =~ /(\w+)\d+/);
-    if (-d "/sys/fs/cgroup" ) {
-        my $blkline = `lsblk -l $physdev`;
-        my $majmin = '';
-        $majmin = $1 if ($blkline =~ /$physdev +(\d+:\d+)/);
-        $postreply .= "Status=OK Setting cgroups block device to $majmin\n";
-        if ($majmin) {
-            setCgroupsBlkDevice($majmin);
-            # `perl -pi -e 's/\\d+:\\d+ /$majmin /' /etc/cgconfig.conf`;
-            # `cgconfigparser -l /etc/cgconfig.conf`;
+    my $devs = $devices{$dev}->{dev};
+    my @pdevs = split(" ", $devs);
+    my $majmins;
+    foreach my $dev (@pdevs) {
+        # It seems that cgroups cannot handle individual partitions for blkio
+        my $physdev = $1 if ($dev =~ /(\w+)\d+/);
+        if ($physdev && -d "/sys/fs/cgroup" ) {
+            my $blkline = `lsblk -l /dev/$physdev`;
+            my $majmin = '';
+            $majmin = $1 if ($blkline =~ /$physdev +(\d+:\d+)/);
+            $postreply .= "Status=OK Setting cgroups block device to $majmin\n";
+            if ($majmin) {
+                $majmins .= ($majmins)?" $majmin":$majmin;
+            }
         }
     }
+    setCgroupsBlkDevice($majmins) if ($majmins);
 
     $Stabile::Nodes::console = 1;
     require "$Stabile::basedir/cgi/nodes.cgi";
@@ -5343,7 +5379,7 @@ sub Initializestorage {
 GET:device,type,fs,activate,force:
 Initializes a local disk or partition, and optionally formats it with ZFS and creates a ZFS pool to use as image storage or backup storage.
 [device] is a local disk device in /dev like e.g. 'sdd'. [type] may be either 'images' (default) or 'backup'. [fs] may be 'lvm' (default) or 'zfs'.
-Set [activate] if you want to put the device into use immediately.
+Set [activate] if you want to put the device into use immediately. Set [force] if you want to destroy existing ZFS pool and recreate (obviously use with care).
 END
     }
     my $fs = $obj->{fs} || 'zfs';
@@ -5381,24 +5417,25 @@ END
     my $mounts = `cat /proc/mounts`;
     my $zpools = `zpool list -v`;
     my $pvs = `pvdisplay -c`;
+    my $z;
     $postreply = '';
     # Unconfigure existing zfs or lvm if $force and zfs/lvm configured or device is in use by either
     if ($zpools =~ /stabile-$type/ || $mounts =~ /dev\/mapper\/stabile$type/ || $zpools =~ /$dev/ || $pvs =~ /$dev/) {
-        if ($fs eq 'zfs' || $zpools =~ /$dev/) { # ZFS needs to be unconfigured
-            if ($force) {
-                my $umount = `umount -v "/stabile-$type/$type" 2>&1`;
+        if ($fs eq 'zfs' || $zpools =~ /$dev/) {
+            if ($force) { # ZFS needs to be unconfigured
+                my $umount = `LANG=en_US.UTF-8 umount -v "/stabile-$type/$type" 2>&1`;
                 unless ($umount =~ /(unmounted|not mounted|no mount point)/) {
-                    $postreply .= "Status=Error Unable to unmount zfs $type storage - $umount\n";
+                    $postreply .= "Status=Error Unable to unmount zfs $type storage on $dev - $umount\n";
                     return $postreply;
                 }
-                `umount "/stabile-$type/$type"`;
                 `umount "/stabile-$type"`;
                 my $res = `zpool destroy "stabile-$type" 2>&1`;
                 chomp $res;
                 $postreply .= "Status=OK Unconfigured zfs - $res\n";
             } else {
                 $postreply .= "Status=Error ZFS is already configured for $type\n";
-                return $postreply;
+                $z = 1;
+            #    return $postreply;
             }
         }
         if ($fs eq 'lvm' || $pvs =~ /$dev/) {
@@ -5429,7 +5466,7 @@ END
     $zpools = `zpool list -v`;
     $pvs = `pvdisplay -c`;
     if ($mounts =~ /\/dev\/$dev/ || $pvs =~ /$dev/ || $zpools =~ /$dev/) {
-        $postreply .= "Status=Error $dev is already in use - please use force.\n";
+        $postreply .= "Status=Error $dev is already in use - use force.\n";
         return $postreply;
     }
     # Now format
@@ -5440,9 +5477,13 @@ END
             my $fres = `parted -s /dev/$dev mklabel GPT 2>&1`;
             $postreply .= "Status=OK partitioned $dev: $fres\n";
         }
-        `zpool create stabile-$type /dev/$dev`;
-        `zfs create stabile-$type/$type`;
-        `zfs set atime=off stabile-$type/$type`;
+        if ($z) { # zpool already created
+            `zpool add stabile-$type /dev/$dev`;
+        } else {
+            `zpool create stabile-$type /dev/$dev`;
+            `zfs create stabile-$type/$type`;
+            `zfs set atime=off stabile-$type/$type`;
+        }
 #        if ($force) {
 #            $postreply .= "Status=OK Forcibly removing all files in $stordir to allow ZFS mount\n";
 #            `rm -r $stordir/*`;
@@ -5493,7 +5534,7 @@ END
 }
 
 sub setCgroupsBlkDevice {
-    my $majmin = shift;
+    my @majmins = split(" ", shift);
     my $file = "/etc/cgconfig.conf";
     unless (open(FILE, "< $file")) {
         $postreply .= "Status=Error problem opening $file\n";
@@ -5503,13 +5544,29 @@ sub setCgroupsBlkDevice {
     close FILE;
     chomp @lines;
     my $group;
+    my $open;
+    my $option;
     my @newlines;
     for my $line (@lines) {
-        $group = $1 if ($line =~ /group (\w+) /);
-        if ($group eq 'stabile' || $group eq 'stabilevm') {
-            $line =~ s/(blkio.throttle\..*_device = ")(\d+:\d+)/$1$majmin";/;
+        if ($line =~ /group (\w+) /) {
+            $group = $1;
+        } else {
+            $open = 0 if ($group && $line =~ /\}/);
         }
-        push @newlines, $line;
+        if ($open && ($group eq 'stabile' || $group eq 'stabilevm')) {
+            if ($line =~ /(blkio.throttle\..+_device = ")(\d+:\d+) (\d+")/) {
+                if ($option ne $1) { # Only handle same option once
+                    $option = $1;
+                    foreach my $majmin (@majmins) {
+                        my $mline = qq|        $1$majmin $3;|;
+                        push @newlines, $mline;
+                    }
+                }
+            }
+#            $line =~ s/(blkio.throttle\..+_device = ")(\d+:\d+)/$1$majmin/;
+        }
+        push @newlines, $line unless ($open);
+        $open = 1 if ($group && $line =~ /blkio \{/);
     }
     unless (open(FILE, "> $file")) {
         $postreply .= "Status=Error Problem opening $file\n";

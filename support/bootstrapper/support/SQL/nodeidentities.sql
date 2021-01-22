@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS `nodeidentities` (
   PRIMARY KEY (`name`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 
-INSERT INTO `nodeidentities` VALUES ('default','kvm','bionic','img,qcow,qcow2','kvm-bionic-x64',0,'x86-64','4.15.0-112-generic','/mnt/stabile/tftp/bionic');
+INSERT INTO `nodeidentities` VALUES ('default','kvm','bionic','img,qcow,qcow2','kvm-bionic-x64',0,'x86-64','','/mnt/stabile/tftp/bionic');

@@ -462,6 +462,36 @@ END
     return $res;
 }
 
+sub do_dnslist {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET::
+Lists entries in $dnsdomain zone.
+END
+    }
+
+    my $res;
+    $res .= header('text/plain') unless $console;
+    $res .= "Status=" . $main::dnsList->($engineid, $user);
+    return $res;
+}
+
+sub do_dnsclean {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET::
+Remove this engines entries in $dnsdomain zone.
+END
+    }
+
+    my $res;
+    $res .= header('text/plain') unless $console;
+    $res .= $main::dnsClean->($engineid, $user);
+    return $res;
+}
+
 sub do_dnscheck {
     my ($uuid, $action) = @_;
     if ($help) {
@@ -533,14 +563,15 @@ sub do_getdnsdomain {
     if ($help) {
         return <<END
 GET::
-Get the domain this Engine registers entries in.
+Get the domain and the subdomain this Engine registers entries in.
 END
     }
-
+    my $domain = ($enginelinked)?$dnsdomain:'';
+    my $subdomain = ($enginelinked)?substr($engineid, 0, 8):'';
+    my $linked = ($enginelinked)?'true':'false';
     my $res;
-#    $res .= header('application/json') unless $console;
-#    $res .= qq|{"domain": "$dnsdomain"}\n|;
-    $res .= "$dnsdomain\n";
+    $res .= header('application/json') unless $console;
+    $res .= qq|{"domain": "$domain", "subdomain": "$subdomain", "enginelinked": "$linked"}|;
     return $res;
 }
 
@@ -1039,7 +1070,7 @@ END
                 } else {
                     $postreply .= "Status=OK Allocated external IP: $externalip\n" unless ($regnet->{'externalip'} eq $externalip);
                     if ($dodns) {
-                        $main::dnsCreate->($engineid, $externalip, $externalip, 'A') unless (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
+                        $main::dnsCreate->($engineid, $externalip, $externalip, 'A', $user);
                     }
                 }
 
@@ -1052,7 +1083,7 @@ END
                 } else {
                     $postreply .= "Status=OK Allocated external IP: $externalip\n" unless ($regnet->{'externalip'} eq $externalip);
                     if ($dodns) {
-                        $postreply .= "Status=OK Trying to register DNS " . $main::dnsCreate->($engineid, $externalip, $externalip, 'A') unless (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
+                        $postreply .= "Status=OK Trying to register DNS " . $main::dnsCreate->($engineid, $externalip, $externalip, 'A', $user);
                     }
                 }
                 $internalip = getNextInternalIP($internalip, $uuid, $id);
@@ -1536,13 +1567,13 @@ END
                 my $result =  removeDHCPAddress($id, $domains, $internalip);
                 $postreply .= "$result\n" unless $result eq "OK";
                 if ($dodns) {
-                    $main::dnsDelete->($engineid, $externalip) if (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
+                    $main::dnsDelete->($engineid, $externalip) if ($enginelinked);
                 }
             } elsif ($type eq "externalip") {
                 my $result =  removeDHCPAddress($id, $domains, $externalip);
                 $postreply .= "$result\n" unless $result eq "OK";
                 if ($dodns) {
-                    $main::dnsDelete->($engineid, $externalip) if (`host $externalip.$dnsdomain authns1.cabocomm.dk` =~ /has address/);
+                    $main::dnsDelete->($engineid, $externalip) if ($enginelinked);
                 }
             }
             if ($status eq 'nat') {

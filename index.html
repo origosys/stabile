@@ -230,7 +230,7 @@
                       }
                       if (!nohistory) {
                           IRIGO.alerts.unshift({"message": message, "time": new Date()});
-                          if (IRIGO.alerts.length>20) IRIGO.alerts.pop();
+                          if (IRIGO.alerts.length>12) IRIGO.alerts.pop();
                           $("#toasthistory").show();
                       }
                   }

@@ -219,7 +219,7 @@ if($ARGV[0] eq 'configure') {
         }
     } elsif ($oldrev && $currev == $oldrev) {
         print_headline("Commencing Stabile reconfiguration ($oldrev -> $currev)", 1);
-        install_all(($tasks[2], $tasks[4], $tasks[5], $tasks[6], $tasks[7], $tasks[8], $tasks[9]));
+        install_all(($tasks[2], $tasks[4], $tasks[5], $tasks[6], $tasks[7], $tasks[8], $tasks[9], $tasks[10]));
         print_headline("Configuration succeeded!");
     } else {
         print_headline("Commencing full Stabile configuration", 1);
@@ -1675,82 +1675,48 @@ sub upgrade {
 	 # Allow mon to actually save disabled states
 #	 `chown mon:mon /usr/lib/mon/state.d`;
 
-	print $out "No tasks to do for this upgrade...\n";
-	return 0;
-
 	foreach my $piston_version (@piston_versions) {
-        my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
-        if (!(-e "$piston_root/bin/bash")) {
+		my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
+		if (!(-e "$piston_root/bin/bash")) {
 			print $out "** Invalid piston found in $piston_root **\n";
-            next;
-        } else {
-			print $out "** Now upgrading software and configuration in existing piston $piston_root **\n";
-        }
+			next;
+		}
+		else {
+			print $out "** Now upgrading software and configuration in existing node root $piston_root **\n";
+		}
 
-        unless (`grep "apt.origo.io" $piston_root/etc/apt/sources.list.d/steampiston.list`) {
-            my $ret = `echo "deb http://apt.origo.io/archives bionic stabile" >> $piston_root/etc/apt/sources.list.d/steampiston.list`;
-        } else {
-            `perl -pi -e "s/archives main mysection/archives bionic stabile/" $piston_root/etc/apt/sources.list.d/steampiston.list`;
-        }
-		print $out `sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' $piston_root/etc/apt/sources.list`;
-		print $out `sed -i -re 's/([a-z]{2}\.)?archive.ubuntu.com|security.ubuntu.com/old-releases.ubuntu.com/g' $piston_root/etc/apt/sources.list`;
-		print $out `chroot $piston_root apt-get update`;
-		print $out `chroot $piston_root apt-get -q -y --force-yes install libproc-background-perl cgroup-bin`;
-		print $out `chroot $piston_root apt-get -q -y --force-yes install kvm-pxe`;
-		print $out `chroot $piston_root apt-get -q -y --force-yes install ssl-cert megacli`;
-		print $out `chroot $piston_root apt-get -q -y --force-yes install msmtp`;
-		print $out `chroot $piston_root apt-get -q -y --force-yes install msmtp-mta bsd-mailx`;
-		print $out `echo "account default\nhost 10.0.0.1\nfrom origo\@origo.io" > /etc/msmtprc`;
-		print $out `cp /usr/share/stabile/lsi/lsi.sh $piston_root/usr/local/bin`;
+		# Copy in new movepiston
+		my $ret = copy('/usr/local/sbin/movepiston', "$piston_root/usr/local/sbin/movepiston");
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+		else {`chmod 755 $piston_root/usr/local/sbin/movepiston`};
 
-    # Set up SOL for IPMI and AMT
-        my $ltext = <<END
-start on stopped rc RUNLEVEL=[2345]
-stop on runlevel [!2345]
-
-respawn
-exec /sbin/getty -8 115200,38400,9600 ttyS1
-END
-;
-        print `echo "$ltext" > $piston_root/etc/init/ttyS1.conf` unless (-e "$piston_root/etc/init/ttyS1.conf");
-        $ltext = <<END
-start on stopped rc RUNLEVEL=[2345]
-stop on runlevel [!2345]
-
-respawn
-exec /sbin/getty -8 115200,38400,9600 ttyS4
-END
-;
-        print `echo "$ltext" > $piston_root/etc/init/ttyS4.conf` unless (-e "$piston_root/etc/init/ttyS4.conf");
-
-    # Handle piston config
-        if (-e "$piston_root/etc/stabile/nodeconfig.cfg") {
+		# Handle piston config
+		if (-e "$piston_root/etc/stabile/nodeconfig.cfg") {
 			print $out "** Now upgrading nodeconfig.cfg in existing $piston_versions[0] piston **\n";
-            my $cfgtpl = new Config::Simple("/usr/share/stabile/nodeconfig.template.cfg");
-            my %cfgtplhash = $cfgtpl->vars();
-            my $cfg = new Config::Simple("$piston_root/etc/stabile/nodeconfig.cfg");
-            my %cfghash = $cfg->vars();
+			my $cfgtpl = new Config::Simple("/usr/share/stabile/nodeconfig.template.cfg");
+			my %cfgtplhash = $cfgtpl->vars();
+			my $cfg = new Config::Simple("$piston_root/etc/stabile/nodeconfig.cfg");
+			my %cfghash = $cfg->vars();
 
-            # Copy in new config keys and values
-            foreach my $pref (keys %cfgtplhash) {
-                if (!(defined $cfg->param($pref))) {
-                    $cfg->param($pref, $cfgtplhash{$pref});
-                }
-            }
-            # Weed out obsolete config keys
-            foreach my $pref (keys %cfghash) {
-                if (!(defined $cfgtpl->param($pref))) {
-                    $cfg->delete($pref);
-                }
-            }
-            $cfg->save();
-        }
+			# Copy in new config keys and values
+			foreach my $pref (keys %cfgtplhash) {
+				if (!(defined $cfg->param($pref))) {
+					$cfg->param($pref, $cfgtplhash{$pref});
+				}
+			}
+			# Weed out obsolete config keys
+			foreach my $pref (keys %cfghash) {
+				if (!(defined $cfgtpl->param($pref))) {
+					$cfg->delete($pref);
+				}
+			}
+			$cfg->save();
+		}
+	}
 
-    }
-
-	print $out "** Now upgrading software in existing valve **\n";
-	print $out `perl -MCPAN -e 'install Locale::TextDomain'`;
-	print $out "** Now upgrading database **\n";
+#	print $out "** Now upgrading software in existing valve **\n";
+#	print $out `perl -MCPAN -e 'install Locale::TextDomain'`;
+#	print $out "** Now upgrading database **\n";
 #    `echo "ALTER TABLE nodes ADD vmuuids varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 #    `echo "ALTER TABLE nodes ADD vmnames varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 #    `echo "ALTER TABLE nodes ADD vmusers varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;
@@ -1786,7 +1752,7 @@ END
 #    `echo "ALTER TABLE users CONVERT TO CHARACTER SET utf8 COLLATE utf8_general_ci;" | mysql steamregister 2>/dev/null 1>/dev/null`;
 
     # Delete archived billing rows - getting out of hand
-	print $out "** Cleaning up billing tables\n";
+#	print $out "** Cleaning up billing tables\n";
 #    `echo "DELETE FROM billing_images where userstoragepooltime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
 #    `echo "DELETE FROM billing_domains where usernodetime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
 #    `echo "DELETE FROM billing_networks where useridtime like '%__-____-__-%.%';" | mysql steamregister 2>/dev/null 1>/dev/null`;
@@ -1812,7 +1778,7 @@ END
 ##    `echo "UPDATE billing_images SET backupsizeavg=backupsize WHERE userstoragepooltime LIKE '%2015-10';" | mysql steamregister 2>/dev/null 1>/dev/null`;
 ##    `echo "UPDATE billing_images SET backupsizeavg=backupsize WHERE userstoragepooltime LIKE '%2015-11';" | mysql steamregister 2>/dev/null 1>/dev/null`;
 
-	print $out "** Now upgrading config.cfg in existing valve **\n";
+	print $out "** Now upgrading config.cfg in existing admin node **\n";
     # Handle valve config
     if (-e "/etc/stabile/config.cfg") {
         my $cfgtpl = new Config::Simple("/usr/share/stabile/config.template.cfg");
@@ -1836,30 +1802,30 @@ END
     }
 
     # We need quotas for VM mountable NFS
-    `perl -pi -e 's/(errors=remount-ro)/errors=remount-ro,usrjquota=aquota.user,jqfmt=vfsv0/' /etc/fstab` unless (`grep aquota /etc/fstab`);
-    # print `apt-get -q -y --force-yes install quota quotatool`; # included in dependencies instead
-    `mount -o remount /`;
-    `quotacheck -avum`;
+#    `perl -pi -e 's/(errors=remount-ro)/errors=remount-ro,usrjquota=aquota.user,jqfmt=vfsv0/' /etc/fstab` unless (`grep aquota /etc/fstab`);
+#    # print `apt-get -q -y --force-yes install quota quotatool`; # included in dependencies instead
+#    `mount -o remount /`;
+#    `quotacheck -avum`;
 
     # We need xinetd to run netperf netserver with hosts.allow support
     # print `apt-get -q -y --force-yes install xinetd`; # included in dependencies instead
     # Install copy of netserver from Precise netperf package
-	print $out `cp -a /usr/share/stabile/netserver /usr/local/bin`;
-	print $out `cp /usr/share/stabile/netperf /etc/xinetd.d/netperf`;
+#	print $out `cp -a /usr/share/stabile/netserver /usr/local/bin`;
+#	print $out `cp /usr/share/stabile/netperf /etc/xinetd.d/netperf`;
     # Run netserver under xinetd
-    `perl -pi -e "s/(smsqp\\s+11201\\/udp)/$1\nnetperf         12865\\/tcp/" /etc/services` unless (`grep netperf /etc/services`);
-    `echo "netserver: 10.0.0.0/8" >> /etc/hosts.allow` unless (`grep netserver /etc/hosts.allow`);
+#    `perl -pi -e "s/(smsqp\\s+11201\\/udp)/$1\nnetperf         12865\\/tcp/" /etc/services` unless (`grep netperf /etc/services`);
+#    `echo "netserver: 10.0.0.0/8" >> /etc/hosts.allow` unless (`grep netserver /etc/hosts.allow`);
 
     # We need libmime-lite-perl to send HTML mon alerts
     # print `apt-get -q -y --force-yes install libmime-lite-perl`; # included in dependencies instead
 
     # Copy in new version of amtterm
-    print `cp /usr/share/stabile/amtterm /usr/bin/amtterm`;
+#    print `cp /usr/share/stabile/amtterm /usr/bin/amtterm`;
     # Upgrade pxe boot files to support AMT terminal
-    `perl -pi -e "s/(bootif=eth0)/console=ttyS4,38400n81 bootif=eth0/" /mnt/stabile/tftp/pxelinux.cfg/*` unless (`grep ttyS4 /mnt/stabile/tftp/pxelinux.cfg/default`);
+#    `perl -pi -e "s/(bootif=eth0)/console=ttyS4,38400n81 bootif=eth0/" /mnt/stabile/tftp/pxelinux.cfg/*` unless (`grep ttyS4 /mnt/stabile/tftp/pxelinux.cfg/default`);
 
     # Change permissions of dnsmasq configuration files
-    print `chown -R www-data:www-data /etc/stabile/networks`;
+#    print `chown -R www-data:www-data /etc/stabile/networks`;
     return 0;
 }
 
@@ -1976,8 +1942,7 @@ sub install_all {
 	my @tasks = @_;
 	my $tasknum = 0;
 	foreach my $task (@tasks) {
-#	    if ($tasknum == 0) {$tasknum++; next;}; # Skip Perl modules
-	    if ($tasknum == 11 || $tasknum == 5) {$tasknum++; next;}; # Don't upgrade, skip guacamole
+#	    if ($tasknum == 11 || $tasknum == 5) {$tasknum++; next;}; # Don't upgrade, skip guacamole
 		execute_task($task);
 		$tasknum++;
 	}

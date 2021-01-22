@@ -260,7 +260,7 @@ $term_li = '' unless ($appinfo{terminallink});
 
 my $head = <<END
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="overflow-x: hidden;">
 <head>
     <meta charset="utf-8">
     <title>$appinfo{name}</title>
@@ -305,10 +305,10 @@ my $head = <<END
             line-height: 0.7;
         }
         .alert {
-            margin-top: 10px;
-            position:absolute;
+            margin: 10px auto 5px auto;
+        /*    position:absolute;
             top:420px;
-            left: 12px;
+            left: 12px; */
             width: 90%
         }
         td {
@@ -372,7 +372,7 @@ my $head = <<END
                     </li>
 $term_li
                     <li>
-                        <a href="https://$externalip.$appinfo{dnsdomain}:10001/" target="_blank">
+                        <a href="https://$externalip:10001/" target="_blank">
                             to the Webmin console
                         </a>
                     </li>

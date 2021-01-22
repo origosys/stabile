@@ -120,7 +120,7 @@ try {
 
 	if ($status eq "joining" && $mac) {
 		print header(),
-		     start_html('Updating Stabile piston...'),
+		     start_html('Updating Stabile node...'),
 		     h1('Examining piston request...'),
 		     hr;
 		# A new node is trying to join
@@ -130,6 +130,7 @@ try {
 		my $dist = $idreg{'default'}->{'dist'};
 		my $path = $idreg{'default'}->{'path'};
 		my $kernel = $idreg{'default'}->{'kernel'};
+        $kernel = "-$kernel" if ($kernel);
 #		untie %idreg;
 		my $bootentry;
 		
@@ -139,11 +140,11 @@ try {
 		if ($dist eq 'lucid') {
 			$bootentry = <<ENDBOOT;
 prompt 0
-default Stabile Piston
-label Stabile Piston
-kernel vmlinuz-$kernel
+default Stabile Node
+label Stabile Node
+kernel vmlinuz$kernel
 ipappend 2
-append initrd=initrd.img-$kernel ro nomodeset root=/dev/nfs nfsroot=$serverip:$path netboot=nfs union=aufs boot=live ip=dhcp identity=$id acpi=force console=ttyS4,115200n81 console=ttyS1,115200n81 console=tty0 ipv6.disable=1 intel_iommu=on
+append initrd=initrd.img$kernel ro nomodeset root=/dev/nfs nfsroot=$serverip:$path netboot=nfs union=aufs boot=live ip=dhcp identity=$id acpi=force console=ttyS4,115200n81 console=ttyS1,115200n81 console=tty0 ipv6.disable=1 intel_iommu=on
 ENDBOOT
 
     		print TEMP2 $bootentry . "\n";
@@ -151,11 +152,11 @@ ENDBOOT
 		} elsif ($dist) {
 			$bootentry = <<ENDBOOT;
 prompt 0
-default Stabile Piston
-label Stabile Piston
-kernel vmlinuz-$kernel
+default Stabile Node
+label Stabile Node
+kernel vmlinuz$kernel
 ipappend 2
-append initrd=initrd.img-$kernel ro nomodeset root=/dev/nfs nfsroot=$serverip:$path netboot=nfs union=aufs boot=casper ip=dhcp identity=$id acpi=force console=ttyS4,115200n81 console=ttyS1,115200n81 console=tty0 ipv6.disable=1 intel_iommu=on disable_mtrr_cleanup
+append initrd=initrd.img$kernel ro nomodeset root=/dev/nfs nfsroot=$serverip:$path netboot=nfs union=aufs boot=casper ip=dhcp identity=$id acpi=force console=ttyS4,115200n81 console=ttyS1,115200n81 console=tty0 ipv6.disable=1 intel_iommu=on disable_mtrr_cleanup
 ENDBOOT
 
 			print TEMP2 $bootentry . "\n";
@@ -262,7 +263,7 @@ ENDBOOT
 # A node is updating it's status
 	} else {
 		print header(),
-		     start_html('Updating Stabile piston...'),
+		     start_html('Updating Stabile node...'),
 		     h1('Examining piston request...'),
 		     hr;
 		# Look for action requests (from users)

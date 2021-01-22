@@ -16,8 +16,8 @@ DEBS=
 PREEXEC=/tmp/files/preexec.sh
 POSTEXEC=/tmp/files/postexec.sh
 SERVICE=
-TERMINALLINK=pipe/http://{uuid}:4200
-MANAGEMENTLINK=pipe/http://{uuid}:10000/stabile/
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
 DATAIMAGE=20G
 LOGO=https://www.stabile.io/images/apps/centos-logo.png
 THUMBNAIL=https://www.stabile.io/images/apps/centos-logo.png
@@ -30,5 +30,4 @@ DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-we
 		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the advanced web UI</li>\
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 		<li>Size the server (after installation) as you like, and only pay for the minutes your servers are running.</li>\
-	</ul>\
-	<div>In minutes, you'll have your own Linux Server up and running, which is easy to maintain and can run all of your server applications. Remember that you only pay for the actual time the server is running. If you start it, and change your mind after a few minutes, you'll only be paying cents.</div>
+	</ul>

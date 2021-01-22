@@ -219,7 +219,7 @@
                           <td><select id="info_imagesdevice_field" style="display:inline-block; margin-bottom: 4px; vertical-align: bottom;" dojoType="dijit.form.Select"
                                       store="stores.imagesDevices" sortbylabel="false" onChange='home.toggleImagesButtons(this);'></select>
 
-                              <button class="btn btn-xs btn-info" id="info_imagesdevice_button" onclick="grid.actionConfirmDialog('info_imagesdevice_field','setimagesdevice','Images storage','use this storage device as primary images device?','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px;">Use this device</button>
+                              <button class="btn btn-xs btn-info" id="info_imagesdevice_button" onclick="grid.actionConfirmDialog('info_imagesdevice_field','setimagesdevice','Primary images storage','use this storage device as primary images device?','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px;">Use this device</button>
 
                               <button class="btn btn-xs btn-info" id="info_imageszfs_button" onclick="grid.actionConfirmDialog('info_imagesdevice_field','formatimagesdevice','Images ZFS storage','configure this storage device as primary images device? This will erase all current data on the device!!','Engine', 'home.deviceHandler');return false;" style="margin-top: -3px;">Format this device</button>
 

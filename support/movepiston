@@ -100,9 +100,19 @@ my %img_virtualsizes;
 my %oldTimes;
 
 my $tenders = $cfg->param('STORAGE_SERVERS_ADDRESS_PATHS') || "$mainvalve:/mnt/stabile/images";
-my @tenderlist = split(/,\s*/, $tenders);
+my @tenderlist;
+if (ref $tenders eq 'ARRAY') {
+    @tenderlist = @{$tenders};
+} else {
+    @tenderlist = split(/,\s*/, $tenders);
+}
 my $tenderpaths = $cfg->param('STORAGE_SERVERS_LOCAL_PATHS') || "/mnt/stabile/images";
-my @tenderpathslist = split(/,\s*/, $tenderpaths);
+my @tenderpathslist;
+if (ref $tenderpaths eq 'ARRAY') {
+    @tenderpathslist = @{$tenderpaths};
+} else {
+    @tenderpathslist = split(/,\s*/, $tenderpaths);
+}
 
 unless ($mainvalve && $adminnic) {
     print "ADMIN_SERVER_ADDRESS and ADMIN_NIC in /etc/stabile/nodeconfig.cfg should contain valid values\n";
@@ -168,7 +178,7 @@ my $hostname = $mac;
 $mac = uri_escape($mac);
 $hostname =~ tr/://d;
 $hostname = "piston" . $hostname;
-$ifinfo =~ m/inet addr:(\S+) (.*)\n/i;
+$ifinfo =~ m/inet (\S+) (.*)\n/i;
 my $ip = $1;
 my $glogentry = "--: nodes: $nmac: running: Bringing up $identity piston...";
 my $command;
@@ -203,6 +213,7 @@ my $badstrokes = "/tmp/badstrokes"; # Keeping track of bad, crashing tasks
 my $tombstones = "/tmp/tombstones"; # Keep track of destroyed servers
 
 `rm /tmp/movepiston.out` if (-e "/tmp/movepiston.out");
+`chmod 666 /dev/zfs` if (-e '/dev/zfs'); # TODO: This should be removed once we upgrade to Bionic and zfs allow is supported
 
 while ($running) {
     if ($ARGV[0] eq 'stop') {

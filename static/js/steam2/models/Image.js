@@ -98,10 +98,10 @@ Image.showFilesDialog = function(uuid){
     }
 
     var t = [
-        '<div style="width:450px; min-height:300px; padding:10px;">',
+        '<div style="width:100%; min-height:300px; padding:10px;">',
             '<div id="filesTreeControls">',
                 '<div style="float:left"><em>pick files to restore</em></div>',
-                '<a href="//origo.io/info/support/help/origo-stabile/images/restore-files" rel="help" target="_blank" id="irigo-restore-files-tooltip">help</a>',
+                '<a href="//www.origo.io/info/stabiledocs/web/images/restore-files" rel="help" target="_blank" id="irigo-restore-files-tooltip">help</a>',
                 '<button id="filesRestoreButton' + uuid + '" class="btn btn-success btn-sm pull-right" style="margin-bottom:4px;"',
                 'onclick="Image._restoresInProgress[uuid] = true; Image.restore(uuid, Image._tree.getChecked()); dialog.hide();"',
                 '>Restore files</button>',

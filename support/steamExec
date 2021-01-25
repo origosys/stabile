@@ -1217,7 +1217,7 @@ sub backupAllImages {
     }
     untie %imagereg;
     # Finally back up all ZFS volumes
-    my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a zbackup";
+    my $bcmd = "REMOTE_USER=irigo $base/cgi/images.cgi -a zbackup";
     print `$bcmd`;
 
     sub runningBackups {

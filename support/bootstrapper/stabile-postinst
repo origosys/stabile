@@ -555,7 +555,7 @@ individual pistons using SSH without providing a password.
 		print $out "Setting up cgroups on engine\n";
 		$ret = cp_conf('/usr/share/stabile/valve-cgrules.conf', '/etc/cgrules.conf');
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
-		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', '/etc/cgconfig.conf');
+		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', '/etc/stabile/cgconfig.conf');
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
 		$ret = cp_conf('/usr/share/stabile/valve-cgrulesgend.service', '/etc/systemd/system/cgrulesgend.service');
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
@@ -571,7 +571,7 @@ individual pistons using SSH without providing a password.
 	# It seems that cgroups cannot handle individual partitions for blkio
 	$rootdev = $1 if ($rootdev =~ /(\w+)\d+/);
 	$majmin = $1 if (`lsblk -l $rootdev` =~ /\S+ +(\d+:\d+)/);
-    `perl -pi -e 's/8:0 /$majmin /' /etc/cgconfig.conf` if ($majmin);
+	`perl -pi -e 's/8:0 /$majmin /' /etc/stabile/cgconfig.conf` if ($majmin);
 
     my $allowusers = <<END
 AllowUsers irigo\@10.0.*

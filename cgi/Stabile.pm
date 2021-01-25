@@ -1270,6 +1270,7 @@ sub Help {
                     }
                     if (data.scopemethod != 'GET') obj.data = JSON.stringify(data.scopedata);
                     \$.ajax(obj);
+                    \$("#scoperesult").text("");
                     return true;
                     function handleResult(data, textStatus, jqXHR) {
                         if (jqXHR == 'Unauthorized') {

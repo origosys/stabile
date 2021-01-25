@@ -47,6 +47,12 @@ my $rdiffenabled = $Stabile::config->get('RDIFF-BACKUP_ENABLED') || "0";
 my $userrdiffenabled = $Stabile::config->get('RDIFF-BACKUP_USERS') || "0";
 my $nodestorageovercommission = $Stabile::config->get('NODE_STORAGE_OVERCOMMISSION') || "1";
 my $engineid = $Stabile::config->get('ENGINEID') || "";
+
+my $valve_readlimit = $Stabile::config->get('VALVE_READ_LIMIT'); # e.g. 125829120 = 120 * 1024 * 1024 = 120 MB / s
+my $valve_writelimit = $Stabile::config->get('VALVE_WRITE_LIMIT');
+my $valve_iopsreadlimit = $Stabile::config->get('VALVE_IOPS_READ_LIMIT'); # e.g. 1000 IOPS
+my $valve_iopswritelimit = $Stabile::config->get('VALVE_IOPS_WRITE_LIMIT');
+
 my $valve001id = '995e86b7-ae85-4ae0-9800-320c1f59ae33';
 my $stackspool = '/mnt/stabile/images001';
 
@@ -681,7 +687,7 @@ sub getSizes {
     my($fname, $dirpath, $suffix) = fileparse($f, ("vmdk", "img", "vhd", "qcow", "qcow2", "vdi", "iso"));
 
     my $subdir = "";
-    if ($dirpath =~ /\/$user(\/.+)\//) {
+    if ($dirpath =~ /.+\/$buser(\/.+)?\//) {
         $subdir = $1;
     }
     my $bdu;
@@ -846,7 +852,7 @@ END
     my $subdir = "";
     if ($curimg && $curimg ne '--') {
         my($bname, $dirpath) = fileparse($curimg);
-        if ($dirpath =~ /\/$buser(\/.+)\//) {
+        if ($dirpath =~ /.+\/$buser(\/.+)?\//) {
             $subdir = $1;
         }
         my $sbname = "$subdir/$bname";
@@ -870,7 +876,7 @@ END
             }
         }
         # Also include ZFS snapshots transferred from nodes
-        $imgbasedir = "/stabile-backups";
+        $imgbasedir = "/stabile-backup";
         my $snaps = `/bin/ls -l --time-style=full-iso $imgbasedir/node-*/.zfs/snapshot/*/$buser$sbname 2> /dev/null`;
         my @snaplines = split("\n", $snaps);
         foreach $line (@snaplines) {
@@ -939,7 +945,7 @@ sub getBtime {
     my $subdir = "";
     my $lastbtimestamp;
     my($bname, $dirpath) = fileparse($curimg);
-    if ($dirpath =~ /\/$buser(\/.+)\//) {
+    if ($dirpath =~ /.+\/$buser(\/.+)?\//) {
         $subdir = $1;
     }
 
@@ -963,7 +969,7 @@ sub getBtime {
         }
     }
     # Also include ZFS snapshots transferred from nodes
-    $imgbasedir = "/stabile-backups";
+    $imgbasedir = "/stabile-backup";
     my $snaps = `/bin/ls -l --time-style=full-iso $imgbasedir/node-*/.zfs/snapshot/*/$buser/$bname 2> /dev/null`;
     my @snaplines = split("\n", $snaps);
     foreach $line (@snaplines) {
@@ -1702,7 +1708,7 @@ END
 
             my $subdir = "";
             my($bname, $dirpath) = fileparse($path);
-            if ($dirpath =~ /\/$user(\/.+)\//) {
+            if ($dirpath =~ /.+\/$buser(\/.+)?\//) {
                 $subdir = $1;
             }
             my $bpath = "$backupdir/$user$subdir/$bname";
@@ -2153,9 +2159,10 @@ sub Move {
     my $macip;
     my $alreadyexists;
     my $subdir;
-    $subdir = $1 if ($path =~ /\/$reguser(\/.+)\//);
+#    $subdir = $1 if ($path =~ /\/$reguser(\/.+)\//);
+    $subdir = $1 if ($path =~ /.+\/$reguser(\/.+)?\//);
     my $restpath;
-    $restpath = $1 if ($path =~ m/.+\/$reguser\/(.+)/);
+    $restpath = $1 if ($path =~ /.+\/$reguser\/(.+)/);
 
     if ($type eq "qcow2" && $path =~ /(.+)\.master\.$type/) {
         my @regkeys = (tied %register)->select_where("master = '$path'");
@@ -3806,7 +3813,7 @@ END
     return "Your account does not have the necessary privileges\n" if ($isreadonly);
     my $res;
     $res .= header('text/plain') unless ($console);
-    $res .= "Unmounting all images for $user. ";
+    $res .= "Unmounting all images for $user\n";
     unmountAll();
     $res .= "\n$postreply" if ($postreply);
     return $res;
@@ -4321,8 +4328,9 @@ END
         if (!(defined $obj->{'storagepool'}) || $storagepool == -1) {
             @nspools = () if ($storagepool == -1); # Only do node backups
             unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac', CLOBBER=>1}, $Stabile::dbopts)) ) {return 0};
-            my $nipath = $ipath;
-            $nipath = "$1/node" if ($nipath =~ /(.+)\/(.+)/);
+#            my $nipath = $ipath;
+#            $nipath = "$1/node" if ($nipath =~ /(.+)\/(.+)/);
+            my $nipath = 'stabile-node/node';
             foreach my $node (values %nodereg) {
                 push @nspools, {
                     mac=>$node->{'mac'},
@@ -4353,10 +4361,10 @@ END
                 $mac = '';
                 $macip = '';
             }
-            if ($macip) {$zfscmd = "$sshcmd $macip zfs";}
+            if ($macip) {$zfscmd = "$sshcmd $macip sudo zfs";}
             else {$zfscmd = "zfs";}
 
-            $postreply .= "\nStatus=OK Commencing ZFS backup of $ipath $macip\n";
+            $postreply .= "Status=OK Commencing ZFS backup of $ipath $macip\n";
             my $res;
             my $cmd;
             my @imagesnaps;
@@ -4400,6 +4408,7 @@ END
                     }
                 }
             }
+
             my $lastisnap = $imagesnaps[scalar @imagesnaps -1];
             my $lastisnaptime = timelocal($6,$5,$4,$3,$2-1,$1) if ($lastisnap =~ /(\d\d\d\d)(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/);
             my $td = ($current_time - $lastisnaptime);
@@ -4415,7 +4424,7 @@ END
                 if (scalar @imagesnaps > $matches+$matchbase) {
                     for (my $j=$matches+$matchbase; $j < scalar @imagesnaps; $j++) {
                         if ($macip) {
-                            $cmd = qq[$zfscmd "send -i $ipath\@SNAPSHOT-$imagesnaps[$j-1] $ipath\@SNAPSHOT-$imagesnaps[$j] | ssh 10.0.0.1 zfs receive $bpath"]; # -R
+                            $cmd = qq[$zfscmd "send -i $ipath\@SNAPSHOT-$imagesnaps[$j-1] $ipath\@SNAPSHOT-$imagesnaps[$j] | ssh 10.0.0.1 sudo zfs receive $bpath"]; # -R
                         } else {
                             $cmd = qq[zfs send -i $ipath\@SNAPSHOT-$imagesnaps[$j-1] $ipath\@SNAPSHOT-$imagesnaps[$j] | zfs receive $bpath]; # -R
                         }
@@ -4430,6 +4439,7 @@ END
                 }
             }
             $res = '';
+
             if ($matches && !$synconly) { # snapshots are in sync
         # Then perform the actual snapshot
                 my $snap1 = sprintf "%4d%02d%02d%02d%02d%02d",$year,$mon+1,$mday,$hour,$min,$sec;
@@ -4444,7 +4454,7 @@ END
         # Send it to backup if asked to
                 unless ($snaponly || !$zbackupavailable) {
                     if ($macip) {
-                        $cmd = qq[$zfscmd "send -i $ipath\@SNAPSHOT-$oldsnap $ipath\@SNAPSHOT-$snap1 | ssh 10.0.0.1 zfs receive $bpath"];
+                        $cmd = qq[$zfscmd "send -i $ipath\@SNAPSHOT-$oldsnap $ipath\@SNAPSHOT-$snap1 | ssh 10.0.0.1 sudo zfs receive $bpath"];
                     } else {
                         $cmd = qq[zfs send -i $ipath\@SNAPSHOT-$oldsnap $ipath\@SNAPSHOT-$snap1 | zfs receive $bpath]; # -R
                     }
@@ -4457,19 +4467,19 @@ END
                     $postreply .= "Status=OK Sending ZFS snapshot of $macip $ipath $oldsnap->$snap1 to $bpath $res\n";
                     $main::syslogit->($user, 'info', "OK Sending ZFS snapshot of $macip $ipath $oldsnap->$snap1 to $bpath $res");
                 }
-                $postreply .= "Status=OK $matches ZFS snapshots are in sync. There are now $ni image snapshots, $nb backup snapshots.\n";
+                $postreply .= "Status=OK Synced $matches ZFS snapshots. There are now $ni image snapshots, $nb backup snapshots.\n";
             } elsif ($matches) {
-                $postreply .= "Status=OK $matches ZFS snapshots are in sync. There are $ni image snapshots, $nb backup snapshots.\n";
+                $postreply .= "Status=OK Synced $matches ZFS snapshots. There are $ni image snapshots, $nb backup snapshots.\n";
 #            } elsif ($ni==0 && $nb==0) { # We start from a blank slate
             } elsif ($nb==0) { # We start from a blank slate
                 my $snap1 = sprintf "%4d%02d%02d%02d%02d%02d",$year,$mon+1,$mday,$hour,$min,$sec;
                 $cmd = qq|$zfscmd snapshot -r $ipath\@SNAPSHOT-$snap1|;
                 $res = `$cmd 2>&1`;
-                $postreply .= "Status=OK Performing ZFS snapshot $res\n";
+                $postreply .= "Status=OK Performing ZFS snapshot $res $macip\n";
         # Send it to backup by creating new filesystem
                 unless ($snaponly || !$zbackupavailable) {
                     if ($macip) {
-                        $cmd = qq[$zfscmd "send $ipath\@SNAPSHOT-$snap1 | ssh 10.0.0.1 zfs receive $bpath"];
+                        $cmd = qq[$zfscmd "send $ipath\@SNAPSHOT-$snap1 | ssh 10.0.0.1 sudo zfs receive $bpath"];
                         $res .= `$cmd 2>&1`;
                         $cmd = qq|zfs set readonly=on $bpath|;
                         $res .= `$cmd 2>&1`;
@@ -4485,7 +4495,7 @@ END
                     $nb++;
                 }
                 $ni++;
-                $postreply .= "Status=OK ZFS snapshots are in sync. There are $ni image snapshots, $nb backup snapshots.\n";
+                $postreply .= "Status=OK Synced ZFS snapshots. There are $ni image snapshots, $nb backup snapshots.\n";
             } else {
                 $postreply .= "Status=ERROR Unable to sync snapshots.\n";
                 $postmsg = "ERROR Unable to sync snapshots";
@@ -4575,9 +4585,10 @@ END
                     }
                 }
             }
-            Updateallbtimes();
-            $postmsg = "OK Performing ZFS snapshot. There are $ni image snapshots and $nb backup snapshots" unless ($postmsg);
+            $postmsg .= "OK Performing ZFS backup of $bpath. There are $ni image snapshots and $nb backup snapshots. ";
         }
+        $postreply .= "Status=OK Updating all btimes\n";
+        Updateallbtimes();
     } else {
         $postreply .= "Status=ERROR Not allowed\n";
         $postmsg = "ERROR Not allowed";
@@ -4679,7 +4690,7 @@ END
     my $restorefromdir = $backupdir;
     my $inc = $backup;
     my $subdir; # 1 level of subdirs supported
-    $subdir = $1 if ($dirpath =~ /\/$obj->{user}(\/.+)\//);
+    $subdir = $1 if ($dirpath =~ /.+\/$obj->{user}(\/.+)?\//);
 
     if ($backup =~ /^SNAPSHOT-(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/) { # We are dealing with a zfs restore
         $inc = "$1-$2-$3-$4-$5-$6";
@@ -5338,7 +5349,7 @@ END
     }
     Updatedownloads();
 
-    # Update /etc/cgconfig.conf
+    # Update /etc/stabile/cgconfig.conf
     my $devs = $devices{$dev}->{dev};
     my @pdevs = split(" ", $devs);
     my $majmins;
@@ -5535,38 +5546,26 @@ END
 
 sub setCgroupsBlkDevice {
     my @majmins = split(" ", shift);
-    my $file = "/etc/cgconfig.conf";
-    unless (open(FILE, "< $file")) {
-        $postreply .= "Status=Error problem opening $file\n";
-        return $postreply;
-    }
-    my @lines = <FILE>;
-    close FILE;
-    chomp @lines;
-    my $group;
-    my $open;
-    my $option;
+    my $file = "/etc/stabile/cgconfig.conf";
+    my %options = (
+        blkio.throttle.read_bps_device => $valve_readlimit,
+        blkio.throttle.write_bps_device => $valve_writelimit,
+        blkio.throttle.read_iops_device => $valve_iopsreadlimit,
+        blkio.throttle.write_iops_device => $valve_iopswritelimit
+        );
+    my @groups = ('stabile', 'stabilevm');
     my @newlines;
-    for my $line (@lines) {
-        if ($line =~ /group (\w+) /) {
-            $group = $1;
-        } else {
-            $open = 0 if ($group && $line =~ /\}/);
-        }
-        if ($open && ($group eq 'stabile' || $group eq 'stabilevm')) {
-            if ($line =~ /(blkio.throttle\..+_device = ")(\d+:\d+) (\d+")/) {
-                if ($option ne $1) { # Only handle same option once
-                    $option = $1;
-                    foreach my $majmin (@majmins) {
-                        my $mline = qq|        $1$majmin $3;|;
-                        push @newlines, $mline;
-                    }
-                }
+    foreach my $majmin (@majmins) {
+        foreach my $group (@groups) {
+            my $mline = qq|group $group {|; push @newlines, $mline;
+            my $mline = qq|    blkio {|; push @newlines, $mline;
+            foreach my $option (keys %options) {
+                my $mline = qq|        $option = "$majmin $options{$option}";|;
+                push @newlines, $mline;
             }
-#            $line =~ s/(blkio.throttle\..+_device = ")(\d+:\d+)/$1$majmin/;
+            my $mline = qq|    }|; push @newlines, $mline;
+            my $mline = qq|}|; push @newlines, $mline;
         }
-        push @newlines, $line unless ($open);
-        $open = 1 if ($group && $line =~ /blkio \{/);
     }
     unless (open(FILE, "> $file")) {
         $postreply .= "Status=Error Problem opening $file\n";

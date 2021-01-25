@@ -591,6 +591,10 @@ END
     }
     my $mac = $obj->{'mac'};
     my $name = $obj->{'name'};
+    unless ($register{$mac}) {
+        $postreply .= "Status=ERROR Please specify a valid mac.\n";
+        return $postreply;
+    }
     my $dbstatus = $register{$mac}->{'status'};
     if ($dbstatus eq "running" && $register{$mac}->{'vms'}==0) {
         $uistatus = "wiping";

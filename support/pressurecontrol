@@ -128,33 +128,38 @@ foreach my $sp (@spoolpaths) {
 }
 
 if (-d "/sys/fs/cgroup") {
-    print "Setting auxilliary cgroups limits\n";
-    my $file = "/etc/cgconfig.conf";
-    open (FILE, "< $file") || die "problem opening $file\n";
-    my @lines = <FILE>;
-    close FILE;
-    chomp @lines;
-    my $group;
-    my @newlines;
-    for my $line (@lines) {
-        $group = $1 if ($line =~ /^group (\S+) \{/ );
-        if ($group eq 'stabile') {
-            $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $valve_readlimit";/;
-            $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $valve_writelimit";/;
-            $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $valve_iopsreadlimit";/;
-            $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $valve_iopswritelimit";/;
-        } elsif ($group eq 'stabilevm') {
-            $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $vm_readlimit";/;
-            $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $vm_writelimit";/;
-            $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $vm_iopsreadlimit";/;
-            $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $vm_iopswritelimit";/;
+    print "Setting cgroups limits\n";
+    my @files = ("/etc/stabile/cgconfig.conf");
+    push @files, "/etc/cgconfig.conf" if (-e "/etc/cgconfig.conf");
+    foreach my $file (@files) {
+        open (FILE, "< $file") || die "problem opening $file\n";
+        my @lines = <FILE>;
+        close FILE;
+        chomp @lines;
+        my $group;
+        my @newlines;
+        for my $line (@lines) {
+            $group = $1 if ($line =~ /^group (\S+) \{/ );
+            if ($group eq 'stabile') {
+                $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $valve_readlimit";/;
+                $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $valve_writelimit";/;
+                $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $valve_iopsreadlimit";/;
+                $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $valve_iopswritelimit";/;
+            } elsif ($group eq 'stabilevm') {
+                $line =~ s/(blkio.throttle.read_bps_device = "\d+:\d+).*/$1 $vm_readlimit";/;
+                $line =~ s/(blkio.throttle.write_bps_device = "\d+:\d+).*/$1 $vm_writelimit";/;
+                $line =~ s/(blkio.throttle.read_iops_device = "\d+:\d+).*/$1 $vm_iopsreadlimit";/;
+                $line =~ s/(blkio.throttle.write_iops_device = "\d+:\d+).*/$1 $vm_iopswritelimit";/;
+            }
+            push @newlines, $line;
         }
-        push @newlines, $line;
+        open (FILE, "> $file") || die "problem opening $file\n";
+        print FILE join("\n", @newlines);
+        close (FILE);
     }
-    open (FILE, "> $file") || die "problem opening $file\n";
-    print FILE join("\n", @newlines);
-    close (FILE);
-    `cgconfigparser -l /etc/cgconfig.conf`;
+    #    `cgconfigparser -l /etc/stabile/cgconfig.conf -l /etc/cgconfig.conf`;
+    my $cmd = "cgconfigparser " . join(" ", map { '-l ' . $_ } @files);
+    `$cmd`;
 } else {
     print "cgroups are not enabled!\n";
 }

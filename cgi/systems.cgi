@@ -2206,7 +2206,7 @@ sub addSimpleMonitors {
     my $hmatch1;
     my $hmatch2;
     my $hmatch3;
-    if ($serveruuid) {
+    if ($serveruuid && $domreg{$serveruuid}) {
         if ($domreg{$serveruuid}->{'user'} eq $user || $isadmin) {
             my $monitors = {
                 ping=>"fping.monitor",
@@ -2279,10 +2279,10 @@ END
                 }
             }
         } else {
-            return "Server $serveruuid not found";
+            return "Server $serveruuid not available";
         }
     } else {
-        return "No uuid";
+        return "Invalid uuid $serveruuid";
     }
     return "OK";
 }
@@ -3068,9 +3068,9 @@ sub buildSystem {
              });
 
         $postreply .= "$res\n";
-        $sysuuid = $1 if ($res =~ /sysuuid: (.+)/);
+        $sysuuid = $1 if ($res =~ /sysuuid: (\S+)/);
         my $serveruuid;
-        $serveruuid = $1 if ($res =~ /uuid: (.+)/);
+        $serveruuid = $1 if ($res =~ /uuid: (\S+)/);
         my $sys = $register{$sysuuid};
         if ($sysuuid && $i==$ioffset) {
             $register{$sysuuid} = {

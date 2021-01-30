@@ -240,12 +240,13 @@ b, strong, label {
   background: #F5F5F5;
   border-right: 1px solid #ddd;
 }
-a:link {
-    color: #ff4400
+a:focus, a:hover {
+    color: #ff4400;
+    text-decoration: underline;
+    cursor: pointer;
 }
-
-a:visited {
-    color: #ff4400
+a:link, a:visited {
+    color: #ff4400;
 }
 a:active {
 	  color: #FF0000;
@@ -2156,6 +2157,9 @@ background-image:url(/stabile/static/img/icons/image--plus.png);
 }
 .backup_icon{
 background-image:url(/stabile/static/img/icons/umbrella--plus.png);
+}
+.rebase_icon{
+    background-image:url(/stabile/static/img/icons/anchor.png);
 }
 .unmaster_icon{
 background-image:url(/stabile/static/img/icons/image--minus.png);

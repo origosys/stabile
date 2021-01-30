@@ -1675,6 +1675,8 @@ sub upgrade {
 	 # Allow mon to actually save disabled states
 #	 `chown mon:mon /usr/lib/mon/state.d`;
 
+	# Change uuid source for libvirt, because some vendors use same uuid for different nodes
+	`perl -pi -e "s/#host_uuid_source =.*/host_uuid_source = 'machine-id'/" /etc/libvirt/libvirtd.conf`;
 	foreach my $piston_version (@piston_versions) {
 		my $piston_root = "$tftp_root/$piston_version/casper/filesystem.dir";
 		if (!(-e "$piston_root/bin/bash")) {
@@ -1711,6 +1713,8 @@ sub upgrade {
 				}
 			}
 			$cfg->save();
+
+			`perl -pi -e "s/#host_uuid_source =.*/host_uuid_source = 'machine-id'/" $piston_root/etc/libvirt/libvirtd.conf`;
 		}
 	}
 

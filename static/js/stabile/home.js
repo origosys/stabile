@@ -630,7 +630,7 @@ define([
                 v += '<span class="terminal"><button dojoType="dijit.form.Button" class="btn btn-info btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="terminal_button" type="button" onclick="systembuilder.system.terminal();";>Terminal</button>';
-                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab" style="margin-right:10px; href="#home" class="small" onclick="systembuilder.system.terminal_in_tab();">in new tab</a></span></span>';
+                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab" style="margin-right:10px;" href="#home" class="small" onclick="systembuilder.system.terminal_in_tab();">in new tab</a></span></span>';
                 v += '<span class="manage_system"><button class="btn btn-success btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="manage_system_button" type="button" onclick="systembuilder.system.manage();">Manage</button>';

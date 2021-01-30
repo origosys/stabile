@@ -2365,7 +2365,7 @@ END
             $nicmac3 = $nicmac3 || randomMac();
             #    $uiuuid = $uuid; # No need to update ui for new server with jsonreststore
             $postmsg .= "Status=OK Created new server: $name";
-            $postmsg .= ", uuid: $uuid" if ($console);
+            $postmsg .= ", uuid: $uuid " if ($console);
         }
         # Update status of images
         my @imgs = ($image, $image2, $image3, $image4);
@@ -2439,7 +2439,7 @@ END
             my $ug = new Data::UUID;
             $sysuuid = $ug->create_str();
             $valref->{'system'} = $sysuuid;
-            $postmsg .= "OK sysuuid: $sysuuid" if ($console);
+            $postmsg .= "OK sysuuid: $sysuuid " if ($console);
         }
 
         # Remove domain uuid from old networks. Leave gateways alone - they get updated on next listing

@@ -1341,7 +1341,7 @@ sub getSizes {
         my($fname, $dirpath, $suffix) = fileparse($f, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
 # Special handling of vmdk's
         if ($suffix eq ".vmdk") {
-            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            my $qinfo = `/usr/bin/qemu-img info --force-share "$f"`;
             $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
             $virtualsize = int($1);
             if ( -s ($dirpath . $fname . "-flat" . $suffix)) {
@@ -1363,7 +1363,7 @@ sub getSizes {
             }
 # Get virtual size of qcow2 auto-grow volumes
         } elsif ($suffix eq ".qcow2") {
-            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            my $qinfo = `/usr/bin/qemu-img info --force-share "$f"`;
             $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
             $virtualsize = int($1);
 # Get virtual size of vdi auto-grow volumes
@@ -1720,8 +1720,8 @@ sub initializeLocalDisk {
             `/sbin/lvcreate -l $size volgroup1 -n lvol1`;
             `/sbin/mkfs.ext3 /dev/volgroup1/lvol1`;
             `/bin/mount /dev/volgroup1/lvol1 /mnt/stabile/node`;
-            `/bin/chmod 777 /mnt/stabile/node`;
         }
+        `/bin/chmod 777 /mnt/stabile/node`;
         my $lsistatus = `/usr/local/bin/lsi.sh status`;
         if ($lsistatus =~ /Adapter 0/) {
             #unless (-e "/etc/cron.hourly/lsicheck.sh") {

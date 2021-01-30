@@ -102,6 +102,7 @@ sub Init {
     *Getbackupdevice = \&Liststoragedevices;
     *Listimagesdevices = \&Liststoragedevices;
     *Listbackupdevices = \&Liststoragedevices;
+    *Rebase = \&Unmaster;
 
     *do_save = \&privileged_action_async;
     *do_sync_save = \&privileged_action;
@@ -133,6 +134,7 @@ sub Init {
     *do_updatedownloads = \&privileged_action;
     *do_master = \&privileged_action_async;
     *do_unmaster = \&privileged_action_async;
+    *do_rebase = \&privileged_action_async;
     *do_clone = \&privileged_action_async;
     *do_snapshot = \&privileged_action_async;
     *do_unsnap = \&privileged_action_async;
@@ -172,6 +174,7 @@ sub Init {
     *do_gear_updatedownloads = \&do_gear_action;
     *do_gear_master = \&do_gear_action;
     *do_gear_unmaster = \&do_gear_action;
+    *do_gear_rebase = \&do_gear_action;
     *do_gear_clone = \&do_gear_action;
     *do_gear_snapshot = \&do_gear_action;
     *do_gear_unsnap = \&do_gear_action;
@@ -648,9 +651,9 @@ sub getVirtualSize {
     my($bname, $dirpath, $suffix) = fileparse($vpath, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
     if ($suffix eq ".qcow2") {
         if ($macip) {
-            $qinfo = `$sshcmd $macip /usr/bin/qemu-img info "$vpath"`;
+            $qinfo = `$sshcmd $macip /usr/bin/qemu-img info --force-share "$vpath"`;
         } else {
-            $qinfo = `/usr/bin/qemu-img info "$vpath"`;
+            $qinfo = `/usr/bin/qemu-img info --force-share "$vpath"`;
         }
         $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
         return(int($1)); # report size of new image for billing purposes
@@ -708,7 +711,7 @@ sub getSizes {
 
 # Special handling of vmdk's
         if ($suffix eq "vmdk") {
-            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            my $qinfo = `/usr/bin/qemu-img info --force-share "$f"`;
             $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
             $virtualsize = int($1);
             if ( -s ($dirpath . substr($fname,0,-1) . "-flat." . $suffix)) {
@@ -730,7 +733,7 @@ sub getSizes {
                 $realsize += $frealsize;
 
                 my $cmdpath = $dirpath . substr($fname,0,-1) . "-s00$i." . $suffix;
-                my $qinfo = `/usr/bin/qemu-img info "$cmdpath"`;
+                my $qinfo = `/usr/bin/qemu-img info --force-share "$cmdpath"`;
                 $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
                 $virtualsize += int($1);
 
@@ -738,7 +741,7 @@ sub getSizes {
             }
 # Get virtual size of qcow2 auto-grow volumes
         } elsif ($suffix eq "qcow2") {
-            my $qinfo = `/usr/bin/qemu-img info "$f"`;
+            my $qinfo = `/usr/bin/qemu-img info --force-share "$f"`;
             $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
             $virtualsize = int($1);
 # Get virtual size of vdi auto-grow volumes
@@ -1140,29 +1143,39 @@ END
     }
     my $f = $img || $curimg;
     return "Status=Error Image $f not found\n" unless (-e $f);
-    my $vinfo = `qemu-img info "$f"`;
+    my $vinfo = `qemu-img info --force-share "$f"`;
     my $master = $1 if ($vinfo =~ /backing file: (.+)/);
-    return "Status=Error Image $f does not use a backing file\n" unless ($master);
-    return "Status=OK $master exists, no changes to $f.\n" if (-e $master); # Master OK
     (my $fname, my $fdir) = fileparse($f);
-    return "Status=OK $master exists in $fdir. No changes to $f.\n" if (-e "$fdir/$master"); # Master OK
-    # Master not immediately found, look for it
-    (my $master, my $mdir) = fileparse($master);
-    my @busers = @users;
-    push (@busers, $billto) if ($billto); # We include images from 'parent' user
-    foreach my $u (@busers) {
-        foreach my $spool (@spools) {
-            my $pooldir = $spool->{"path"};
-            my $masterpath = "$pooldir/$u/$master";
-            if (-e $masterpath) {
-                my $cmd = qq|qemu-img rebase -f qcow2 -u -b "$masterpath" "$f"|;
-                $postreply .= "Status=OK found $masterpath, rebasing from $mdir to $pooldir/$u ";
-                $postreply .= `$cmd` . "\n";
-                last;
+    if (!$master) {
+        $register{$f}->{'master'} = '';
+        $postreply .=  "Status=OK Image $f does not use a backing file\n";
+    } elsif (-e $master){ # Master OK
+        $register{$f}->{'master'} = $master;
+        $postreply .=  "Status=OK $master exists, no changes to $f.\n";
+    } elsif (-e "$fdir/$master") { # Master OK
+        $register{$f}->{'master'} = "$fdir/$master";
+        $postreply .=  "Status=OK $master exists in $fdir. No changes to $f.\n"
+    } else {
+        # Master not immediately found, look for it
+        (my $master, my $mdir) = fileparse($master);
+        my @busers = @users;
+        push (@busers, $billto) if ($billto); # We include images from 'parent' user
+        foreach my $u (@busers) {
+            foreach my $spool (@spools) {
+                my $pooldir = $spool->{"path"};
+                my $masterpath = "$pooldir/$u/$master";
+                if (-e $masterpath) {
+                    my $cmd = qq|qemu-img rebase -f qcow2 -u -b "$masterpath" "$f"|;
+                    $register{$f}->{'master'} = $masterpath;
+                    $postreply .= "Status=OK found $masterpath, rebasing from $mdir to $pooldir/$u ";
+                    $postreply .= `$cmd` . "\n";
+                    last;
+                }
             }
         }
+        $postreply .= "Status=Error $master not found in any user dir. You must provide this backing file to use this image.\n" unless ($postreply);
     }
-    $postreply .= "Status=Error $master not found in any user dir. You must provide this backing file to use this image.\n" unless ($postreply);
+    tied(%register)->commit;
     return $postreply;
 }
 
@@ -1620,10 +1633,12 @@ END
 
     $uistatus = "deleting";
     if ($status eq "unused" || $status eq "uploading" || $path =~ /(.+)\.master\.$type/) {
-        my $haschildren = 0;
+        my $haschildren;
+        my $child;
+        my $hasprimary;
+        my $primary;
         my $master = ($img->{'master'} && $img->{'master'} ne '--')?$img->{'master'}:'';
         my $usedmaster = '';
-        my $child;
         my @regvalues = values %register;
         foreach my $valref (@regvalues) {
             if ($valref->{'master'} eq $path) {
@@ -1639,10 +1654,24 @@ END
             $register{$master}->{'status'} = 'unused';
             $main::syslogit->($user, "info", "Freeing master $master");
         }
+        if ($type eq "qcow2") {
+            my @regkeys = (tied %register)->select_where("image2 = '$path'");
+            foreach my $k (@regkeys) {
+                my $val = $register{$k};
+                if ($val->{'image2'} eq $path) {
+                    $hasprimary = 1;
+                    $primary = $val->{'name'};
+                    last;
+                }
+            }
+        }
 
         if ($haschildren) {
             $postmsg = "Cannot delete image. This image is used as master by: $child";
             $postreply .= "Status=Error $postmsg\n";
+#        } elsif ($hasprimary) {
+#            $postmsg = "Cannot delete image. This image is used as secondary image by: $primary";
+#            $postreply .= "Status=Error $postmsg\n";
         } else {
             if ($mac && $path =~ /\/mnt\/stabile\/node\//) {
                 unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac', CLOBBER=>1}, $Stabile::dbopts)) ) {return "Status=Error Cannot connect to DB\n";};
@@ -1804,7 +1833,6 @@ END
         $upath = $spool->{'path'} . "/$user/$namepath";
         while ($register{"$upath.clone$i.$type"} || $register{"$npath.clone$i.$type"}) {$i++;};
     }
-
     $upath = "$spools[$istoragepool]->{'path'}/$user/$namepath";
 
     my $iname = $register{$path}->{'name'};
@@ -1834,6 +1862,7 @@ END
         if ($identity eq 'local_kvm') {
             $postreply .= "Status=OK Cloning to local node with index $dindex\n";
             $istoragepool = 0; # cloning to local node
+            $upath = "$spools[$istoragepool]->{'path'}/$user/$namepath";
         } elsif (!$macip) {
             $postreply .= "Status=ERROR Unable to locate node with sufficient storage for image\n";
             $postmsg = "Unable to locate node for image!";
@@ -2155,7 +2184,9 @@ sub Move {
     my $newuser = $reguser;
     my $newstoragepool = $regstoragepool;
     my $haschildren;
+    my $hasprimary;
     my $child;
+    my $primary;
     my $macip;
     my $alreadyexists;
     my $subdir;
@@ -2171,6 +2202,17 @@ sub Move {
             if ($val->{'master'} eq $path) {
                 $haschildren = 1;
                 $child = $val->{'name'};
+                last;
+            }
+        }
+    }
+    if ($type eq "qcow2") {
+        my @regkeys = (tied %register)->select_where("image2 = '$path'");
+        foreach my $k (@regkeys) {
+            my $val = $register{$k};
+            if ($val->{'image2'} eq $path) {
+                $hasprimary = 1;
+                $primary = $val->{'name'};
                 last;
             }
         }
@@ -2198,7 +2240,11 @@ sub Move {
                 || ($ahash{$iuser} && !($ahash{$iuser} =~ /r/))
         ) {
             if ($haschildren) {
+                $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"Error Cannot move image. This image is used as master by: $child"});
                 $postreply .= "Status=Error Cannot move image. This image is used as master by: $child\n";
+            } elsif ($hasprimary) {
+                $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"Error Cannot move image. This image is used as secondary image by: $primary"});
+                $postreply .= "Status=Error Cannot move image. This image is used as secondary image by: $primary\n";
             } else {
                 if ($regstoragepool == -1) { # The image is located on a node
                     my $uprivs = $userreg{$iuser}->{'privileges'};
@@ -2248,18 +2294,26 @@ sub Move {
         $main::syslogit->($user, "info", "Moving $name from $regstoragepool to $istoragepool $macip $wakenode");
 
         if ($haschildren) {
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"ERROR Unable to move $name (has children)"});
             $postreply .= "Status=ERROR Unable to move $name (has children)\n";
+        } elsif ($hasprimary) {
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"Error Cannot move image. This image is used as secondary image by: $primary"});
+            $postreply .= "Status=Error Cannot move image. This image is used as secondary image by: $primary\n";
         } elsif ($wakenode) {
             $postreply .= "Status=ERROR All available nodes are asleep moving $name, waking $mac, please try again later\n";
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"All available nodes are asleep moving $name, waking $mac, please try again later"});
             require "$Stabile::basedir/cgi/nodes.cgi";
             $Stabile::Nodes::console = 1;
             Stabile::Nodes::wake($mac);
         } elsif (overStorage($virtualsize, $istoragepool+0, $mac)) {
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"ERROR Out of storage in destination pool $istoragepool $mac moving: $name"});
             $postreply .= "Status=ERROR Out of storage in destination pool $istoragepool $mac moving: $name\n";
         } elsif (overQuotas($virtualsize, ($istoragepool==-1))) {
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"ERROR Over quota (". overQuotas($virtualsize, ($istoragepool==-1)) . ") moving: $name"});
             $postreply .= "Status=ERROR Over quota (". overQuotas($virtualsize, ($istoragepool==-1)) . ") moving: $name\n";
         } elsif ($istoragepool == -1 && $regstoragepool != -1 && $path =~ /\.master\.$type/) {
             $postreply .= "Status=ERROR Unable to move $name (master images are not supported on node storage)\n";
+            $main::updateUI->({tab=>"images", user=>$user, type=>"update", uuid=>$register{$path}->{'uuid'}, status=>$status, message=>"Unable to move $name (master images are not supported on node storage)"});
     # Moving to node
         } elsif ($istoragepool == -1 && $regstoragepool != -1) {
             if (index($privileges,"a")!=-1 || index($privileges,"n")!=-1) { # Privilege "n" means user may use node storage
@@ -3552,9 +3606,9 @@ END
     return "Status=ERROR image already exists in destination ($newpath)\n" if (-e $newpath && !$force);
     return "Status=ERROR image is in use ($newpath)\n" if (-e $newpath && $register{$newpath} && $register{$newpath}->{'status'} ne 'unused');
 
-    my $virtualsize = `qemu-img info "$imagepath" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
+    my $virtualsize = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
     chomp $virtualsize;
-    my $master = `qemu-img info "$imagepath" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+    my $master = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
     chomp $master;
 
     # Now deal with image2
@@ -3572,9 +3626,9 @@ END
         return "Status=ERROR image2 already exists in destination ($newpath2)\n" if (-e $newpath2 && !$force);
         return "Status=ERROR image2 is in use ($newpath2)\n" if (-e $newpath2 && $register{$newpath2} && $register{$newpath2}->{'status'} ne 'unused');
 
-        my $virtualsize2 = `qemu-img info "$image2path" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
+        my $virtualsize2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
         chomp $virtualsize2;
-        my $master2 = `qemu-img info "$image2path" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+        my $master2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
         chomp $master2;
         if ($register{$master2}) {
             $register{$master2}->{'status'} = 'used';
@@ -3872,6 +3926,12 @@ EOT
                 $res .= "Writing .htaccess: $id -> $dir/$username/.htaccess\n";
                 unlink("$dir/$username/.htaccess");
                 `/bin/echo "$txt1" | sudo -u www-data tee $dir/$username/.htaccess`;
+                if ($tenderlist[$p->{'id'}] eq 'local') {
+                    unless (-e "$dir/$username/fuel") {
+                        `mkdir "$dir/$username/fuel"`;
+                        `chmod 777 "$dir/$username/fuel"`;
+                    }
+                }
             }
         }
     }
@@ -4780,8 +4840,8 @@ END
         $postreply .= "Status=ERROR Image $path not found\n";
     } elsif ($status ne "unused") {
         $postreply .= "Status=ERROR Only unused images may be mastered\n";
-    } elsif ($namepath =~ /(.+)\.master/ || $register{$path}->{'master'}) {
-        $postreply .= "Status=ERROR Only one level of mastering is supported\n";
+#    } elsif ($namepath =~ /(.+)\.master/ || $register{$path}->{'master'}) {
+#        $postreply .= "Status=ERROR Only one level of mastering is supported\n";
     } elsif ($obj->{istoragepool} == -1 || $obj->{regstoragepool} == -1) {
         $postreply .= "Status=ERROR Unable to master $obj->{name} (master images are not supported on node storage)\n";
     } elsif ($obj->{type} eq "qcow2") {
@@ -4796,7 +4856,6 @@ END
         }
 
         $uipath = $path;
-#        $uiname = "$obj->{name} (master)";
         $uiname = "$obj->{name}";
         eval {
             my $qinfo = `/bin/mv -iv "$path" "$uinewpath"`;
@@ -4852,7 +4911,7 @@ END
         $postreply .= "Status=ERROR Unable to unmaster $obj->{name} (master images are not supported on node storage)\n";
     } elsif ($obj->{type} eq "qcow2") {
         # Demoting a master to regular image
-        if ($namepath =~ /(.+)\.master$/) {
+        if ($action eq 'unmaster' && $namepath =~ /(.+)\.master$/) {
             $namepath = $1;
             $uipath = $path;
             # First find an unused path
@@ -4878,7 +4937,7 @@ END
                 1;
             } or do {$postreply .= "Status=ERROR $@\n";}
     # Rebasing a child image
-        } elsif ($obj->{master} && $obj->{master} ne "--") {
+        } elsif ($action eq 'rebase' && $obj->{master} && $obj->{master} ne "--") {
             $uistatus = "rebasing";
             $uipath = $path;
             $iname = $obj->{name};
@@ -5192,13 +5251,13 @@ END
     if ($postreply) {
         $postmsg = $postreply;
     } else {
-        $postreply = to_json(\%{$register{$uipath}}, {pretty=>1}) if ($uipath);
+        $postreply = to_json(\%{$register{$uipath}}, {pretty=>1}) if ($uipath && $register{$uipath});
         $postreply =~ s/""/"--"/g;
         $postreply =~ s/null/"--"/g;
         $postreply =~ s/"notes" {0,1}: {0,1}"--"/"notes":""/g;
         $postreply =~ s/"installable" {0,1}: {0,1}"(true|false)"/"installable":$1/g;
     }
-    return $postreply;
+    return $postreply || "Status=OK Saved $uipath\n";
 }
 
 sub Setstoragedevice {

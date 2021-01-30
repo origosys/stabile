@@ -321,7 +321,7 @@ $main::dnsCreate = sub {
     }
 
     if (`host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/) {
-        return "Status=ERROR $name is already registered\n";
+        return "OK $name is already registered\n";
     };
 
     if ($enginelinked && $name && $value) {
@@ -357,7 +357,7 @@ $main::dnsCreate = sub {
             }
         }
         $res =~ s/://g;
-        return $res;
+        return "$res\n";
 
     } else {
         return "ERROR Problem creating dns record with data $name, $value. " . ($enginelinked?"":" Engine is not linked!") . "\n";

@@ -468,7 +468,7 @@ if (lc($arg1) eq "backupallimages" ) {
 #        $res .= `/bin/dd if=/dev/zero of="$localpath"  bs=1M  count=2; /bin/rm -f "$localpath.meta"`;
         $res .= `/usr/bin/wget --no-check-certificate -O "$localpath" "$imageurl"; /bin/rm -f "$localpath.meta"`;
 
-        my $qinfo = `/usr/bin/qemu-img info "$localpath"`;
+        my $qinfo = `/usr/bin/qemu-img info --force-share "$localpath"`;
         $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
         $newvirtualsize = int($1);
         unless ($newvirtualsize) {
@@ -567,16 +567,17 @@ if (lc($arg1) eq "backupallimages" ) {
             $res .= qq[Moving: /usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"\n];
         #    $md5sum = (split(" ", `/usr/bin/md5sum "$path1"`))[0];
         #    $res .= "MD5: $md5sum\n";
-            $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"`;
-            $res .= `$sshcmd $macip "/bin/chmod 666 $esc_localpath"`;
+            my $mvres = system(qq|/usr/bin/rsync -vW --sparse -e "$sshcmd" $esc_path1 "$esc_path2"|);
+            my $chres .= `$sshcmd $macip "/bin/chmod 666 $esc_localpath"`;
         #    $md5sum2 = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath"`))[0];
         #    $res .= "MD5: $md5sum2\n";
-            $localstatus = $oldstatus;
-            $localstatus2 = "unused";
         #    if ($md5sum && ($md5sum eq $md5sum2)) {
+            unless ($mvres || $chres) { # Sanity check
+                $localstatus = $oldstatus;
+                $localstatus2 = "unused";
                 unlink $path1;
                 $localstatus2 = "removed"; # The image being left behind is removed from db after moving to new location
-        #    }
+            }
     # From node
         } elsif ($path1 =~ m/(\d+\.\d+\.\d+\.\d+)\:(\/.+)/) {
             my $macip = $1;
@@ -584,23 +585,22 @@ if (lc($arg1) eq "backupallimages" ) {
             $localpath = $path2;
         #    my $md5sum;
         #    my $md5sum2;
-
             my $esc_localpath = shell_esc_chars($localpath);
             my $esc_localpath2 = shell_esc_chars($localpath2);
             my $esc_path1 = "$macip:$esc_localpath2";
             my $esc_path2 = shell_esc_chars($path2);
-
         #    $md5sum = (split(" ", `$sshcmd $macip "/usr/bin/md5sum -b $esc_localpath2"`))[0];
         #    $res .= "MD5: $md5sum\n";
-            $res .= `/usr/bin/rsync -vW --sparse -e "$sshcmd" "$esc_path1" $esc_path2`;
+            my $mvres = system(qq|/usr/bin/rsync -vW --sparse -e "$sshcmd" "$esc_path1" $esc_path2|);
         #    $md5sum2 = (split(" ", `/usr/bin/md5sum "$path2"`))[0];
         #    $res .= "MD5: $md5sum2\n";
-            $localstatus = $oldstatus;
-            $localstatus2 = "unused";
         #    if ($md5sum && ($md5sum eq $md5sum2)) {
+            unless ($mvres) { # Sanity check
+                $localstatus = $oldstatus;
+                $localstatus2 = "unused";
                 `$sshcmd $macip "/usr/bin/unlink $esc_localpath2"`;
                 $localstatus2 = "removed"; # The image being left behind is removed from db after moving to new location
-        #    }
+            }
         # Update billing
             $newvirtualsize = getVirtualSize($path2);
             $newvirtualsize2 = 0;
@@ -609,7 +609,7 @@ if (lc($arg1) eq "backupallimages" ) {
             $localpath2 = $path1;
             $res .= `/bin/mv -v "$path1" "$path2"`;
             $res .= `/bin/mv -v "$path1.meta" "$path2.meta"` if (-e "$path1.meta");
-            $localstatus2 = "unused";
+            $localstatus2 = "removed";
             $localstatus = $oldstatus;
         # Update billing
             $newvirtualsize = getVirtualSize($path2);
@@ -998,7 +998,7 @@ sub updateImageStatus {
             };
             $arg1 = $imageuser;
         }
-    } elsif ($imagestatus) {
+    } elsif ($imagestatus ne 'removed') {
         if ($imagestatus eq 'installable') {
             $imagestatus = 'unused';
             $imagename = $imagereg{$imagepath}->{'name'} if ($imagereg{$imagepath});
@@ -1020,7 +1020,7 @@ sub updateImageStatus {
         $imagereg{$imagepath}->{'status'} = $imagestatus;
         $imagereg{$imagepath}->{'virtualsize'} = $newvsize if ($newvsize);
     } else {
-        syslogit('info', "Deleting $imagepath from DB (no status)");
+        syslogit('info', "Deleting $imagepath from DB ($imagestatus)");
         delete $imagereg{$imagepath};
     }
     tied(%imagereg)->commit;
@@ -1260,9 +1260,9 @@ sub getVirtualSize {
     my($bname, $dirpath, $suffix) = fileparse($vpath, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
     if ($suffix eq ".qcow2") {
         if ($macip) {
-            $qinfo = `$sshcmd $macip /usr/bin/qemu-img info "$vpath"`;
+            $qinfo = `$sshcmd $macip /usr/bin/qemu-img info --force-share "$vpath"`;
         } else {
-            $qinfo = `/usr/bin/qemu-img info "$vpath"`;
+            $qinfo = `/usr/bin/qemu-img info --force-share "$vpath"`;
         }
         $qinfo =~ /virtual size:.*\((.+) bytes\)/g;
         return(int($1)); # report size of new image for billing purposes

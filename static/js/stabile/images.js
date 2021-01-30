@@ -397,7 +397,7 @@ define([
             var unsnap_button = actionButton({'action':"unsnap", 'id':id});
             var master_button = actionButton({'action':"master", 'id':id});
             var unmaster_button = actionButton({'action':"unmaster", 'id':id, 'title': 'unmaster'});
-            var rebase_button = actionButton({'action':"unmaster", 'id':id, 'title': 'rebase'});
+            var rebase_button = actionButton({'action':"rebase", 'id':id, 'title': 'rebase'});
             var backup_button = actionButton({'action':"backup", 'id':id});
             var delete_button = actionButton({'action':"delete", 'id':id, 'confirm':true});
             var save_button = include_save ? grid.saveButton(type) : "";
@@ -439,11 +439,11 @@ define([
                         }
                     }
                     if(item.master && item.master!="--" && (status=="unused" || status =="used")) { // this is a child, which may be rebased
-                        if (is_master)
-                            buttons += unmaster_button;
-                        else
-                            buttons += rebase_button;
-                    } else if (item.storagepool != -1) {
+                        if (is_master)  buttons += unmaster_button;
+                    //    else
+                        buttons += rebase_button;
+                    }
+                    if (item.storagepool != -1) {
                         if (is_master) {
                             is_master = true;
                             if (status=="unused") buttons += unmaster_button;
@@ -581,7 +581,7 @@ define([
             var _masterReg = new RegExp("\.master\." + item.type + "$");
             is_master = _masterReg.test(item.path)?true:false;
             if (dijit.byId('master')) master = dijit.byId('master').value;
-            if (!is_master && master && master!="--") {
+            if (master && master!="--") {
                 stores.images.fetch({query: {path:master+'*'}, onComplete: images.updateMasterName});
             } else if (is_master) {
                 if (dijit.byId('mastername')) dijit.byId('mastername').set("value", "This image is a master image");

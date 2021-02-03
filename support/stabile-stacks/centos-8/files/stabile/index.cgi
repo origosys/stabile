@@ -191,13 +191,21 @@ if ($in{action} && $in{tab} && $tabsh{$in{tab}}) {
         $mip = $internalip;
         chomp $mip;
     }
+    if (`grep admin /etc/webmin/miniserv.users`) {
+        `perl -pi -e 's/admin\:.*/admin::0/' /etc/webmin/miniserv.users`;
+    } else {
+        `echo "admin::0" >> /etc/webmin/miniserv.users`;
+    }
     if ($mip) {
         my $pass = `/usr/bin/openssl rand -base64 12`;
         chomp $pass;
         `$webminhome/changepass.pl /etc/webmin admin "$pass"`;
         $pass = uri_encode($pass);
         my $res = `curl "http://$mip:10000/stabile/index.cgi?action=savewebminserver&pass=$pass"`;
-        print qq|[{"status": "OK: Registered at $mip, $res"}]|;
+        print qq|[{"status": "OK: Registered at $mip"}, $res]|;
+        # Jump through a few hoops to activate login
+        $res = `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"`;
+        `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"` unless ($res =~ /Set-Cookie: sid=/s);
     } else {
         print qq|{"status": "ERROR: Unable to locate admin server ip"}|;
     }
@@ -235,7 +243,7 @@ my $upgradelink = '';
 my $upgradebadge = '';
 if ($upgradeurl) {
     if ($appinfo{version} lt $appinfo{currentversion}) {
-        $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your stack will be unavailable while upgrading!');"><span style="background-color: #e74c3c;" class="badge">!</span> Upgrade this system</a></li>|;
+        $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your stack will be unavailable while upgrading!');"><span style="background-color: #e74c3c;" class="badge">!</span> Upgrade this stack</a></li>|;
         $upgradebadge = qq|<span class="badge" style="background-color: #e74c3c; top:-3px; left: 6px;  position: relative;" title="Upgrade available ($appinfo{version} -> $appinfo{currentversion})">!</span>|;
     } else {
         $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your stack will be unavailable while reinstalling!');">Reinstall this stack</a></li>|;

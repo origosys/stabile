@@ -13,7 +13,7 @@ sub storage {
 <div style="margin-bottom: 5px; width:97%;" id="storageresultpane" class="resultpane">
 </div>
 </form>
-<form style="margin-bottom:18px;" class="passwordform" action="index.cgi?tab=storage" onsubmit="return false;">
+<form style="margin-bottom:18px; margin-top:18px;" class="passwordform" action="index.cgi?tab=storage" onsubmit="return false;">
 <button class="btn btn-default" id="update_storage" title="Click to reload storage status." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); updatestorageStatus(); return false;"><span class="glyphicon glyphicon-repeat"></button>
 <button class="btn btn-default" id="resize_storage" title="Click to resize storage." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); resizestorage(); return false;">Resize</button>
 </form>

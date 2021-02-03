@@ -243,7 +243,7 @@ my $upgradelink = '';
 my $upgradebadge = '';
 if ($upgradeurl) {
     if ($appinfo{version} lt $appinfo{currentversion}) {
-        $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your system will be unavailable while upgrading!');"><span style="background-color: #e74c3c;" class="badge">!</span> Upgrade this system</a></li>|;
+        $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your stack will be unavailable while upgrading!');"><span style="background-color: #e74c3c;" class="badge">!</span> Upgrade this stack</a></li>|;
         $upgradebadge = qq|<span class="badge" style="background-color: #e74c3c; top:-3px; left: 6px;  position: relative;" title="Upgrade available ($appinfo{version} -> $appinfo{currentversion})">!</span>|;
     } else {
         $upgradelink = qq|<li><a href="#" onclick="confirmAction('upgrade','Your stack will be unavailable while reinstalling!');">Reinstall this stack</a></li>|;

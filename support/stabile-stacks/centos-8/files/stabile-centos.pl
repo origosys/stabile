@@ -58,6 +58,7 @@ if ($action eq 'mountpools') {
     foreach my $k (keys %filesystems) {
         push @fslist, $filesystems{$k};
     }
+    @fslist = sort {$a->{'Name'} cmp $b->{'Name'}} @fslist;
     print to_json(\@fslist, {pretty=>1});
     exit 0;
 
@@ -116,7 +117,7 @@ if (-e '/etc/webmin/') {
     while (!$registered && $i<20) {
         $internalip = $internalip || get_internalip();
         my $res = `curl http://$internalip:10000/stabile/index.cgi?action=registerwebminserver`;
-        $registered = ($res =~ /Registered at \S+/);
+        $registered = ($res =~ /Registered at .*(\d+)\.serv/);
         chomp $registered;
         if ($registered) {
             `echo "$internalip: $res" >> /tmp/stabile-registered`;
@@ -224,7 +225,7 @@ if ($status eq 'upgrading') {
         print `iptables -A INPUT -p tcp --dport 4200 -j DROP`;
 
         my $title = $externalip || $internalip;
-        if (-e '$webminhome/stabile/tabs/servers/ShellInABox.js') {
+        if (-e '$webminhome/stabile/shellinabox/ShellInABox.js') {
             print "Updating terminal title to $title\n";
             `perl -pi -e 's/^document.title = ".*";/document.title = "Term:$title";/' $webminhome/stabile/shellinabox/ShellInABox.js`;
         }
@@ -260,7 +261,7 @@ CA_CERT_LOCATION="/etc/ssl/certs/stabile.chain"
 RELOAD_CMD="systemctl reload $apache"
 END
 ;
-                print `echo '$getsslcfg' > /root/.getssl/$externalip.$dnsdomain/getssl.cfg'`;
+                print `echo '$getsslcfg' > /root/.getssl/$externalip.$dnsdomain/getssl.cfg`;
                 `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
                 `echo "$internalip $externalip.$dnsdomain" >> /etc/hosts` unless (`grep '$externalip.$dnsdomain' /etc/hosts`); # necessary to allow getssl do its own checks
                 print `getssl -a`;

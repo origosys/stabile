@@ -202,7 +202,10 @@ if ($in{action} && $in{tab} && $tabsh{$in{tab}}) {
         `$webminhome/changepass.pl /etc/webmin admin "$pass"`;
         $pass = uri_encode($pass);
         my $res = `curl "http://$mip:10000/stabile/index.cgi?action=savewebminserver&pass=$pass"`;
-        print qq|[{"status": "OK: Registered at $mip, $res"}]|;
+        print qq|[{"status": "OK: Registered at $mip"}, $res]|;
+        # Jump through a few hoops to activate login
+        $res = `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"`;
+        `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"` unless ($res =~ /Set-Cookie: sid=/s);
     } else {
         print qq|{"status": "ERROR: Unable to locate admin server ip"}|;
     }

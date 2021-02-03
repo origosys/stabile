@@ -372,11 +372,11 @@ END
                  $res .= qq[<tr><td>Memory:</td><td align="right">$memorygb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$memorygb*$memoryprice) . qq[</td><td align="right">$memoryquotagb GB</td></tr>];
                  $res .= qq[<tr><td>Shared storage:</td><td align="right">$virtualsizegb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$virtualsizegb*$storageprice) . qq[</td><td align="right">$storagequotagb GB</td></tr>];
                  $res .= qq[<tr><td>Node storage:</td><td align="right">$nodevirtualsizegb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$nodevirtualsizegb*$nodestorageprice) . qq[</td><td align="right">$nodestoragequotagb GB</td></tr>];
-                 $res .= qq[<tr><td>Backup storage:</td><td align="right">$backupsizegb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$backupsizegb*$storageprice) . qq[</td><td align="right">&infin;</td></tr>];
+                 $res .= qq[<tr><td>Backup storage (est.):</td><td align="right">$backupsizegb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$backupsizegb*$storageprice) . qq[</td><td align="right">&infin;</td></tr>];
                  $res .= qq[<tr><td>External IP addresses:</td><td align="right">$externalip</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$externalip*$externalipprice) . qq[</td><td align="right">$externalipquota</td></tr>];
                  if (!$uuid) {
-                     $res .= qq[<tr><td>Network traffic out:</td><td align="right">] . int(0.5 + $rx) . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $rxquota/1024/1024) . qq[ GB</td></tr>];
-                     $res .= qq[<tr><td>Network traffic in:</td><td align="right">] . int(0.5 + $tx) . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $txquota/1024/1024) . qq[ GB</td></tr>];
+                     $res .= qq[<tr><td>Network traffic out:</td><td align="right">] . $rx . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $rxquota/1024/1024) . qq[ GB</td></tr>];
+                     $res .= qq[<tr><td>Network traffic in:</td><td align="right">] . $tx . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $txquota/1024/1024) . qq[ GB</td></tr>];
                  }
 
                  $res =~ s/-1/&infin;/g;
@@ -390,8 +390,8 @@ END
                      node_storage => {quantity => $nodevirtualsizegb, unit => 'GB', quota => $nodestoragequotagb},
                      backup_storage => {quantity => $backupsizegb, unit => 'GB'},
                      external_ips => {quantity => $externalip, quota => $externalipquota},
-                     network_traffic_out => {quantity => int(0.5 + $rx), unit => 'GB', quota => int(0.5 + $rxquota/1024/1024)},
-                     network_traffic_in => {quantity => int(0.5 + $tx), unit => 'GB', quota => int(0.5 + $txquota/1024/1024)}
+                     network_traffic_out => {quantity => $rx, unit => 'GB', quota => int(0.5 + $rxquota/1024/1024)},
+                     network_traffic_in => {quantity => $tx, unit => 'GB', quota => int(0.5 + $txquota/1024/1024)}
                  };
                  if ($showcost) {
                      $bill->{vcpus}->{cost} = int(0.5+$vcpu*$vcpuprice);
@@ -422,7 +422,7 @@ END
                  $res .= qq[<tr><td>Memory:</td><td align="right">$memoryavggb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$memoryavggb*$memoryprice) . qq[</td><td align="right">$memoryquotagb GB</td></tr>];
                  $res .= qq[<tr><td>Shared storage:</td><td align="right">$virtualsizeavggb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$virtualsizeavggb*$storageprice) . qq[</td><td align="right">$storagequotagb GB</td></tr>];
                  $res .= qq[<tr><td>Node storage:</td><td align="right">$nodevirtualsizeavggb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$nodevirtualsizeavggb*$nodestorageprice) . qq[</td><td align="right">$nodestoragequotagb GB</td></tr>];
-                 $res .= qq[<tr><td>Backup storage:</td><td align="right">$backupsizeavggb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$backupsizeavggb*$storageprice) . qq[</td><td align="right">&infin;</td></tr>];
+                 $res .= qq[<tr><td>Backup storage (est.):</td><td align="right">$backupsizeavggb GB</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$backupsizeavggb*$storageprice) . qq[</td><td align="right">&infin;</td></tr>];
                  $res .= qq[<tr><td>External IP addresses:</td><td align="right">] . int(0.5+100*$externalipavg)/100 . qq[</td><td align="right" class="$irigo_cost">$cur ] . int(0.5+$externalipavg*$externalipprice) . qq[</td><td align="right">$externalipquota</td></tr>];
                  $res .= qq[<tr><td>Network traffic in:</td><td align="right">] . int(0.5 + $rx) . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $rxquota/1024/1024) . qq[ GB</td></tr>];
                  $res .= qq[<tr><td>Network traffic out:</td><td align="right">] . int(0.5 + $tx) . qq[ GB</td><td align="right" class="$irigo_cost">$cur 0</td><td align="right">] . int(0.5 + $txquota/1024/1024) . qq[ GB</td></tr>];
@@ -1223,17 +1223,73 @@ END
 ;
 }
 
+sub do_cleanbillingdata {
+    my ($uuid, $action, $obj) = @_;
+    if ($help) {
+        return <<END
+GET:year,dryrun,cleanup:
+Deletes billing from [year]. Default is current year-2. Set dryrun to do a test run. Set cleanup to remove invalid entries.
+END
+    }
+    return "Status=Error Not allowed\n" unless ($isadmin);
+
+    my $y = $params{'year'} || ($year-2);
+    my $dryrun = $params{'dryrun'};
+    my $cleanup = $params{'cleanup'};
+    my $pattern = qq|like '%-$y-__'|;
+    if ($cleanup) {
+        $pattern = qq|not like '%-____-__'|;
+        $y = '';
+    }
+
+    unless ( tie(%bnetworksreg,'Tie::DBI', Hash::Merge::merge({table=>'billing_networks', key=>'useridtime'}, $Stabile::dbopts)) ) {return "Status=Error Unable to access billing register"};
+    my @bkeys = (tied %bnetworksreg)->select_where("useridtime $pattern");
+    $postreply .= "Status=OK -- this is only a test run ---\n" if ($dryrun);
+    $postreply .= "Status=OK Cleaning " . scalar @bkeys . " $y network rows\n";
+    foreach my $bkey (@bkeys) {
+        $postreply .= "Status=OK removing $bnetworksreg{$bkey}->{useridtime}\n";
+        delete($bnetworksreg{$bkey}) unless ($dryrun);
+    }
+    untie(%bnetworksreg);
+
+    unless ( tie(%bimagesreg,'Tie::DBI', Hash::Merge::merge({table=>'billing_images', key=>'userstoragepooltime'}, $Stabile::dbopts)) ) {return "Status=Error Unable to access billing register"};
+    my @bkeys = (tied %bimagesreg)->select_where("userstoragepooltime $pattern");
+    $postreply .= "Status=OK Cleaning " . scalar @bkeys . " $y image rows\n";
+    foreach my $bkey (@bkeys) {
+        $postreply .= "Status=OK removing $bimagesreg{$bkey}->{userstoragepooltime}\n";
+        delete($bimagesreg{$bkey}) unless ($dryrun);
+    }
+    untie(%bimagesreg);
+
+    unless ( tie(%bserversreg,'Tie::DBI', Hash::Merge::merge({table=>'billing_domains', key=>'usernodetime'}, $Stabile::dbopts)) ) {return "Status=Error Unable to access billing register"};
+    my @bkeys = (tied %bserversreg)->select_where("usernodetime $pattern");
+    $postreply .= "Status=OK Cleaning " . scalar @bkeys . " $y server rows\n";
+    foreach my $bkey (@bkeys) {
+        $postreply .= "Status=OK removing $bserversreg{$bkey}->{usernodetime}\n";
+        delete($bserversreg{$bkey}) unless ($dryrun);
+    }
+    untie(%bserversreg);
+
+    return $postreply;
+
+}
+
 sub collectBillingData {
     my ( $curuuid, $buser, $bmonth, $byear, $showcost ) = @_;
 
-    my $vcpu=0, $memory=0, $virtualsize=0, $nodevirtualsize=0, $backupsize=0, $externalip=0;
+    my $vcpu=0;
     my $rx = 0;
     my $tx = 0;
     my $vcpuavg = 0;
+    my $memory = 0;
     my $memoryavg = 0;
+    my $backupsize = 0;
     my $backupsizeavg = 0;
+    my $nodevirtualsize = 0;
     my $nodevirtualsizeavg = 0;
+    my $virtualsize = 0;
     my $virtualsizeavg = 0;
+    my $externalip = 0;
     my $externalipavg = 0;
 
     my $prevmonth = $bmonth-1;
@@ -1302,7 +1358,7 @@ sub collectBillingData {
 
         # Build list of the users network id's
         my %usernetworks;
-        my @nkeys = (tied %networkreg)->select_where("user = '$buser'");;
+        my @nkeys = (tied %networkreg)->select_where("user = '$buser'");
         foreach $network (@nkeys) {
             my $id = $networkreg{$network}->{'id'};
             $usernetworks{$id} = $id unless ($usernetworks{$id} || $id==0 || $id==1);
@@ -1328,7 +1384,7 @@ sub collectBillingData {
         # Build list of the users storage pools
         my $storagepools = $Stabile::config->get('STORAGE_POOLS_DEFAULTS') || "0";
         my $upools = $register{$buser}->{'storagepools'}; # Prioritized list of users storage pools as numbers, e.g. "0,2,1"
-        $storagepools = $upools if ($upools);
+        $storagepools = $upools if ($upools && $upools ne '--');
         my @spl = split(/,\s*/, $storagepools);
         my $bimageobj = $bimagesreg{"$buser--1-$byear-$bmonth"};
         $backupsize = $bimageobj->{'backupsize'}+0;

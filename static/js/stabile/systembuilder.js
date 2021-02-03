@@ -649,7 +649,7 @@ define([
             }
             console.log("Managing system:", managementlink);
             systembuilder.system.cancelled = false;
-            if (!systemname && home.currentItem) systemname = "Manage: " + home.currentItem.name;
+            if (!systemname && home.currentItem) systemname = home.currentItem.name;
 
         // Loading external URL's in iframe is no longer supported by most browsers
             if (managementlink.indexOf("http")==0) {
@@ -660,10 +660,10 @@ define([
             var dialog;
             if(dijit.byId('createSystemDialog') !== undefined){
                 dialog = dijit.byId('createSystemDialog');
-                if (systemname) dialog.set("title", systemname);
+                if (systemname) dialog.set("title", "Manage: " + systemname);
             } else {
                 dialog = new dijit.Dialog({
-                    title: systemname,
+                    title: "Manage: " + systemname,
                     id: 'createSystemDialog',
                     resizable: true,
                     style: "width: 90%; overflow: auto;"
@@ -838,7 +838,7 @@ define([
                             console.log("Over quota", overquota);
                             dialog.hide();
                         } else if (managementlink && start) {
-                            var n = /Status=OK Network .* saved: (\S+)/is.exec(data);
+                            var n = /Status=OK Network .* saved: (\S+)/i.exec(data);
                             var errors = /\S+=ERROR (.+)/i.exec(data);
                             if (errors && errors.length>1) {
                                 IRIGO.toast("Error: " + errors[1]);

@@ -58,6 +58,7 @@ if ($action eq 'mountpools') {
     foreach my $k (keys %filesystems) {
         push @fslist, $filesystems{$k};
     }
+    @fslist = sort {$a->{'Name'} cmp $b->{'Name'}} @fslist;
     print to_json(\@fslist, {pretty=>1});
     exit 0;
 
@@ -116,7 +117,7 @@ if (-e '/etc/webmin/') {
     while (!$registered && $i<20) {
         $internalip = $internalip || get_internalip();
         my $res = `curl http://$internalip:10000/stabile/index.cgi?action=registerwebminserver`;
-        $registered = ($res =~ /Registered at \S+/);
+        $registered = ($res =~ /Registered at .*(\d+)\.serv/);
         chomp $registered;
         if ($registered) {
             `echo "$internalip: $res" >> /tmp/stabile-registered`;

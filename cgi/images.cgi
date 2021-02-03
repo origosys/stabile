@@ -215,10 +215,11 @@ sub Init {
     my $reloadnfs;
     foreach my $p (@spl) {
         if ($tenderlist[$p] && $tenderpathslist[$p] && $tendernameslist[$p]) {
+            my $rd = (defined $rdiffenabledlist[$p])?$rdiffenabledlist[$p]:"$rdiffenabledlist[0]";
             my %pool = ("hostpath", $tenderlist[$p],
                 "path", $tenderpathslist[$p],
                 "name", $tendernameslist[$p],
-                "rdiffenabled", $rdiffenabledlist[$p],
+                "rdiffenabled", $rd,
                 "mountable", ($tenderlist[$p] eq 'local') || $mountabletenderslist[$p] || '0', # local pools always mountable
                 "lvm", 0+($tenderlist[$p] eq 'local' && ($mounts =~ m/\/dev\/mapper\/(\S+)-(\S+) $tenderpathslist[$p].+/g) ),
                 "zfs", (($mounts =~ /(\S+) $tenderpathslist[$p] zfs/)?$1:''),
@@ -441,6 +442,7 @@ sub Updateregister {
 GET:image,uuid:
 If used with the -f switch ($fulllist) from console, all users images are updated in the db.
 If used with the -p switch ($fullupdate), also updates status information (ressource intensive - runs through all domains)
+Only images on shared storage are updated, images on node storage are handled on the node.
 END
     }
     return "Status=ERROR You must be an admin to do this!\n" unless ($isadmin);
@@ -473,14 +475,13 @@ END
                     my $storagepool = $spool->{"id"};
             # Deal with sizes
                     my ($newmtime, $newbackupsize, $newsize, $newrealsize, $newvirtualsize) =
-                        getSizes($f, $img->{'mtime'}, $img->{'status'}, $force);
+                        getSizes($f, $img->{'mtime'}, $img->{'status'}, $u, $force);
                     my $size = $newsize || $img->{'size'};
                     my $realsize = $newrealsize || $img->{'realsize'};
                     my $virtualsize = $newvirtualsize || $img->{'virtualsize'};
                     my $mtime = $newmtime || $img->{'mtime'};
                     my $created = $img->{'created'} || $mtime;
                     my $name = $img->{'name'} || substr($fname,0,-1);
-
                     $register{$f} = {
                         path=>$f,
                         user=>$u,
@@ -497,7 +498,8 @@ END
                         backup=>"", # Only set in uservalues at runtime
                         created=>$created,
                         mtime=>$mtime
-                    }
+                    };
+                #    $postreply .= "Status=OK $f, $size, $newbackupsize\n" if ($console);
                 }
             }
         }
@@ -641,6 +643,7 @@ END
     untie %nodereg;
     tied(%register)->commit;
     $res .= "Status=OK Updated image register for " . join(', ', @users) . "\n";
+    $res .= $postreply;
     return $res if ($res);
 }
 
@@ -676,10 +679,7 @@ sub getVirtualSize {
 }
 
 sub getSizes {
-    my $f = shift;
-    my $lmtime = shift;
-    my $status = shift;
-    my $force = shift;
+    my ($f, $lmtime, $status, $buser, $force) = @_;
 
     my @stat = stat($f);
     my $size = $stat[7];
@@ -688,18 +688,11 @@ sub getSizes {
     my $backupsize = 0;
     my $mtime = $stat[9];
     my($fname, $dirpath, $suffix) = fileparse($f, ("vmdk", "img", "vhd", "qcow", "qcow2", "vdi", "iso"));
-
     my $subdir = "";
     if ($dirpath =~ /.+\/$buser(\/.+)?\//) {
         $subdir = $1;
     }
-    my $bdu;
-    if (-d "$backupdir/$user$subdir/$fname$suffix") {
-        $bdu = `/usr/bin/du -bs "$backupdir/$user$subdir/$fname$suffix/"`;
-        $bdu =~ /(\d+)\s+/;
-        $backupsize = $1;
-        #$main::syslogit->($user, 'info', $bdu);
-    }
+    $backupsize = getBackupSize($subdir, "$fname$suffix", $buser);
     my $ps = `/bin/ps ax`;
 
 # Only fire up qemu-img etc. if image has been modified and is not being used
@@ -5064,7 +5057,6 @@ END
                 my $size = $obj->{msize};
                 $cmd = qq|/usr/bin/VBoxManage createhd --filename "$ipath" --size "$size" --format VDI|;
             }
-
             $obj->{name} = 'New Image' if (!$obj->{name} || $obj->{name} eq '--' || $obj->{name} =~ /^\./ || $obj->{name} =~ /\//);
             if (-e $ipath) {
                 $postreply .= "Status=ERROR Image already exists: \"$obj->{name}\" in \"$ipath\”\n";
@@ -5101,9 +5093,10 @@ END
                 $postreply .= "Status=OK uuid: $newuuid\n"; # if ($console || $api);
                 $postreply .= "Status=OK path: $ipath\n"; # if ($console || $api);
                 sleep 1; # Needed to give updateUI a chance to reload
-                $main::updateUI->({tab=>"images", uuid=>$newuuid, user=>$user, type=>"update", name=>$obj->{name}});
+                $main::updateUI->({tab=>"images", user=>$user, type=>"update"});
+#                $main::updateUI->({tab=>"images", uuid=>$newuuid, user=>$user, type=>"update", name=>$obj->{name}, path=>$obj->{path}});
                 $main::syslogit->($user, "info", "Created $obj->{type} image: $obj->{name}: $newuuid");
-                updateBilling("New image");
+                updateBilling("New image: $obj->{name}");
             } else {
                 $postreply .= "Status=ERROR Problem creating image: $obj->{name} of size $obj->{virtualsize}\n";
             }
@@ -5169,27 +5162,29 @@ END
                 $obj->{bschedule} = "" if ($obj->{bschedule} eq "--");
                 if ($obj->{bschedule}) {
                     # Remove backups
-                    if ($obj->{bschedule} eq "none" && $spools[$obj->{regstoragepool}]->{'rdiffenabled'}) {
-                        my($bname, $dirpath) = fileparse($path);
-                        if ($path =~ /\/($user|common)\/(.+)/) {
-                            my $buser = $1;
-                            if (-d "$backupdir/$buser/$bname" && $backupdir && $bname && $buser) {
-                                eval {
-                                    $qinfo = `/bin/rm -rf "$backupdir/$buser/$bname"`;
-                                    1;
-                                } or do {$postreply .= "Status=ERROR $@\n"; $e=1;};
-                                if (!$e) {
-                                    $postreply .=  "Status=OK Removed all backups of $obj->{name}\n";
-                                    chomp $qinfo;
-                                    $register{$path} = {backupsize=>0};
-                                    $main::syslogit->($user, "info", "Removed all backups of $obj->{name}: $path: $qinfo");
-                                    $main::updateUI->({
-                                        user=>$user,
-                                        message=>"Removed all backups of $obj->{name}",
-                                        backup=>$path
-                                    });
-                                    updateBilling("no backup $path");
-                                    delete $register{$path}->{'btime'};
+                    if ($obj->{bschedule} eq "none") {
+                        if ($spools[$obj->{regstoragepool}]->{'rdiffenabled'}) {
+                            my($bname, $dirpath) = fileparse($path);
+                            if ($path =~ /\/($user|common)\/(.+)/) {
+                                my $buser = $1;
+                                if (-d "$backupdir/$buser/$bname" && $backupdir && $bname && $buser) {
+                                    eval {
+                                        $qinfo = `/bin/rm -rf "$backupdir/$buser/$bname"`;
+                                        1;
+                                    } or do {$postreply .= "Status=ERROR $@\n"; $e=1;};
+                                    if (!$e) {
+                                        $postreply .=  "Status=OK Removed all rdiff backups of $obj->{name}\n";
+                                        chomp $qinfo;
+                                        $register{$path} = {backupsize=>0};
+                                        $main::syslogit->($user, "info", "Removed all backups of $obj->{name}: $path: $qinfo");
+                                        $main::updateUI->({
+                                            user=>$user,
+                                            message=>"Removed all backups of $obj->{name}",
+                                            backup=>$path
+                                        });
+                                        updateBilling("no backup $path");
+                                        delete $register{$path}->{'btime'};
+                                    }
                                 }
                             }
                         }

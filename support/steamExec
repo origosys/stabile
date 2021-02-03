@@ -42,6 +42,7 @@ my $newvirtualsize;
 my $newbackupsize;
 my $newvirtualsize2;
 my $newbackupsize2;
+my $uimsg = '';
 
 my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
     [qw(RDIFF-BACKUP_ENABLED STORAGE_BACKUPDIR
@@ -678,11 +679,14 @@ if (lc($arg1) eq "backupallimages" ) {
                 debuglog("removing logical volume /dev/$lvolgroup/$snapname");
                 $res .= `/sbin/lvremove -f /dev/$lvolgroup/$snapname`;
             }
-            if (-d "$cmd1/$user/$path1") {
-                my $bdu = `/usr/bin/du -bs "$cmd1/$user/$path1"`;
-                $bdu =~ /(\d+)\s+/;
-                $newbackupsize = $1; # Report new backup size for billing
-            }
+
+           if (-d "$cmd1/$user/$path1") { # Report new backup size for billing
+               if ($subdir) {
+                   $newbackupsize = getBackupSize("/$subdir", $image, $user);
+               } else {
+                   $newbackupsize = getBackupSize('', $image, $user);
+               }
+           }
         # Update btime
             $localpath =~ /(.+)/;
             my $buser = $user;
@@ -692,6 +696,28 @@ if (lc($arg1) eq "backupallimages" ) {
             $res .= "$scmd $bcmd\n";
             $res .= `$scmd $bcmd`;
             $res .= "Updating btime: for $localpath\n\n";
+
+            my $bmes;
+            if ($status eq "backingup" || $status eq "lbackingup") {
+                $bmes;
+                if ($res =~ /TotalDestinationSizeChange (\d)(.+\))/) {
+                    if ($1 eq "0") {
+                        $bmes = "No changes to back up";
+                    } else {
+                        $bmes = "Backed up $1$2";
+                        #    $bmes .= " in $1$2" if ($res =~ /ElapsedTime (\d)(.+\))/);
+                    }
+                } elsif ($res =~ /(Image is already being backed up)/) {
+                    $bmes = $1;
+                } else {
+                    my $hres = $res;
+                    $hres =~ s/\n/<br>/g;
+                    $hres =~ s/\"/\\"/g;
+                    $bmes = "Backup failed: $hres";
+                }
+                $uimsg = $bmes;
+            }
+
         }
         $localstatus = $oldstatus;
 
@@ -809,7 +835,9 @@ if (lc($arg1) eq "backupallimages" ) {
     }
 
 #    updateClientUI($arg1, $localpath, $localstatus, $dsnap1);
-    my $uires = $main::updateUI->({user=>$arg1, tab=>"images", path=>$localpath, status=>$localstatus, snap1=>$dsnap1, type=>"update"});
+    my $updateobj = {user=>$arg1, tab=>"images", path=>$localpath, status=>$localstatus, snap1=>$dsnap1, type=>"update"};
+    $updateobj->{'message'} = $uimsg if ($uimsg);
+    my $uires = $main::updateUI->($updateobj);
 #    debuglog("Updating UI with user=>$arg1 path=>$localpath, status=>$localstatus, $uires");
 
     if ($localpath2 && ($status =~ /cloning|copying|converting|moving|restoring/)) {
@@ -868,9 +896,6 @@ sub updateClientUI {
                 $hres =~ s/\"/\\"/g;
                 $bmess = "Backup failed: $hres";
             }
-            #$newtasks .= "{\"type\":\"message\",\"id\":\"images\"" .
-            #",\"message\":\"$bmes\", \"backup\":\"$path1\"" .
-            #"}, ";
         }
         syslogit('info', "$bmes: $path1") if ($bmes);
         my $newtasks = "{\"type\":\"update\",\"tab\":\"images\",\"timestamp\":$current_time" .

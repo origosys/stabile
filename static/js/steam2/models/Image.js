@@ -98,7 +98,7 @@ Image.showFilesDialog = function(uuid){
     }
 
     var t = [
-        '<div style="width:100%; min-height:300px; padding:10px;">',
+        '<div style="width: 50vw; height:450px; min-height:300px; padding:10px;">',
             '<div id="filesTreeControls">',
                 '<div style="float:left"><em>pick files to restore</em></div>',
                 '<a href="//www.origo.io/info/stabiledocs/web/images/restore-files" rel="help" target="_blank" id="irigo-restore-files-tooltip">help</a>',
@@ -107,7 +107,7 @@ Image.showFilesDialog = function(uuid){
                 '>Restore files</button>',
             '</div>',
             '<div style="clear:both"></div>',
-            '<div style="overflow:auto;max-height:400px">',
+            '<div style="overflow:auto;height:400px">',
                 '<div id="filesTreeLoader" style="text-align:center;overflow:auto"><img src="/stabile/static/img/loader.gif" /></div>',
                 '<div id="filesTreeErrorMessage"></div>',
                 '<div id="filesTreeWrapper"></div>',

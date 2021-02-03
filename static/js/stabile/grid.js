@@ -160,7 +160,10 @@ var grid = {
                                 home.grid.updatePending = images.grid.updatePending = networks.grid.updatePending = true;
 
                             var newstatus = server.parseResponse(response)["status"];
-                            console.log("response", item, newstatus);
+                            console.log("response", newstatus, item);
+                            if (item.status != newstatus)
+                                ui_update.publish([{"type": "update","tab": type, "status": newstatus, "uuid": item.uuid}])
+
                             if((action === "delete" /*|| action === "master" */) && window[type].grid.dialog.isOpen())
                                 {window[type].grid.dialog.hide();}
 

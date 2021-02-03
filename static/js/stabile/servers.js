@@ -841,35 +841,37 @@ define([
             var self = this;
             if(item.status != 'new'){
                 if(item.image && item.image != '--'){
-                    domConstruct.place('<a id="serverDialogImageDialogLink" href="#servers">Image</a>', 'serverDialogImageDialogLink', 'replace');
+                    domConstruct.place('<a id="serverDialogImageDialogLink" nohref="#servers">Image</a>', 'serverDialogImageDialogLink', 'replace');
                     on(dom.byId('serverDialogImageDialogLink'), 'click', function(){
                         self.grid.dialog.hide();
-                        stores.imagesByPath.fetchItemByIdentity({identity: item.image , onItem: function(item){stores.images.fetchItemByIdentity({identity: item.uuid, onItem: function(image){window['images'].grid.dialog.show(image);}})}});
+                        home.showImageDialog(item.image);
+                //        stores.imagesByPath.fetchItemByIdentity({identity: item.image , onItem: function(item) {console.log("fetching", item); stores.images.fetchItemByIdentity({identity: item.uuid, onItem: function(image){window['images'].grid.dialog.show(image);}})}});
                     });
                 }
                 if(item.image2 && item.image2 != '--'){
-                    domConstruct.place('<a id="serverDialogImage2DialogLink" href="#servers">Image2</a>', 'serverDialogImage2DialogLink', 'replace');
+                    domConstruct.place('<a id="serverDialogImage2DialogLink" nohref="#servers">Image2</a>', 'serverDialogImage2DialogLink', 'replace');
                     on(dom.byId('serverDialogImage2DialogLink'), 'click', function(){
                         self.grid.dialog.hide();
-                        stores.imagesByPath.fetchItemByIdentity({identity: item.image2 , onItem: function(item){stores.images.fetchItemByIdentity({identity: item.uuid, onItem: function(image){window['images'].grid.dialog.show(image);}})}});
+                        home.showImageDialog(item.image2);
+                //        stores.imagesByPath.fetchItemByIdentity({identity: item.image2 , onItem: function(item){stores.images.fetchItemByIdentity({identity: item.uuid, onItem: function(image){window['images'].grid.dialog.show(image);}})}});
                     });
                 }
                 if(item.networkuuid1 && item.networkuuid1 != '--'){
-                    domConstruct.place('<a id="serverDialogNetwork1DialogLink" href="#servers">Connection</a>', 'serverDialogNetwork1DialogLink', 'replace');
+                    domConstruct.place('<a id="serverDialogNetwork1DialogLink" nohref="#servers">Connection</a>', 'serverDialogNetwork1DialogLink', 'replace');
                     on(dom.byId('serverDialogNetwork1DialogLink'), 'click', function(){
                         self.grid.dialog.hide();
                         networks.grid.dialog.show(stores.networks.fetchItemByIdentity({identity: item.networkuuid1 }));
                     });
                 }
                 if(item.networkuuid2 && item.networkuuid2 != '--'){
-                    domConstruct.place('<a id="serverDialogNetwork2DialogLink" href="#servers">Connection2</a>', 'serverDialogNetwork2DialogLink', 'replace');
+                    domConstruct.place('<a id="serverDialogNetwork2DialogLink" nohref="#servers">Connection2</a>', 'serverDialogNetwork2DialogLink', 'replace');
                     on(dom.byId('serverDialogNetwork2DialogLink'), 'click', function(){
                         self.grid.dialog.hide();
                         networks.grid.dialog.show(stores.networks.fetchItemByIdentity({identity: item.networkuuid2 }));
                     });
                 }
                 if(user.is_admin && item.mac && item.mac != '--'){
-                    domConstruct.place('<a id="serverDialogNodeDialogLink" href="#servers">Node</a>', 'serverDialogNodeDialogLink', 'replace');
+                    domConstruct.place('<a id="serverDialogNodeDialogLink" nohref="#servers">Node</a>', 'serverDialogNodeDialogLink', 'replace');
                     on(dom.byId('serverDialogNodeDialogLink'), 'click', function(){
                         self.grid.dialog.hide();
                         nodes.grid.dialog.show(stores.nodes.fetchItemByIdentity({identity: item.mac }));

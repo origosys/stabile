@@ -164,7 +164,7 @@ var nodes = {
                     for (var i in doms) {
                         //serverStandIn = {uuid:doms[i],name:domnames[i],user:domusers[i]};
                         //serverEditLink += Server.getEditDialogLink(serverStandIn) + " ";
-                        serverEditLink += '<a href="#nodes" title="User: ' + domusers[i] + '" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + doms[i]  + '\'}));">' + domnames[i] + '</a> ';
+                        serverEditLink += '<a nohref="#nodes" title="User: ' + domusers[i] + '" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + doms[i]  + '\'}));">' + domnames[i] + '</a> ';
                     }
                     return '<td>Servers</td><td>' + serverEditLink + '</td>';
                 } else {

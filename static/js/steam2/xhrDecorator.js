@@ -10,12 +10,10 @@ define([
     aspect.around(dojo, "xhr", function(originalXhr){
         return function(method, args){
             var dfd = originalXhr(method, args);
-            
             var errHandler = function(error){
                 if(logoutInProgress){
                     return error;
                 }
-
                 if(error.status === 401 || error.status === 403){
                     logoutInProgress = true;
                     topic.publish("message", {

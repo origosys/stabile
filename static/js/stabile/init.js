@@ -1,3 +1,4 @@
+// Obsolete - not used
 define([
 'stabile/ui_update',
 "dojo/ready",

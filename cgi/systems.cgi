@@ -236,7 +236,7 @@ sub do_list {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET::
+GET:uuid:
 List systems current user has access to.
 END
     }

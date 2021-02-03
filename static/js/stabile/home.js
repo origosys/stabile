@@ -668,6 +668,9 @@ define([
                         }
                     }
                 }
+                var imageItem = stores.images.fetchItemByIdentity({identity: gridItem.imageuuid});
+                var serverLink = '<a href="#home" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity:\'' + imageItem.domains + '\'}));">' + imageItem.domainnames + '</a>';
+                v += "<b>Administration server:</b> " + serverLink + "<br>";
                 v += "<b>Total servers:</b> " + images + " (" + sysvcpu + " vCPU" + (sysvcpu>1?"s, ":", ") +
                         sysmemory + " MB memory" + ")<br>";
                 v += "<b>Active servers:</b> " + aimages + " (" + asysvcpu + " vCPU" + (asysvcpu>1?"s, ":", ") +
@@ -721,7 +724,7 @@ define([
                 $(".info-account").hide();
                 $(".info-system").show();
 
-                var url = "/stabile/images?action=list"; //images&image=listall";
+                var url = "/stabile/images?action=listimages"; //images&image=listall";
                 if (stores.unusedImages2.url != url) {
                     stores.unusedImages2.url = url;
                 }
@@ -784,11 +787,11 @@ define([
                 if (gridItem.networktype1 == "gateway" && gridItem.networkid1>1) {
                     stores.networks.fetchItemByIdentity({identity: gridItem.networkuuid1, onItem: home.updateVitals_network});
                     home.servicesFilter = "service: 'ping' OR service: 'diskspace'";
-                    stores.unusedImages2.url = url;
+                //    stores.unusedImages2.url = url;
                 } else if (gridItem.networkuuid1 && gridItem.networkuuid1!="0" && gridItem.networkuuid1!="1") {
                     stores.networks.fetchItemByIdentity({identity: gridItem.networkuuid1, onItem: home.updateVitals_network});
                     home.servicesFilter = "service: '*'";
-                    var url = "/stabile/images?action=list"; //images&image=listall";
+                    var url = "/stabile/images?action=listimages"; //images&image=listall";
                     stores.unusedImages2.url = url;
                 } else {
                     home.servicesFilter = "service: 'diskspace'";
@@ -1163,28 +1166,31 @@ define([
             } else if (path == null && images.grid.dialog) {
                 path = images.grid.dialog.item.master;
             }
-            var url = "/stabile/images?action=list"; //images&image=listall";
-            if (stores.unusedImages2.url != url) {
-                stores.unusedImages2.url = url;
-                stores.unusedImages2.close();
-            }
+            // var url = "/stabile/images?action=list"; //images&image=listall";
+            // if (stores.unusedImages2.url != url) {
+            //     stores.unusedImages2.url = url;
+            //     stores.unusedImages2.close();
+            // }
+
             // We need to translate the image path from server info to an image uuid
             // unusedImages2 uses path as identifier
-            stores.unusedImages2.fetchItemByIdentity({identity: path, onItem: function(item0) {
-                // images uses uuid as identifier
-                stores.images.fetchItemByIdentity({identity: item0.uuid, onItem: function(item) {
-                    if (images.grid.dialog) {
-                        images.grid.dialog.show(item);
-                    } else {
-                        home.imagesOnShowItem = item;
-                        dijit.byId('tabs').selectChild(dijit.byId('images'));
-                    }
+            $.get('/stabile/images/?path=' + encodeURIComponent(path) ,function(item) {home.showImageItemDialog(item)});
 
-                }});
-            }});
+            // stores.unusedImages2.fetchItemByIdentity({identity: path, onItem: function(item0) {
+            //     // images uses uuid as identifier
+            //     stores.images.fetchItemByIdentity({identity: item0.uuid, onItem: function(item) {
+            //         if (images.grid.dialog) {
+            //             images.grid.dialog.show(item);
+            //         } else {
+            //             home.imagesOnShowItem = item;
+            //             dijit.byId('tabs').selectChild(dijit.byId('images'));
+            //         }
+            //     }});
+            // }});
         },
 
-        showDialog: function(/* String */ uuid, /* String */ type) {
+/*
+        showDialog: function(uuid, type) {
             if (uuid == null) {
                 var ids;
                 if (type == "serverimage") {
@@ -1219,7 +1225,6 @@ define([
                    if(!pane.isLoaded){
                        // init the server grid and dialog
                        var tabs = menu.tabs;
-                       
                        var h = connect.connect(grid, 'init', function(evt) {
                            grid.grid.dialog.show(item);
                            dojo.disconnect(h);
@@ -1232,6 +1237,7 @@ define([
                 }});
             });
         },
+*/
 
         deviceHandler: function(item_id, action) {
             var dev = dijit.byId(item_id).get("value");
@@ -1780,7 +1786,7 @@ define([
             } else {
                 filter = {id: '*'};
             }
-            console.log("filtering:", filter);
+//            console.log("filtering:", filter);
             grid.store.reset();
             grid.filter(filter, true);
             grid.updateMissingMonitors(filter);

@@ -1411,7 +1411,6 @@ END
         </div>
 END
         ;
-
         $res .= qq|</body>\n</html>|;
     } else {
         foreach my $fname (@fnames) {
@@ -1424,6 +1423,30 @@ END
     }
 
     return $res;
+}
+
+sub getBackupSize {
+    my ($subdir, $img, $imguser) = @_; # $subdir, if specified, includes leading slash
+    $imguser = $imguser || $user;
+    my $backupsize = 0;
+    my @bdirs = ("$backupdir/$imguser$subdir/$img");
+    if ($backupdir =~ /^\/stabile-backup\//) { # ZFS backup is enabled - we need to scan more dirs
+        @bdirs = (
+            "/stabile-backup/*/$imguser$subdir/" . shell_esc_chars($img),
+            "/stabile-backup/*/.zfs/snapshot/*/$imguser$subdir/". shell_esc_chars($img)
+        );
+    }
+    foreach my $bdir (@bdirs) {
+        my $bdu = `/usr/bin/du -bs $bdir 2>/dev/null`;
+        my @blines = split("\n", $bdu);
+        # only count size from last snapshot
+        my $bline = pop @blines;
+#        foreach my $bline (@blines) {
+            $bline =~ /(\d+)\s+/;
+            $backupsize += $1;
+#        }
+    }
+    return $backupsize;
 }
 
 sub shell_esc_chars {

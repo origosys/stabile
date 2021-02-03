@@ -203,7 +203,7 @@ define([
                             var domnames = image.domainnames.split(/, {0,1}/);
                             var serverEditLink = "";
                             for (var i in doms) {
-                                serverEditLink += '<a href="#images" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + doms[i]  + '\'}));">' + domnames[i] + '</a> ';
+                                serverEditLink += '<a nohref="#images" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + doms[i]  + '\'}));">' + domnames[i] + '</a> ';
                             }
                             return '<td>Server</td><td>' + serverEditLink + '</td>';
                         } else {
@@ -242,7 +242,7 @@ define([
             },
             {
                 field: "mastername",
-                name:"<a href=\"#\" onClick=\"home.showImageDialog(null);\">Master</a>",
+                name:"<a nohref=\"#\" onClick=\"home.showImageDialog(null);\">Master</a>",
                 type: "dijit.form.TextBox",
                 attrs: {readonly:"readonly"}
             },
@@ -582,7 +582,8 @@ define([
             is_master = _masterReg.test(item.path)?true:false;
             if (dijit.byId('master')) master = dijit.byId('master').value;
             if (master && master!="--") {
-                stores.images.fetch({query: {path:master+'*'}, onComplete: images.updateMasterName});
+//                stores.images.fetch({query: {path:master+'*'}, onComplete: images.updateMasterName});
+                stores.images.fetch({query: {path:master}, onComplete: images.updateMasterName});
             } else if (is_master) {
                 if (dijit.byId('mastername')) dijit.byId('mastername').set("value", "This image is a master image");
                 if (document.getElementById('masternamelabel')) document.getElementById('masternamelabel').innerHTML = "Master";
@@ -645,14 +646,16 @@ define([
         },
 
         updateMasterName : function(items) {
-            if (items[0] && items[0].name && dijit.byId("mastername")) {
-                dijit.byId("mastername").set("value", items[0].name);
+            if (items && items.name && dijit.byId("mastername")) {
+                dijit.byId("mastername").set("value", items.name);
                 if (dojo.byId('masternamelabel')) dojo.byId('masternamelabel').innerHTML =
-                        "<a href=\"#\" onClick=\"home.showImageDialog('" + items[0].path + "');\">Master</a>"
+                    '<a nohref="#" onClick="$.get(\'/stabile/images/' + items.uuid + '\',function(item) {home.showImageItemDialog(item)});">Master</a>'
+    //                "<a href=\"#\" onClick=\"home.showImageDialog('" + items.path + "');\">Master</a>"
             } else {
                 if (dijit.byId('mastername')) dijit.byId('mastername').set("value","--");
                 if (dojo.byId('masternamelabel')) dojo.byId('masternamelabel').innerHTML = "Master";
             }
+            stores.images.reset('norender');
         },
 
         updateMissingBackups : function(filter) {
@@ -847,7 +850,7 @@ define([
             var self = this;
             if(image.status != 'new'){
                 if(user.is_admin && image.mac && image.mac != '--'){
-                    domConstruct.place('<a id="imageDialogNodeDialogLink" href="#images">Node</a>', 'imageDialogNodeDialogLink', 'replace');
+                    domConstruct.place('<a id="imageDialogNodeDialogLink" nohref="#images">Node</a>', 'imageDialogNodeDialogLink', 'replace');
                     on(dom.byId('imageDialogNodeDialogLink'), 'click', function(){
                         self.grid.dialog.hide();
                         nodes.grid.dialog.show(stores.nodes.fetchItemByIdentity({identity: image.mac }));

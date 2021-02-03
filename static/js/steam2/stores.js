@@ -82,7 +82,7 @@ dojox.data.JsonRestStore.prototype.reset = function(uuid){
     // remove all the existing elements from the index
 //    console.log("Deleting from Dojo (systems)", this.target);
     for (idx in dojox.rpc.Rest._index) {
-        if (uuid) {
+        if (uuid && uuid!=='norender') {
             if (dojox.rpc.Rest._index[idx].uuid == uuid) {
 //                console.log("Deleting uuid from Dojo (systems): " + idx + ", " + uuid);
                 delete dojox.rpc.Rest._index[idx];
@@ -100,24 +100,26 @@ dojox.data.JsonRestStore.prototype.reset = function(uuid){
     //this.revert();
 
     console.log("refreshed target", this.target);
-    if (this.target.match("systems")) {
-        console.log("not rendering systems");
-        home.grid.render();
-    } else if (this.target.match("servers")) {
-        console.log("rendering servers");
-        servers.grid.render();
-    } else if (this.target.match("images")) {
-        console.log("rendering images");
-        images.grid.render();
-    } else if (this.target.match("networks")) {
-        console.log("rendering networks");
-        networks.grid.render();
-    } else if (this.target.match("nodes")) {
-        console.log("rendering nodes"); 
-        nodes.grid.render();
-    } else if (this.target.match("users")) {
-        console.log("rendering users");
-        users.grid.render();
+    if (uuid!=='norender') {
+        if (this.target.match("systems")) {
+            console.log("not rendering systems");
+            home.grid.render();
+        } else if (this.target.match("servers")) {
+            console.log("rendering servers");
+            servers.grid.render();
+        } else if (this.target.match("images")) {
+            console.log("rendering images");
+            images.grid.render();
+        } else if (this.target.match("networks")) {
+            console.log("rendering networks");
+            networks.grid.render();
+        } else if (this.target.match("nodes")) {
+            console.log("rendering nodes");
+            nodes.grid.render();
+        } else if (this.target.match("users")) {
+            console.log("rendering users");
+            users.grid.render();
+        }
     }
     // very, very ugly :(
     setTimeout(function() {q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();},1000);

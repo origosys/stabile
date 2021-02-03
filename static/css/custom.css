@@ -245,7 +245,7 @@ a:focus, a:hover {
     text-decoration: underline;
     cursor: pointer;
 }
-a:link, a:visited {
+a, a:link, a:visited {
     color: #ff4400;
 }
 a:active {

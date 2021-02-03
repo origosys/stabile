@@ -26,7 +26,25 @@ var ui_update = {
         } else if (ui_update.logged_out) {
             // do nothing
         } else {
-           // console.log("basewait", basewait, "timeout", timeout);
+//            console.log("GETTING", ui_update.url, "basewait", basewait, "timeout", timeout);
+// Using jQuery
+/*
+            $.ajax({
+                url: ui_update.url,
+                success: function (tasks) {
+                    ui_update.wait = basewait;
+                    if (ui_update.publish(tasks)) ui_update.subscribe();
+                },
+                dataType: "json",
+                timeout: timeout,
+                error: function(tasks) {
+                    console.log("ui_update error", tasks);
+                    setTimeout(ui_update.subscribe, ui_update.wait);
+                    ui_update.wait = ui_update.wait * 1.5;
+                }
+            })
+*/
+// Unsing Dojo
             xhr.get({
                 "handleAs":"json",
                 "timeout":timeout,

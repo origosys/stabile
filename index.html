@@ -203,8 +203,15 @@
                           toastr.options.timeOut = 3000;
                           toastr.options.preventDuplicates = true;
                           toastr.options.progressBar = false;
-                          toastr.alert(message, "Alert history");
+                          toastr.alert(message, 'Alert history <a href="#" onclick="IRIGO.toastclear();" class="pull-right" style="font-weight: 400;">clear</a>');
                       }
+                  }
+
+                  IRIGO.toastclear = function() {
+                      IRIGO.alerts = [];
+                      toastr.remove();
+                  //    toastr.clear();
+                      $("#toasthistory").hide();
                   }
 
                   IRIGO.toast = function(message) {

@@ -28,7 +28,7 @@ my $servername = $ENV{'SERVER_NAME'};
 $servername = "localhost" unless $servername;
 my $serverip = scalar(inet_ntoa(inet_aton($servername)));
 
-my $backupdir = $Stabile::config->get('STORAGE_BACKUPDIR') || "/mnt/stabile/backups";
+$backupdir = $Stabile::config->get('STORAGE_BACKUPDIR') || "/mnt/stabile/backups";
 my $engineid = $Stabile::config->get('ENGINEID') || "";
 #my $enginelinked = $Stabile::config->get('ENGINE_LINKED') || "";
 $brutalsleep = $Stabile::config->get('BRUTAL_SLEEP') || "";
@@ -193,18 +193,13 @@ ENDBOOT
             tied(%imagereg)->commit();
             if ($plogentry =~ /Backed up/) { # An image was backed up from the node
                 $imagereg{$uipath}->{'btime'} = $current_time;
+                my $imguser = $imagereg{$uipath}->{'user'};
                 my($fname, $dirpath, $suffix) = fileparse($uipath, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
                 my $subdir = "";
                 if ($dirpath =~ /\/$user(\/.+)\//) {
                     $subdir = $1;
                 }
-                my $bdu;
-                my $backupsize = 0;
-                if (-d "$backupdir/$user$subdir/$fname$suffix") {
-                    $bdu = `/usr/bin/du -bs "$backupdir/$user$subdir/$fname$suffix"`;
-                    $bdu =~ /(\d+)\s+/;
-                    $backupsize = $1;
-                }
+                my $backupsize = getBackupSize($subdir, "$fname$suffix", $imguser);
                 updateImageBilling($user, $uipath, "backed up", $backupsize);
             }
             if ($plogentry) {
@@ -543,14 +538,9 @@ END
                     }
                     my $bdu;
                     my $backupsize = 0;
-                    my $cmdpath = "$backupdir/$imguser$subdir/$fname$suffix";
-                    $cmdpath =~ /(.+)/; $cmdpath = $1; # untaint
-                    if (-d $cmdpath) {
-                        $bdu = `/usr/bin/du -bs "$cmdpath"`;
-                        $bdu =~ /(\d+)\s+/;
-                        $backupsize = $1;
-                    }
-
+                    my $imgpath = "$fname$suffix";
+                    $imgpath = $1 if $cmdpath =~ /(.+)/; # untaint
+                    $backupsize = getBackupSize($subdir, $imgpath, $imguser);
             # If image on node is attached to a domain, reserve vcpus for starting domain on node
                     my $imgdom = $regimg->{'domains'};
                     if ($imgdom && $domreg{$imgdom}) {
@@ -571,7 +561,7 @@ END
                             my $imgdomains = $regimg->{'domains'};
                             my $imgdomainnames = $regimg->{'domainnames'};
                             (tied %domreg)->select_where("user = '$imguser' or user = 'common'") unless ($fulllist);
-                            foreach my $dom (%domreg) {
+                            foreach my $dom (values %domreg) {
                                 my $img = $dom->{'image'};
                                 my $img2 = $dom->{'image2'};
                                 my $img3 = $dom->{'image3'};
@@ -920,6 +910,7 @@ sub updateImageBilling {
     if ($backupsize) {
         $imagereg{$bpath}->{'backupsize'} = $backupsize;
     }
+    return "No user" unless ($user);
     my $tenders = $Stabile::config->get('STORAGE_POOLS_ADDRESS_PATHS');
     my @tenderlist = split(/,\s*/, $tenders);
     my $tenderpaths = $Stabile::config->get('STORAGE_POOLS_LOCAL_PATHS') || "/mnt/stabile/images";

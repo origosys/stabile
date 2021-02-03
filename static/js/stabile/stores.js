@@ -303,7 +303,7 @@ var stores = {
     }),
 
     imagesByPath: new dojo.data.ItemFileReadStore({
-        url: "/stabile/images?action=listimages&image=", //listall",
+        url: "/stabile/images?action=listimages&image=all", //listall",
         clearOnClose:true,
         urlPreventCache:true
     }),

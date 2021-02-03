@@ -2364,7 +2364,7 @@ END
             $networkname3 = $networkname3 || '--';
             $nicmac3 = $nicmac3 || randomMac();
             #    $uiuuid = $uuid; # No need to update ui for new server with jsonreststore
-            $postmsg .= "Status=OK Created new server: $name";
+            $postmsg .= "OK Created new server: $name";
             $postmsg .= ", uuid: $uuid " if ($console);
         }
         # Update status of images

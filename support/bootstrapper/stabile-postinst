@@ -1718,7 +1718,14 @@ sub upgrade {
 		}
 	}
 
-#	print $out "** Now upgrading software in existing valve **\n";
+	`echo "ALTER TABLE networks ADD systems varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE networks ADD systemnames varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE systems ADD networkuuids varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE systems ADD networknames varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE domains ADD networkuuids varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE domains ADD networknames varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+
+	#	print $out "** Now upgrading software in existing valve **\n";
 #	print $out `perl -MCPAN -e 'install Locale::TextDomain'`;
 #	print $out "** Now upgrading database **\n";
 #    `echo "ALTER TABLE nodes ADD vmuuids varchar(4096);" | mysql steamregister 2>/dev/null 1>/dev/null`;

@@ -95,7 +95,7 @@ sub getObj {
         $obj = {uuid => $uuid};
         my @props = qw(uuid name  user  notes  created  opemail  opfullname  opphone  email  fullname  phone  services
             recovery  alertemail  image  networkuuid1  internalip autostart issystem system systemstatus from to
-            appid callback installsystem installaccount);
+            appid callback installsystem installaccount networkuuids);
         if ($register{$uuid}) {
             foreach my $prop (@props) {
                 my $val = $h{$prop} || $register{$uuid}->{$prop};
@@ -566,8 +566,11 @@ sub Save {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-PUT:uuid, fullname, email, phone, opfullname, opemail, opphone, alertemail, services, recovery:
-Save properties for a system. If no uuid is provided, a new stack is created.
+PUT:uuid, fullname, email, phone, opfullname, opemail, opphone, alertemail, services, recovery, networkuuids:
+Save properties for a system. If no uuid is provided, a new stack is created.[networkuuids] is a comma-separated list of networks reserved to this stack for use not associated with specific servers.
+[networkuuids] is a list of UUIDs of linked network connections, i.e. connections reserved for this system to handle
+
+        Specify '--' to clear a value.
 END
     }
     my $name = $obj->{"name"} || $register{$uuid}->{'name'};
@@ -585,6 +588,7 @@ END
     my $alertemail = $obj->{'alertemail'};
     my $services = $obj->{'services'};
     my $recovery = $obj->{'recovery'};
+    my $networkuuids = $obj->{'networkuuids'};
 
     if ((!$uuid)) {
         my $ug = new Data::UUID;
@@ -620,7 +624,7 @@ END
                 if ($val) {
                     $val = '' if ($val eq '--');
                     $oldvals{$prop} = $register{$uuid}->{$prop} || $userreg{$user}->{$prop};
-                    if ($val eq $userreg{$user}->{$prop}) {
+                if ($val eq $userreg{$user}->{$prop}) {
                         $register{$uuid}->{$prop} = ''; # Same val as parent (user val), reset
                     } else {
                         $register{$uuid}->{$prop} = $val;
@@ -723,6 +727,30 @@ END
             $valref->{'autostart'} = ($obj->{'autostart'} && $obj->{'autostart'} ne 'false'?'true':'false');
             tied(%domreg)->commit;
             $postreply = getSystemsListing(); # Hard to see what else to do, than to send entire table
+        }
+    }
+    if ($networkuuids) { # link networks to this system
+        my @networks = split(/, ?/, $networkuuids);
+        my @newnetworks = ();
+        my @newnetworknames = ();
+        unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {return "Unable to access networks register"};
+        foreach my $networkuuid (@networks) {
+            if (
+                !$networkreg{$networkuuid}->{'domains'} # a network cannot both be linked and in active use
+                    && (!$networkreg{$networkuuid}->{'systems'} ||  $networkreg{$networkuuid}->{'systems'} eq $uuid) # check if network is already linked to another system
+            ) {
+                $networkreg{$networkuuid}->{'systems'} = $uuid;
+                $networkreg{$networkuuid}->{'systemnames'} = $name;
+                push @newnetworks, $networkuuid;
+                push @newnetworknames, $networkreg{$networkuuid}->{'name'};
+            }
+        }
+        if ($issystem) {
+            $register{$uuid}->{'networkuuids'} = join(", ", @newnetworks);
+            $register{$uuid}->{'networknames'} = join(", ", @newnetworknames);
+        } else {
+            $domreg{$uuid}->{'networkuuids'} = join(", ", @newnetworks);
+            $domreg{$uuid}->{'networknames'} = join(", ", @newnetworknames);
         }
     }
     untie %domreg;
@@ -3004,9 +3032,9 @@ sub buildSystem {
         } else { # Create new network
             my $networkname = $name;
             $networkname =~ s/system/Connection/i;
-            my $type = $hnetworktype1;
+            my $type = ($i==0)?$hnetworktype1 : '';
             if (!$type) {
-                if ($curuuid) {
+                if ($curuuid && $i==0) { # This should never be true, leaving for now...
                     unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {$postreply = "Unable to access networks register"; return $postreply;};
                     $type = $networkreg{$domreg{$curuuid}->{'networkuuid1'}}->{'type'};
                     untie %networkreg;
@@ -3396,6 +3424,16 @@ sub remove {
     if ($issystem) {
     # Delete child servers
         if (($user eq $reguser || $isadmin) && $register{$uuid}){ # Existing system
+        # First delete any linked networks
+            if ($register{$uuid}->{'networkuuids'} && $register{$uuid}->{'networkuuids'} ne '--') {
+                my @lnetworks = split /, ?/, $register{$uuid}->{'networkuuids'};
+                foreach my $networkuuid (@lnetworks) {
+                    if ($networkuuid) {
+                        Stabile::Networks::Deactivate($networkuuid);
+                        $res .= Stabile::Networks::Remove($networkuuid, 'remove', {force=>1});
+                    }
+                }
+            }
             foreach my $domvalref (values %domreg) {
                 if ($domvalref->{'system'} eq $uuid && ($domvalref->{'user'} eq $user || $isadmin)) {
                     if ($domvalref->{'status'} eq 'shutoff' || $domvalref->{'status'} eq 'inactive') {
@@ -3458,6 +3496,10 @@ sub remove {
         $duuid = $domuuid;
     }
     if (@domains) {
+        if ($register{$uuid}) {
+            delete $register{$uuid};
+            tied(%register)->commit;
+        }
         $main::updateUI->(
                         {tab=>'servers',
                         user=>$user,

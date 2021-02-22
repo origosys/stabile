@@ -52,7 +52,7 @@ END
         my $res;
         return $res;
 
-# This is called from origo-ubuntu.pl when rebooting and with status "upgrading"
+# This is called from stabile-ubuntu.pl when rebooting and with status "upgrading"
     } elsif ($action eq 'restore') {
         my $res;
         return $res;
@@ -63,7 +63,7 @@ END
         my $pwd = $in{jupyterpassword};
         if ($pwd) {
             my $password = sha1_hex($pwd . $salt);
-            $message .= `perl -pi -e "s/.*c\\.NotebookApp\\.password =.*/c.NotebookApp.password = 'sha1:$salt:$password'/" /home/origo/.jupyter/jupyter_notebook_config.py`;
+            $message .= `perl -pi -e "s/.*c\\.NotebookApp\\.password =.*/c.NotebookApp.password = 'sha1:$salt:$password'/" /home/stabile/.jupyter/jupyter_notebook_config.py`;
             $message .= `pkill -f jupyter`;
             $message .= "<div class=\"message\">The Jupyter password was changed!</div>";
         }

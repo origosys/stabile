@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS `networks` (
   `nextid` int(11) DEFAULT NULL,
   `type` varchar(16) DEFAULT NULL,
   `ports` varchar(256) DEFAULT NULL,
+  `systems` varchar(256) DEFAULT NULL,
+  `systemnames` varchar(256) DEFAULT NULL,
   PRIMARY KEY (`uuid`),
   KEY `networks-index` (`id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

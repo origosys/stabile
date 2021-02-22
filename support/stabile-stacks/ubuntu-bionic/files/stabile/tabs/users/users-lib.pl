@@ -38,7 +38,7 @@ END
             $i++;
         }
         my $form = <<END
-<div class="tab-pane" id="users">
+<div class="tab-pane container" id="users">
     <div style="width:100%; height:310px; overflow-y:scroll;">
       <table class="table table-condensed table-striped small" id="users_table" style="width: 100%; border:none;">
         <thead>

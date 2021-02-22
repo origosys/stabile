@@ -16,5 +16,7 @@ CREATE TABLE IF NOT EXISTS `systems` (
   `image` varchar(256) DEFAULT NULL,
   `networkuuid1` varchar(48) DEFAULT NULL,
   `internalip` varchar(15) DEFAULT NULL,
+  `networkuuids` varchar(2048) DEFAULT NULL,
+  `networknames` varchar(2048) DEFAULT NULL,
   PRIMARY KEY (`uuid`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

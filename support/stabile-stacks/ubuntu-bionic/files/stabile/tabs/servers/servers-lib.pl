@@ -8,7 +8,7 @@ sub servers {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="servers">
+<div class="tab-pane container" id="servers">
 The servers in this stack are listed below.
 <div class="small">
 Click on a server to launch a terminal and log in with username "stabile" and the password you set in the "security" tab.
@@ -112,7 +112,7 @@ END
     }
 
     function listServers(webmin) {
-        console.log("listing servers", (updating?"spinner":"no spinner"), updating, webmin);
+        //console.log("listing servers", (updating?"spinner":"no spinner"), updating, webmin);
         var bgcolors = {
                 ready: "lightgreen",
                 running: "darkgreen",

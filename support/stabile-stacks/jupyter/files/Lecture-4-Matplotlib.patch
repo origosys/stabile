@@ -1,0 +1,31 @@
+--- Lecture-4-Matplotlib.ipynb	2017-09-09 13:07:56.445047231 +0000
++++ Lecture-4-Matplotlib.fixed.ipynb	2017-09-09 13:16:17.197365904 +0000
+@@ -2244,7 +2244,7 @@
+     "    def update(frame_counter):\n",
+     "        # update figure for new frame\n",
+     "\n",
+-    "    anim = animation.FuncAnimation(fig, update, init_func=init, frames=200, blit=True)\n",
++    "    anim = animation.FuncAnimation(fig, update, init_func=init, frames=200, blit=False)\n",
+     "\n",
+     "    anim.save('animation.mp4', fps=30) # fps = frames per second\n",
+     "\n",
+@@ -2330,7 +2330,7 @@
+     "    pendulum1.set_data([0 ,x1], [0 ,y1])\n",
+     "    pendulum2.set_data([x1,x2], [y1,y2])\n",
+     "\n",
+-    "anim = animation.FuncAnimation(fig, update, init_func=init, frames=len(t), blit=True)\n",
++    "anim = animation.FuncAnimation(fig, update, init_func=init, frames=len(t), blit=False)\n",
+     "\n",
+     "# anim.save can be called in a few different ways, some which might or might not work\n",
+     "# on different platforms and with different versions of matplotlib and video encoders\n",
+@@ -4283,7 +4283,9 @@
+    "source": [
+     "from IPython.display import HTML\n",
+     "video = open(\"animation.mp4\", \"rb\").read()\n",
+-    "video_encoded = video.encode(\"base64\")\n",
++    "import base64, urllib\n",
++    "encoded = base64.b64encode(video)\n",
++    "video_encoded = urllib.parse.quote(encoded)\n",
+     "video_tag = '<video controls alt=\"test\" src=\"data:video/x-m4v;base64,{0}\">'.format(video_encoded)\n",
+     "HTML(video_tag)"
+    ]

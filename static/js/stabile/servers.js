@@ -299,7 +299,7 @@ define([
             },
             {
                 field: "nicmodel1",
-                name:"Network Interface model",
+                name:"NIC model",
                 type: "dijit.form.Select",
                 help: "servers/network-interface",
                 attrs: {store:"stores.networkInterfaces", searchAttr: "type", query: "{hypervisor: '*'}"}

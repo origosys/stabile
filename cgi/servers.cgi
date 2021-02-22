@@ -644,7 +644,6 @@ END
     my %appinfo;
     if ($uuid && $register{$uuid}) {
         unless ( tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {return "Unable to access image register"};
-
         $appinfo{'appid'} = $imagereg{$register{$uuid}->{image}}->{appid} || '';
         $appinfo{'managementlink'} = $imagereg{$register{$uuid}->{image}}->{managementlink} || '';
         $appinfo{'managementlink'} =~ s/{uuid}/$register{$uuid}->{networkuuid1}/;
@@ -662,6 +661,16 @@ END
         $appinfo{'version'} = $imagereg{$register{$uuid}->{image}}->{version} || '';
         $appinfo{'status'} = $register{$uuid}->{status} || '';
         $appinfo{'name'} = $register{$uuid}->{name} || '';
+        $appinfo{'system'} = $register{$uuid}->{system} || '';
+
+        if ($appinfo{'system'}) {
+            unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
+            $appinfo{'systemname'} = $sysreg{$appinfo{'system'}}->{name} || '';
+            untie(%sysreg);
+        } else {
+            $appinfo{'systemname'} = $appinfo{'name'};
+        }
+
 
         if ($appinfo{'appid'}) {
             my @regkeys = (tied %imagereg)->select_where("appid = '$appinfo{appid}'");

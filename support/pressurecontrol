@@ -258,8 +258,10 @@ if ($linked) {
             if ($enginekeys{$k}) {
                 my @vals = $cfg->param($k); my $val = join(", ", @vals);
                 if ($val ne $v) {
-                    print "Received modified config: $line\n";
-                    $cfg->param($k, $v) if ($pullconfigs || $k eq 'ENGINEUSER');
+                    if ($pullconfigs || $k eq 'ENGINEUSER') {
+                        print "Received modified config: $line\n";
+                        $cfg->param($k, $v);
+                    }
                 } else {
                     #print "Unmodified config line received: $line, $val[0]\n";
                 }

@@ -360,6 +360,8 @@ my $head = <<END
             color: red;
             display: none;
         }
+		#sortable { list-style-type: none; width: 200px; }
+      	.ui-state-default {border: 1px solid #DDDDDD; margin:5px; padding-left:10px; background: #fafafa;}
     </style>
 </head>
 <body>
@@ -440,8 +442,10 @@ $alert
 </div>
 
 <!-- Load JS here for greater good =============================-->
-<script src="js/jquery-1.8.3.min.js"></script>
-<script src="js/jquery-ui-1.10.3.custom.min.js"></script>
+<!-- script src="js/jquery-1.10.2.min.js"></script -->
+<!-- script src="js/jquery-ui-1.10.3.custom.min.js"></script -->
+<script src="js/jquery-1.10.2.min.js"></script -->
+<script src="js/jquery-ui-1.10.4.min.js"></script>
 <script src="js/jquery.ui.touch-punch.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script src="js/bootstrap-select.js"></script>
@@ -453,6 +457,7 @@ $alert
 <script type="text/javascript" charset="utf8" src="js/jquery.dataTables.min.js"></script>
 <script type="text/javascript" src="strength/strength.js"></script>
 <script src="js/Chart.js"></script>
+<script src="js/clipboard.js"></script>
 
 <script type='text/javascript'>
     var timeout;

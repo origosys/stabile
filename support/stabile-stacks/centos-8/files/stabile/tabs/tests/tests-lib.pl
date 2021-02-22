@@ -8,7 +8,7 @@ sub tests {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="tests">
+<div class="tab-pane container" id="tests">
 <span class="dropdown">
     Select test:
     <button class="btn btn-primary dropdown-toggle dropdown" data-toggle="dropdown" id="run_test">Run test<span class="caret"></span></button>
@@ -61,7 +61,7 @@ CPU: sysbench --test=cpu --cpu-max-prime=10000 run<br>
 CPU 5 threads: sysbench --test=cpu --cpu-max-prime=10000 run --num-threads=5<br>
 Memory: sysbench --test=memory --memory-total-size=4G run<br>
 Network: netperf -f M -H \&lt;HOST\&gt; -l 10<br>
-Network gateway: netperf -f M -H 10.0.0.1 -l 10<br>
+Network gateway: netperf -f M -H $gw -l 10<br>
 </div>
 </span>
 <div id="myChart" width="700" height="240" style="margin-top:10px;"></div>
@@ -170,7 +170,7 @@ sub run_test {
         "cpu5", "sysbench --test=cpu --cpu-max-prime=10000 run --num-threads=5",
         "memory", "sysbench --test=memory --memory-total-size=4G run",
         "network", "netperf -f M -H HOST -l 10",
-        "netgw", "netperf -f M -H 10.0.0.1 -l 10"
+        "netgw", "netperf -f M -H $gw -l 10"
     );
     my $command = $tests{$test};
     foreign_require("cluster-shell", "cluster-shell-lib.pl");
@@ -311,8 +311,8 @@ sub get_test_results {
                                 $n++;
                                 unless ($testkey eq 'KB' || $testkey eq 'reclen') {
                                     unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                                    if ($test eq 'io' || $test eq 'iodirect') {push $tests{$testkey}, int($number/1024);}
-                                    else {push $tests{$testkey}, $number+0;}
+                                    if ($test eq 'io' || $test eq 'iodirect') {push @{$tests{$testkey}}, int($number/1024);}
+                                    else {push @{$tests{$testkey}}, $number+0;}
                                 }
                             }
                         }
@@ -324,24 +324,24 @@ sub get_test_results {
                     if ($test eq 'dd' || $test eq 'ddnfs') {
                         my $testkey = 'write';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        push $tests{$testkey}, $1 if ($_ =~ / s, (.+) \S+\/s/);
+                        push @{$tests{$testkey}}, $1 if ($_ =~ / s, (.+) \S+\/s/);
                         `echo "$_" >> /tmp/nfs.out`;
                     } elsif ($test eq 'cpu') {
                         my $testkey = 'max prime 10000';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        push $tests{$testkey}, $1 if ($_ =~ /total time:\s+ (\S+)s/);
+                        push @{$tests{$testkey}}, $1 if ($_ =~ /total time:\s+ (\S+)s/);
                     } elsif ($test eq 'cpu5') {
                         my $testkey = 'max prime 10000';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        push $tests{$testkey}, $1 if ($_ =~ /total time:\s+ (\S+)s/);
+                        push @{$tests{$testkey}}, $1 if ($_ =~ /total time:\s+ (\S+)s/);
                     } elsif ($test eq 'memory') {
                         my $testkey = 'r/w';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        push $tests{$testkey}, $1 if ($_ =~ /transferred \((\S+) MB\/sec\)/);
+                        push @{$tests{$testkey}}, $1 if ($_ =~ /transferred \((\S+) MB\/sec\)/);
                     } elsif ($test eq 'network' || $test eq 'netgw') {
                         my $testkey = 'r/w';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        push $tests{$testkey}, $1 if ($_ =~ /\d+\s+\d+\s+\d+\s+\d+\.\d+\s+(\d+\.\d+)/);
+                        push @{$tests{$testkey}}, $1 if ($_ =~ /\d+\s+\d+\s+\d+\s+\d+\.\d+\s+(\d+\.\d+)/);
                     }
                 }
             }

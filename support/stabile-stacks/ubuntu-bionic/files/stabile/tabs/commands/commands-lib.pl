@@ -8,7 +8,7 @@ sub commands {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="commands">
+<div class="tab-pane container" id="commands">
 To run a command on all servers, type it below and click "run".
 <form style="margin-bottom:18px;" class="passwordform" action="index.cgi?tab=commands" onsubmit="return false;">
 <input id="command" name="command" type="text" title="Type the command you want to run on all servers" rel="tooltip" data-placement="bottom" value="uptime" style="width:80%; display: inline; margin-right:3px;"></input>

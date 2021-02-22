@@ -13,8 +13,8 @@ sub security {
         $limitssh = $1 if ($allow =~ /sshd: ?(.*) #stabile/);
 
         my $pwform = <<END
-    <div class="tab-pane active container" id="security" style="width:100%;">
-    <div style="margin-bottom: 20px;">
+    <div class="tab-pane active container" id="security">
+    <div>
         Here you can manage basic security settings for the servers in your stack.
     </div>
     <form class="passwordform" id="passwordform" action="index.cgi?action=changelinuxpassword&tab=security" method="post" onsubmit="passwordSpinner(); return false;" accept-charset="utf-8" id="linform" autocomplete="off">
@@ -38,7 +38,7 @@ END
         $curipwp = qq|<div style="font-size: 13px;">leave empty to allow login from anywhere, your current IP is <a href="#" onclick="\$('#wplimit').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#wplimit').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></div>| if ($ENV{HTTP_X_FORWARDED_FOR});
 
         my $limitform = <<END
-    <form class="passwordform" id="limitsshform" action="index.cgi?action=limitssh&tab=security" method="post" onsubmit="limitSpinner(); return false;" accept-charset="utf-8" style="margin-bottom:26px;">
+    <form class="passwordform" id="limitsshform" action="index.cgi?action=limitssh&tab=security" method="post" onsubmit="limitSpinner(); return false;" accept-charset="utf-8">
 	    <div class="small">Allow ssh and webmin login from:</div>
 	    <div class="row">
  	       <div class="col-sm-10">
@@ -95,7 +95,7 @@ END
             salert( "An error occurred :(" );
         });
     }
-    function limitSpinner() {
+    function limitSpinner(button_id) {
         \$("#limit_button").prop("disabled", true ).html('Set! <i class="fa fa-cog fa-spin"></i>');
         \$.post('index.cgi?action=limitssh&tab=security', \$('form#limitsshform').serialize(), function(data) {}
         ,'json'

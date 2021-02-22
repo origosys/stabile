@@ -8,7 +8,7 @@ sub storage {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="storage">
+<div class="tab-pane container" id="storage">
 <form id="storage_form" autocomplete="off">
 <div style="margin-bottom: 5px; width:97%;" id="storageresultpane" class="resultpane">
 </div>

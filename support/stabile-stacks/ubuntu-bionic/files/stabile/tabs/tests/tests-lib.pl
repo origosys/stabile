@@ -8,7 +8,7 @@ sub tests {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="tests">
+<div class="tab-pane container" id="tests">
 <span class="dropdown">
     Select test:
     <button class="btn btn-primary dropdown-toggle dropdown" data-toggle="dropdown" id="run_test">Run test<span class="caret"></span></button>

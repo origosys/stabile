@@ -70,9 +70,16 @@ sub getObj {
     $api = 1 if $h{"api"};
     my $uuid = $h{"uuid"};
     $uuid = $curuuid if ($uuid eq 'this');
+    if ($uuid =~ /(\d+\.\d+\.\d+\.\d+)/) { # ip addresses are unique across networks so we allow this
+        foreach my $val (values %register) {
+            if ($val->{'internalip'} eq $uuid || $val->{'externalip'} eq $uuid) {
+                $uuid = $val->{'uuid'};
+                last;
+            }
+        }
+    }
     my $dbobj = $register{$uuid} || {};
     my $status = $dbobj->{'status'} || $h{"status"}; # Trust db status if it exists
-
     if ((!$uuid && $uuid ne '0') && (!$status || $status eq 'new')) {
         my $ug = new Data::UUID;
         $uuid = $ug->create_str();
@@ -101,6 +108,8 @@ sub getObj {
     my $externalip = $h{"externalip"} || $dbobj->{'externalip'};
     my $ports = $h{"ports"} || $dbobj->{'ports'};
     my $type = $h{"type"} || $dbobj->{'type'};
+    my $systems = $h{"systems"} || $dbobj->{'systems'};
+    my $force = $h{"force"};
     my $reguser = $dbobj->{'user'};
     # Sanity checks
     if (
@@ -124,7 +133,7 @@ sub getObj {
          if ($internalip && $internalip ne "--" && $externalip && $externalip ne "--") {$type = "ipmapping";}
          elsif (($internalip && $internalip ne "--") || $status eq 'new') {$type = "internalip";}
          elsif (($externalip && $externalip ne "--") || $status eq 'new') {$type = "externalip";}
-     }
+    }
 
     my $obj = {
         uuid => $uuid,
@@ -135,6 +144,8 @@ sub getObj {
         internalip => $internalip,
         externalip => $externalip,
         ports => $ports,
+        systems => $systems,
+        force => $force,
         action => $h{"action"}
     };
     return $obj;
@@ -190,11 +201,10 @@ sub Init {
 }
 
 sub do_list {
-    my $uuid = shift;
-    my $action = shift;
+    my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET::
+GET:uuid:
 List networks current user has access to.
 END
     }
@@ -203,6 +213,7 @@ END
     my $filter;
     my $statusfilter;
     my $uuidfilter;
+    $uuid = $obj->{'uuid'} if ($obj->{'uuid'});
 
     if ($curuuid && ($isadmin || $register{$curuuid}->{'user'} eq $user) && $uripath =~ /networks(\.cgi)?\/(\?|)(this)/) {
         $uuidfilter = $curuuid;
@@ -210,7 +221,9 @@ END
         $filter = $3 if ($uripath =~ /networks(\.cgi)?\/.*name(:|=)(.+)/);
         $statusfilter = $3 if ($uripath =~ /networks(\.cgi)?\/.*status(:|=)(\w+)/);
     } elsif ($uripath =~ /networks(\.cgi)?\/(\w{8}-\w{4}-\w{4}-\w{4}-\w{12})/) {
-    $uuidfilter = $2;
+        $uuidfilter = $2;
+    } elsif ($uuid) {
+        $uuidfilter = $uuid;
     }
     $uuidfilter = $options{u} unless $uuidfilter;
     $filter = $1 if ($filter =~ /(.*)\*/);
@@ -902,7 +915,7 @@ sub removeDHCPAddress {
         chomp $psid;
         $running = -e "/proc/$psid" if ($psid);
         1;
-    } or do {$error .= "Status=ERROR Problem configuring dhcp for $name $@\n";};
+    } or do {$error .= "Status=ERROR Problem deconfiguring dhcp for $name $@\n";};
 
     my $keepup;
     if (-e "$etcpath/dhcp-hosts-$id") {
@@ -968,11 +981,13 @@ sub Save {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-POST:uuid, id, name, internalip, externalip, ports, type:
+POST:uuid, id, name, internalip, externalip, ports, type, systems, activate:
 To save a collection of networks you either PUT or POST a JSON array to the main endpoint with objects representing the networks with the changes you want.
 Depending on your privileges not all changes are permitted. If you save without specifying a uuid, a new network is created.
+For now, [activate] only has effect when creating a new connection with a linked system/server.
 END
     }
+    $uuid = $obj->{'uuid'} if ($obj->{'uuid'});
     my $id = $obj->{id};
     my $name = $obj->{name};
     my $status = $obj->{status};
@@ -982,6 +997,7 @@ END
     my $ports = $obj->{ports};
     my $buildsystem = $obj->{buildsystem};
     my $username = $obj->{username};
+    my $systems = $obj->{systems}; # Optionally link this network to a system
 
     $postreply = "" if ($buildsystem);
 	$username = $user unless ($username);
@@ -999,6 +1015,7 @@ END
         $postreply .= "Status=Error Invalid uuid $uuid\n";
         return $postreply;
     }
+    my $systemnames = $regnet->{'systemnames'};
 
     my $dbid = 0+$regnet->{'id'};
     if ($status eq 'new' || !$dbid) {
@@ -1057,6 +1074,7 @@ END
             $regnet->{'type'} ne $type ||
             $regnet->{'internalip'} ne $internalip ||
             $regnet->{'externalip'} ne $externalip ||
+            $regnet->{'systems'} ne $systems ||
             $regnet->{'ports'} ne $ports)
         {
             if ($type eq "externalip") {
@@ -1105,7 +1123,7 @@ END
                     $internalip = "--";
                     $type = "gateway";
                 } else {
-                    $postreply .= "Status=OK Allocated internal IP $internalip for $name\n" unless ($regnet->{'internalip'} eq $internalip);
+                    $postreply .= "Status=OK Allocated internal IP: $internalip for $name\n" unless ($regnet->{'internalip'} eq $internalip);
                 }
 
             } elsif ($type eq "gateway") {
@@ -1135,6 +1153,34 @@ END
             if ($ports ne "--") {
                 $ports = join(',', @portslist);
             }
+            if ($systems ne $regnet->{'systems'}) {
+                my $regsystems = $regnet->{'systems'};
+                unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
+
+                # Remove existing link to system
+                if ($sysreg{$regsystems}) {
+                    $sysreg{$regsystems}->{'networkuuids'} =~ s/$uuid,? ?//;
+                    $sysreg{$regsystems}->{'networknames'} = s/$regnet->{'name'},? ?//;
+                } elsif ($domreg{$regsystems}) {
+                    $domreg{$regsystems}->{'networkuuids'} =~ s/$uuid,? ?//;
+                    $domreg{$regsystems}->{'networknames'} = s/$regnet->{'name'},? ?//;
+                }
+                if ($systems) {
+                    if ($sysreg{$systems}) { # Add new link to system
+                        $sysreg{$systems}->{'networkuuids'} .= (($sysreg{$systems}->{'networkuuids'}) ? ',' : '') . $uuid;
+                        $sysreg{$systems}->{'networknames'} .= (($sysreg{$systems}->{'networknames'}) ? ',' : '') . $name;
+                        $systemnames = $sysreg{$systems}->{'name'};
+                    } elsif ($domreg{$systems}) {
+                        $domreg{$systems}->{'networkuuids'} .= (($domreg{$systems}->{'networkuuids'}) ? ',' : '') . $uuid;
+                        $domreg{$systems}->{'networknames'} .= (($domreg{$systems}->{'networknames'}) ? ',' : '') . $name;
+                        $systemnames = $domreg{$systems}->{'name'};
+                    } else {
+                        $systems = '';
+                    }
+                }
+                tied(%sysreg)->commit;
+                untie(%sysreg);
+            }
 
             $register{$uuid} = {
                 uuid=>$uuid,
@@ -1145,6 +1191,8 @@ END
                 externalip=>$externalip,
                 ports=>$ports,
                 type=>$type,
+                systems=>$systems,
+                systemnames=>$systemnames,
                 action=>""
             };
             tied(%register)->commit;
@@ -1152,6 +1200,8 @@ END
             $postreply .= "Status=OK uuid: $uuid\n" if ($console && $status eq 'new');
             if ($status eq 'new') {
                 validateStatus($register{$uuid});
+                $postmsg = "Created connection $name";
+                $uiupdatetype = "update";
             }
             updateBilling("allocate $externalip") if (($type eq "ipmapping" || $type eq "externalip") && $externalip && $externalip ne "--");
 
@@ -1165,6 +1215,7 @@ END
             $json_text =~ s/null/"--"/g;
             $json_text =~ s/""/"--"/g;
             $postreply = $json_text;
+            $postmsg = $postmsg || "OK, updated network $name";
         }
 
         return $postreply;
@@ -1181,6 +1232,7 @@ END
                 my $json_text = to_json(\%jitem);
                 $json_text =~ s/null/"--"/g;
                 $postreply = $json_text;
+                $postmsg = "OK, updated network $name";
             }
         } else {
             $postreply .= "Status=OK Nothing to save\n";
@@ -1196,22 +1248,25 @@ END
 }
 
 sub Activate {
-    my ($uuid, $action) = @_;
+    my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
 GET:uuid:
 Activate a network which must be in status down or nat.
 END
     }
+    $uuid = $obj->{'uuid'} if ($obj->{'uuid'});
     $action = 'activate' || $action;
-    my $id = $register{$uuid}->{'id'};
-    my $name = $register{$uuid}->{'name'};
-    my $type = $register{$uuid}->{'type'};
-    my $status = $register{$uuid}->{'status'};
-    my $domains = $register{$uuid}->{'domains'};
-    my $internalip = $register{$uuid}->{'internalip'};
-    my $externalip = $register{$uuid}->{'externalip'};
-    my $ports = $register{$uuid}->{'ports'};
+    my $regnet = $register{$uuid};
+    my $id = $regnet->{'id'};
+    my $name = $regnet->{'name'};
+    my $type = $regnet->{'type'};
+    my $status = $regnet->{'status'};
+    my $domains = $regnet->{'domains'};
+    my $systems = $regnet->{'systems'};
+    my $internalip = $regnet->{'internalip'};
+    my $externalip = $regnet->{'externalip'};
+    my $ports = $regnet->{'ports'};
     my $idleft = ($id>99)?(substr $id,0,-2)+0 : 0;
     my $idright = (substr $id,-2) + 0;
     my $interfaces = `/sbin/ifconfig`;
@@ -1271,15 +1326,17 @@ END
     }
     my $astatus = "nat" unless ($e);
     `/usr/bin/touch $etcpath/dhcp-hosts-$id` unless (-e "$etcpath/dhcp-hosts-$id");
-    if ($action eq "activate" && $domains) {
-        # Configure internal dhcp server
+    if ($action eq "activate") { #} && $domains) {
         if ($type eq "internalip" || $type eq "ipmapping") {
-            my $result = addDHCPAddress($id, $domains, $internalip, "10.$idleft.$idright.1", $nicmac);
-            if ($result eq "OK") {
-                $astatus = "up" if ($type eq "internalip");
-            } else {
-                $e = 1;
-                $postreply .= "$result\n";
+            # Configure internal dhcp server
+            if ($domains) {
+                my $result = addDHCPAddress($id, $domains, $internalip, "10.$idleft.$idright.1", $nicmac);
+                if ($result eq "OK") {
+                    $astatus = "up" if ($type eq "internalip");
+                } else {
+                    $e = 1;
+                    $postreply .= "$result\n";
+                }
             }
 
             # Also export storage pools to user's network
@@ -1340,15 +1397,18 @@ END
                     eval {`/sbin/ifconfig $proxynic:proxy $proxyip/$proxysubnet up`; 1;}
                         or do {$e=1; $postreply .= "Status=ERROR Problem setting up proxy arp gw $proxynic $@\n";};
                 }
-                my $result = addDHCPAddress($id, $domains, $externalip, "10.$idleft.$idright.1", $nicmac);
-                if ($result eq "OK") {
-			        # Allow forwarding of packets coming from $externalip
-			        `/sbin/iptables --delete FORWARD --in-interface $datanic.$id -s $externalip -j ACCEPT`;
-			        `/sbin/iptables --insert FORWARD --in-interface $datanic.$id -s $externalip -j ACCEPT`;
-                } else {
-                    $e = 1;
-                    $postreply .= "$result\n";
+                my $result = "OK";
+                if ($domains) {
+                    $result = addDHCPAddress($id, $domains, $externalip, "10.$idleft.$idright.1", $nicmac) if ($domains);
+                    if ($result eq "OK") {
+                        ;
+                    } else {
+                        $e = 1;
+                        $postreply .= "$result\n";
+                    }
                 }
+                `/sbin/iptables --delete FORWARD --in-interface $datanic.$id -s $externalip -j ACCEPT`;
+                `/sbin/iptables --insert FORWARD --in-interface $datanic.$id -s $externalip -j ACCEPT`;
             } else {
                 $postreply .= "Status=ERROR Cannot set up external IP without Proxy ARP gateway\n";
             }
@@ -1359,10 +1419,10 @@ END
             if ($internalip && $internalip ne "--" && $externalip && $externalip ne "--" && !($interfaces =~ m/$externalip/g)) {
                 $externalip =~ /\d+\.\d+\.\d+\.(\d+)/; my $ipend = $1;
                 eval {`/sbin/ifconfig $extnic:$id-$ipend $externalip/$extsubnet up`; 1;}
-                    or do {$e=1; $postreply .= "Status=ERROR Problem adding interface $@\n";};
+                    or do {$e=1; $postreply .= "Status=ERROR Problem adding interface $extnic:$id-$ipend $@\n";};
                 unless (`ip addr show dev $extnic` =~ /$externalip/) {
                     $e=10;
-                    $postreply .= "Status=ERROR Problem adding interface\n";
+                    $postreply .= "Status=ERROR Problem adding interface $extnic:$id-$ipend\n";
                 }
                 if ($ports && $ports ne "--") { # Port mapping is defined
                     my @portslist = split(/, ?| /, $ports);
@@ -1537,16 +1597,19 @@ sub Removeusernetworks {
 }
 
 sub Remove {
-    my ($uuid, $action) = @_;
+    my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-DELETE:uuid:
-Delete a network which must be in status down or nat.
+DELETE:uuid,force:
+Delete a network which must be in status down or nat and should not be used by any servers, or linked to any stacks.
 May also be called with endpoints "/stabile/[uuid]" or "/stabile?uuid=[uuid]"
+Set [force] to remove even if linked to a system.
 END
     }
-
+    $uuid = $obj->{'uuid'} if ($curuuid && $obj->{'uuid'}); # we are called from a VM with an ip address as target
+    my $force = $obj->{'force'};
     ( my $domains, my $domainnames ) = getDomains($uuid);
+    ( my $systems, my $systemnames ) = getSystems($uuid);
 
     if ($register{$uuid}) {
         my $id = $register{$uuid}->{'id'};
@@ -1558,7 +1621,12 @@ END
         my $externalip = $register{$uuid}->{'externalip'};
 
         my @regvalues = values %register;
-        if ($id!=0 && $id!=1 && ($domains eq '' || $domains eq '--') && ($status eq 'down' || $status eq 'new' || $status eq 'nat')) {
+        if (
+            $id!=0 && $id!=1 && (!$domains || $domains eq '--')
+                && (!$systems || $systems eq '--' || $force)
+                # allow internalip's to be removed if active and only linked, i.e. not providing dhcp
+                && ($status eq 'down' || $status eq 'new' || $status eq 'nat' || ($type eq 'internalip' && ($systems eq '--' || $force)))
+        ) {
             # Deconfigure internal dhcp server and DNS
             if ($type eq "internalip") {
                 my $result =  removeDHCPAddress($id, $domains, $internalip);
@@ -1589,23 +1657,34 @@ END
                     eval {`/sbin/vconfig rem $datanic.$id`; 1;} or do {;};
                 }
             }
+
+            unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
+            if ($sysreg{$systems}) { # Remove existing link to system
+                $sysreg{$systems}->{'networkuuids'} =~ s/$uuid,?//;
+                $sysreg{$systems}->{'networknames'} = s/$name,?//;
+            }
+            tied(%sysreg)->commit;
+            untie(%sysreg);
+
+
             delete $register{$uuid};
             tied(%register)->commit;
             updateBilling("delete $val->{'externalip'}") if ($type eq "ipmapping");
             $main::syslogit->($user, "info", "Deleted network $uuid ($id)");
-            $postreply = "{}" || $postreply;
-            sleep 1;
+            $postreply = "[]" || $postreply;
+            $main::updateUI->({tab=>"networks", user=>$user, type=>"update"});
         } else {
-            $postreply .= "Status=ERROR Cannot delete network 0,1 or a network which is active ($uuid).\n";
+            $postreply .= "Status=ERROR Cannot remove $uuid which is $status. Cannot delete network 0,1 or a network which is active or in use.\n";
+            $main::updateUI->({tab=>"networks", user=>$user, message=>"Cannot remove a network which is active, linked or in use."});
         }
     } else {
-        $postreply .= "Status=ERROR Network not found\n";
+        $postreply .= "Status=ERROR Network $uuid $ipaddress not found\n";
     }
     return $postreply;
 }
 
 sub Deactivate {
-    my ($uuid, $action) = @_;
+    my ($uuid, $action, $obj) = @_;
 
     if ($help) {
         return <<END
@@ -1613,18 +1692,24 @@ GET:uuid:
 Deactivate a network which must be in status up.
 END
     }
+    $uuid = $obj->{'uuid'} if ($obj->{'uuid'});
+
+    unless ($register{$uuid}) {
+        $postreply .= "Status=ERROR Connection with uuid $uuid not found\n";
+        return $postreply;
+    }
+    my $regnet = $register{$uuid};
 
     $action = $action || 'deactivate';
     ( my $domains, my $domainnames ) = getDomains($uuid);
     my $interfaces = `/sbin/ifconfig`;
 
-    my $id = $register{$uuid}->{'id'};
-    my $name = $register{$uuid}->{'name'};
-    my $type = $register{$uuid}->{'type'};
-    my $internalip = $register{$uuid}->{'internalip'};
-    my $externalip = $register{$uuid}->{'externalip'};
-    my $ports = $register{$uuid}->{'ports'};
-
+    my $id = $regnet->{'id'};
+    my $name = $regnet->{'name'};
+    my $type = $regnet->{'type'};
+    my $internalip = $regnet->{'internalip'};
+    my $externalip = $regnet->{'externalip'};
+    my $ports = $regnet->{'ports'};
 
     if ($id!=0 && $id!=1 && $status ne 'down') {
     # If gateway is created, take it down along with all user's networks
@@ -1767,7 +1852,7 @@ END
             $e=1;
             $postreply .= "$result\n";
         }
-    } elsif ($type eq "externalip") {
+    } elsif ($type eq "externalip" && $domains) {
         my $result =  removeDHCPAddress($id, $domains, $externalip);
         if ($result ne "OK") {
             $e=1;
@@ -1863,6 +1948,34 @@ sub getDomains {
     $domains = substr $domains, 0, -2;
     $domainnames = substr $domainnames, 0, -2;
     return ($domains, $domainnames); 
+}
+
+sub getSystems {
+    my $uuid = shift;
+    my $systems;
+    my $systemnames;
+    unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
+    my @sysregvalues = values %sysreg;
+    foreach my $sysval (@sysregvalues) {
+        my $networkuuids = $sysval->{'networkuuids'};
+        if ($networkuuids =~ /$uuid/ && $sysval->{'user'} eq $user) {
+            $systems = $sysval->{'uuid'};
+            $systemnames = $sysval->{'name'};
+            last;
+        }
+    }
+    unless ($systems) {
+        my @sysregvalues = values %domreg;
+        foreach my $sysval (@sysregvalues) {
+            my $networkuuids = $sysval->{'networkuuids'};
+            if ($networkuuids =~ /$uuid/ && $sysval->{'user'} eq $user) {
+                $systems = $sysval->{'uuid'};
+                $systemnames = $sysval->{'name'};
+                last;
+            }
+        }
+    }
+    return ($systems, $systemnames);
 }
 
 sub getNextId {
@@ -2070,6 +2183,7 @@ sub validateStatus {
     my $idright = (substr $id,-2) + 0;
 
     ( $valref->{'domains'}, $valref->{'domainnames'} ) = getDomains($uuid);
+    my ( $systems, $systemnames ) = getSystems($uuid);
     my $extip = $valref->{'externalip'};
     my $intip = $valref->{'internalip'};
 
@@ -2113,12 +2227,13 @@ sub validateStatus {
 
         if ($type eq "internalip") {
         # Check if external ip has been created and dhcp is ok
-            if ($nat && $dhcprunning && $dhcpconfigured) {
+            if ($nat && (($dhcprunning && $dhcpconfigured) || $systems)) {
                 $valref->{'status'} = "up";
             }
         } elsif ($type eq "ipmapping") {
         # Check if external ip has been created, dhcp is ok and vlan interface is created
-            if ($nat && $dhcprunning && $dhcpconfigured && $interfaces =~ m/$extip/) {
+        # An ipmapping linked to a system is considered up if external interface exists
+            if ($nat && $interfaces =~ m/$extip/ && (($dhcprunning && $dhcpconfigured) || $systems)) {
                 $valref->{'status'} = "up";
             }
         }
@@ -2140,8 +2255,12 @@ sub validateStatus {
         my $vproxy = `/bin/cat /proc/sys/net/ipv4/conf/$datanic.$id/proxy_arp`; chomp $vproxy;
         my $eproxy = `/bin/cat /proc/sys/net/ipv4/conf/$proxynic/proxy_arp`; chomp $eproxy;
         my $proute = `/sbin/ip route | grep "$extip dev"`; chomp $proute;
-        if ($vproxy && $eproxy && $proute && $dhcprunning && $dhcpconfigured) {
-            $valref->{'status'} = "up";
+        if ($vproxy && $eproxy && $proute) {
+            if ((($dhcprunning && $dhcpconfigured) || $systems)) {
+                $valref->{'status'} = "up";
+            } elsif (!$valref->{'domains'}) {
+                $valref->{'status'} = "nat";
+            }
         } else {
             #print "$vproxy && $eproxy && $proute && $dhcprunning && $dhcpconfigured :: $extip\n";        
         }

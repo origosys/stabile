@@ -7,7 +7,15 @@ if ($ip =~ /SKU Number: (\d+\.\d+\.\d+)\.(\d+)/) {
 	$net = "$1";
 	print "Configuring IP address with $ip\n";
 	`mkdir /etc/stabile` unless (-e '/etc/stabile');
-	`echo "$ip" > /tmp/internalip` if ($net =~ /^10\./);
+    # Generate new ssh keys on first run
+    unless (-e "/etc/stabile/internalip") {
+        `rm /etc/ssh/ssh_host_*`;
+        `ssh-keygen -A`;
+    }
+    if ($net =~ /^10\./) {
+        `echo "$ip" > /tmp/internalip`;
+        `echo "$ip" > /etc/stabile/internalip`;
+    }
 } else {
 	die "No ip address found\n";
 }

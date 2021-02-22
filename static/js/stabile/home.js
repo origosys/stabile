@@ -434,6 +434,7 @@ define([
         currentExternalip: null,
         currentManagementlink: null,
         currentTerminallink: null,
+        linkedNetworks: null,
         user: user,
 
         imagesOnShowItem: null,
@@ -668,9 +669,13 @@ define([
                         }
                     }
                 }
-                var imageItem = stores.images.fetchItemByIdentity({identity: gridItem.imageuuid});
-                var serverLink = '<a href="#home" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity:\'' + imageItem.domains + '\'}));">' + imageItem.domainnames + '</a>';
-                v += "<b>Administration server:</b> " + serverLink + "<br>";
+                if (gridItem.imageuuid) {
+                    var imageItem = stores.images.fetchItemByIdentity({identity: gridItem.imageuuid});
+                    if (imageItem) {
+                        var serverLink = '<a href="#home" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity:\'' + imageItem.domains + '\'}));">' + imageItem.domainnames + '</a>';
+                        v += "<b>Administration server:</b> " + serverLink + "<br>";
+                    }
+                }
                 v += "<b>Total servers:</b> " + images + " (" + sysvcpu + " vCPU" + (sysvcpu>1?"s, ":", ") +
                         sysmemory + " MB memory" + ")<br>";
                 v += "<b>Active servers:</b> " + aimages + " (" + asysvcpu + " vCPU" + (asysvcpu>1?"s, ":", ") +
@@ -678,11 +683,12 @@ define([
                 v += "<b>Total images:</b> " + (images + images2);
                 v += " (" + (aimages + aimages2) + " active)<br>";
                 if (cdroms>0) v += "<b>CDs:</b> " + cdroms + ", ";
-                v += "<b>Connections:</b> " + networks + "<br>";
+                if (networks>0) v += "<b>Connections:</b> " + networks + "<br>";
                 if (user.is_admin || user.node_storage_allowed) v += "<b>Active nodes:</b>  <span title=\"" + Object.keys(nodesHash).join(", ") + "\">" + Object.keys(nodesHash).length + " (" + home.currentCores + " cores)</span><br>";
                 home.vitals.innerHTML = v;
                 v += "<b>Created:</b> " + home.timestampToLocaleString(gridItem.created) + "<br>";
                 v += "<b>UUID:</b> " + gridItem.uuid + "<br>";
+                v += '<span id="vitals_linkednetworks"></span>';
                 home.vitals.innerHTML = v;
                 home.totalServers = images;
                 home.activeServers = aimages;
@@ -698,6 +704,12 @@ define([
                     } else {
                         home.setFieldValue("info_"+kprop+"_field" , "");
                     }
+                }
+                if (gridItem.networkuuids && gridItem.networkuuids!=='--') {
+                    home.linkedNetworks = '<b>Linked connections:</b> ';
+                    home.updateVitals_linkednetworks(gridItem.networkuuids, gridItem.networknames);
+                } else {
+                    home.linkedNetworks = null;
                 }
 
                 var sysnotesval = (gridItem.notes && gridItem.notes!="--")?gridItem.notes:"";
@@ -731,7 +743,9 @@ define([
                 home.currentManagementlink = '';
                 home.currentTerminallink = '';
                 if (home.currentItem.imageuuid) {
-                    $.get("/stabile/images/" + home.currentItem.imageuuid, function(item) {home.updateManagementlink(item)});
+                    $.get("/stabile/images/" + home.currentItem.imageuuid, function(item) {
+                        home.updateManagementlink(item)
+                    });
                 } else {
                     home.updateManagementlink(null);
                 }
@@ -769,14 +783,9 @@ define([
                 "<b>Primary image:</b> " + imageLink + "<br>" +
                 (gridItem.image2=="--"?"":"<b>2nd image:</b> " + image2Link + "<br>") +
                 (gridItem.cdrom=="--"?"":"<b>CD:</b> " + cdrom + (gridItem.boot=="hd"?"<br>":" (boot)<br>") ) +
-
-                        "<b>Connection:</b> " +
-                // (!gridItem.networkid1 || gridItem.networkid1=="0" || gridItem.networkid1=="1"?" Only outgoing network connectivity<br>":networkLink + "<span id='vitals_network'></span><br>") +
-                networkLink + "<span id='vitals_network'></span><br>" +
-
-                (gridItem.networkid2=="--"?"":"<b>2nd connection:</b> " +
-                // (!gridItem.networkid2 || gridItem.networkid2=="0" || gridItem.networkid2=="1"?" Only outgoing network connectivity<br>":networkLink2 + "<span id='vitals_network2'></span><br>"));
-                networkLink2 + "<span id='vitals_network2'></span><br>");
+                "<b>Connection:</b> " + networkLink + "<span id='vitals_network'></span><br>" +
+                (gridItem.networkid2=="--"?"":"<b>2nd connection:</b> " + networkLink2 + "<span id='vitals_network2'></span><br>");
+                v += '<span id="vitals_linkednetworks"></span>';
 
                 if (gridItem.status!='shutoff' && gridItem.status!='inactive' &&
                         (user.is_admin || user.node_storage_allowed) && (gridItem.maccpucores && gridItem.maccpucores!='--'))
@@ -833,6 +842,12 @@ define([
                         home.setFieldValue("info_"+uprop+"_field" , "");
                     }
                 }
+                if (gridItem.networkuuids && gridItem.networkuuids!=='--') {
+                    home.linkedNetworks = '<b>Linked connections:</b> ';
+                    home.updateVitals_linkednetworks(gridItem.networkuuids, gridItem.networknames);
+                } else {
+                    home.linkedNetworks = null;
+                }
 
                 var notesval = (gridItem.notes && gridItem.notes!="--")?gridItem.notes:"";
                 home.setNotesValue(notesval, gridItem, "notes");
@@ -865,6 +880,42 @@ define([
                 home.currentManagementlink = '';
                 home.currentTerminallink = '';
                 $.get("/stabile/images/" + home.currentItem.imageuuid, function(item) {home.updateManagementlink(item)});
+            }
+        },
+
+        updateVitals_linkednetworks: function(networkuuids, networknames) {
+            if (networkuuids && networkuuids!='--') {
+                var nuuids = networkuuids.split(/, ?/);
+                var nnames = networknames.split(/, ?/);
+                var i;
+                updatelinkednetwork = function(network, render) {
+                    var networkLink = '<a onclick="networks.grid.dialog.show(stores.networks.fetchItemByIdentity({identity: \'' + network.uuid  + '\'}));">' + network.name + '</a>';
+                    var content = networkLink;
+                    if (!network) {
+                        ;
+                    } else if (network.type=="ipmapping") {
+                        content += " (" + network.internalip +
+                            " / <a href=\"http://" + network.externalip + "\" target=\"_blank\">" + network.externalip + "</a>)";
+                    } else if (network.type=="externalip") {
+                        content += " (<a href=\"http://" + network.externalip + "\" target=\"_blank\">" + network.externalip + "</a>)";
+                    } else if (network.type=="internalip") {
+                        content += " (" + network.internalip + ")";
+                    }
+                    if (network && (network.type=="ipmapping" || network.type=="externalip")) {
+                        if (network.status == "down") {
+                            content += " <span style=\"color:#CCCCCC\"> disabled</span>";
+                        }
+                    }
+                    home.linkedNetworks += content + ", ";
+                    if (render) {
+                        $('#vitals_linkednetworks').html(home.linkedNetworks.slice(0,-2) + "<br>");
+                    }
+                };
+                for (i = 0; i < nuuids.length; i++) {
+                    stores.networks.fetchItemByIdentity({identity: nuuids[i], onItem: function(item) {
+                        updatelinkednetwork(item, (i==nuuids.length-1));
+                    }})
+                };
             }
         },
 

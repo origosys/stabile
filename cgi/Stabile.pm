@@ -989,7 +989,7 @@ sub preInit {
         $params{'keywords'} = URI::Escape::uri_unescape($options{k});
         $console = 1 unless ($options{v} && !$options{c});
     }
-    $action = (($action)?$action.'_':'') . 'remove' if ($ENV{'REQUEST_METHOD'} eq 'DELETE');
+    $action = (($action)?$action.'_':'') . 'remove' if ($ENV{'REQUEST_METHOD'} eq 'DELETE' && $action ne 'remove');
     # -f should only set $fulllisting and not trigger any keyword actions
     delete $params{'keywords'} if ($params{'keywords'} eq '-f');
 
@@ -1195,8 +1195,6 @@ sub process {
         print header('text/html', '500 Internal Server Error') unless ($console);
         print $postreply;
 	}
-#    my $uiupdatetype = ($uistatus)?"update":"message";
-    my $uiupdatetype = "update";
     # Functions called via aliases to privileged_action or privileged_action_async cannot update $postmsg or $uistatus
     # so updateUI must be called internally in these functions.
     if (@updateList) {

@@ -79,7 +79,18 @@ define([
             {
                 field : 'domainnames',
                 name : 'Used by',
-                width : "auto"
+                width : "auto",
+                formatter : function(val, rowIdx, cell) {
+                    var item = this.grid.getItem(rowIdx);
+                    console.log("net item", item);
+                    if (val && val!='--') {
+                        return val;
+                    } else if (item.systemnames && item.systemnames!='--') {
+                        return '<i>' + item.systemnames + '</i>';
+                    } else {
+                        return '--';
+                    }
+                }
             },
             {
                 field : 'internalip',
@@ -101,8 +112,8 @@ define([
         ],
 
         dialogStructure : [
-            { field : "name",        name : "Name",    type : "dijit.form.TextBox"},
-            { field : "type",        name : "Type", type: "dijit.form.Select",
+            { field : "name", name : "<span style='width:115px; display:inline-block;'>Name</span>",    type : "dijit.form.TextBox"},
+            { field : "type", name : "Type", type: "dijit.form.Select",
                 attrs:{ store: "stores.networkTypes", searchAttr:"type", onChange: "networks.updateIPFields(this.value);"}},
             { field : 'id',          name : "ID", type : "dijit.form.TextBox", width : "50px", restricted: true,
                 attrs:{ onChange: "networks.updateIPPrefix(this.value);"}},
@@ -110,7 +121,6 @@ define([
                 field: "uuid",
                 name: "UUID",
                 type: "dijit.form.TextBox",
-                style: "width: 275px;",
                 attrs: {readonly:"readonly"}
             },
             { field : "status",      name : "Status",  type : "dijit.form.TextBox", attrs : {readonly :"readonly"}},
@@ -126,15 +136,14 @@ define([
                 field : 'externalip',
                 type : "dijit.form.TextBox",
                 name : 'External IP',
-                width : "150px",
+                width : "50px",
                 attrs : {readonly :"readonly"}
             },
             {
                 field : 'ports',
                 type : "dijit.form.TextBox",
                 name : 'Allowed ports',
-                help: "networks/ports",
-                width : "150px"
+                help: "networks/ports"
             },
             {
                 formatter: function(network){
@@ -142,33 +151,30 @@ define([
                     if(network.status == 'new'){
                         return '';
                     }
-
                     if(network.domains != '--'){
-
                         var domainnames = network.domainnames.split(/,\s|,/);
                         var uuids = network.domains.split(/,\s|,/);
-                        //var uuids = network.domains[0].split(/,\s|,/);
                         var domains = [];
-
                         // create a new array that we can sort by name
                         arrayUtil.forEach(uuids, function(d, i){
                             domains.push({uuid: d, name: domainnames[i]});
                         });
-
                         // sort the servers
                         domains = domains.sort(function(a,b){
                             if(a.name == b.name){ return 0;}
                             if(a.name > b.name){ return 1;}
                             return -1;
                         });
-
                         var html = [];
                         arrayUtil.forEach(domains, function(d, i){
-                            var serverEditLink = '<a href="#networks" onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + d.uuid  + '\'}));">' + d.name + '</a>';
+                            var serverEditLink = '<a onclick="servers.grid.dialog.show(stores.servers.fetchItemByIdentity({identity: \'' + d.uuid  + '\'}));">' + d.name + '</a>';
                             html.push('<li>' + serverEditLink + '</li>');
                         });
-
-                        return '<td valign="top" style="width:60px">Servers</td><td><ul style="list-style:none;padding:0;margin:0;">' + html.join('') + '<ul></td>'; 
+                        return '<td valign="top" style="width:60px">Servers</td><td><ul style="list-style:none;padding:0;margin:0;">' + html.join('') + '</ul></td>';
+                    } else if (network.systems != '--') {
+                    //    var systemEditLink = '<a onclick="systems.grid.dialog.show(stores.systems.fetchItemByIdentity({identity: \'' + d.uuid  + '\'}));">' + d.name + '</a>';
+                        var syshtml = network.systemnames;
+                        return '<td valign="top" style="width:60px">Stacks</td><td><ul style="list-style:none;padding:0;margin:0;">' + syshtml + '</ul></td>';
                     }
                     return '';
                 }  
@@ -202,26 +208,22 @@ define([
             var save = include_save ? grid.saveButton(type) : "";
 
             if (id == 0 || id == 1) {return "";}
-
-            if(status == "down"){
-                return (!item.domains || item.domains=="--"?_delete + (item.type=="gateway"?up:""):up) + save;
+            else if(status == "down"){
+                return ((item.domains=="--" && item.systems=="--")?_delete + (item.type=="gateway"?up:""):up) + save;
             }
-
-            if(status == "up"){
-                return (item.type=="gateway"?down: _break) + save;
+            else if(status == "up"){
+                return (item.type=="gateway"?down:(item.type=="internalip" && item.systems!="--"?'':_break)) + save;
             }
-
-            if(status == "new"){
+            else if(status == "new"){
                 return save;
             }
-
-            if(status == "--"){
-                return up + (item.domains=="--"?_delete:"");
+            else if(status == "--"){
+                return up + ((item.domains=="--" && item.systems=="--")?_delete:"");
             }
-
-            if(status == "nat"){
+            else if(status == "nat"){
                 if ((item.internalip!="--" || item.externalip!="--") && item.domains!="--") return up  + (item.type=="gateway"?down:"") + save;
-                else return (item.type=="gateway"?down:"") + save + (item.domains=="--"?_delete:"");
+                else if ((item.internalip!="--" || item.externalip!="--") && item.systems!="--") return up + save;
+                else return (item.type=="gateway"?down:"") + save + ((item.domains=="--" && item.systems=="--")?_delete:"");
             }
             console.error("WTF? unknown status : ", status);
         },

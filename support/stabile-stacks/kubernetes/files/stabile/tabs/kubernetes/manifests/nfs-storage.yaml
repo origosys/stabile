@@ -1,0 +1,47 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nfs-storage-pool0
+provisioner: stabile.io/nfs-pool0
+parameters:
+  archiveOnDelete: "false"
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: nfs-client-provisioner-pool0
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: nfs-client-provisioner
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: nfs-client-provisioner
+    spec:
+      serviceAccountName: nfs-client-provisioner
+      containers:
+        - name: nfs-client-provisioner
+          image: docker.io/timmiles/nfs-subdir-external-provisioner:latest
+          resources:
+            limits:
+              memory: 0.5Gi
+          volumeMounts:
+            - name: nfs-client-pool0
+              mountPath: /persistentvolumes
+          env:
+            - name: PROVISIONER_NAME
+              value: stabile.io/nfs-pool0
+            - name: NFS_SERVER
+              value: gatewayip
+            - name: NFS_PATH
+              value: nfspath
+      volumes:
+        - name: nfs-client-pool0
+          nfs:
+            server: gatewayip
+            path: nfspath

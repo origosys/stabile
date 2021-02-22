@@ -14,7 +14,9 @@ a {
 a:hover {
     text-decoration:underline;
 }
-
+.app-container .tab-pane {
+    width: 100%;
+}
 div.item{
     margin: 10px 4px 10px 4px;
 }
@@ -69,7 +71,8 @@ div.item{
 .passwordform{
     width: 100%;
 	max-width:640px;
-    /* margin: 0 auto; */
+    margin-top:10px;
+    margin-bottom:10px;
     position: relative;
 }
 #linform{

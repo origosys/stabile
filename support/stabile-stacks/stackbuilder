@@ -5,18 +5,22 @@ use URI::Escape::XS qw/uri_escape uri_unescape/;
 use ConfigReader::Simple;
 use Cwd;
 use Data::Dumper;
-use Getopt::Std;
+# use Getopt::Std;
+use Getopt::Long qw(GetOptions);
 
+Getopt::Long::Configure qw(gnu_getopt); # Allow combining short options
 our %options=();
-Getopt::Std::getopts("rapdfsu", \%options);
+# Getopt::Std::getopts("rapdfsu", \%options);
+GetOptions(\%options, 'rebuild|r', 'activate|a', 'publish|p', 'debug|d', 'force|f', 'release|s', 'unrelease|u');
+
 my $ofile = $ARGV[(scalar @ARGV)-1] if @ARGV;
-my $rebuild = 1 if ($options{r});
-my $activate = 1 if ($options{a});
-my $publish = 1 if ($options{p});
-my $release = 1 if ($options{s});
-my $debug = 1 if ($options{d});
-my $force = 1 if ($options{f});
-my $unrelease = 1 if ($options{u});
+my $rebuild = 1 if ($options{rebuild});
+my $activate = 1 if ($options{activate});
+my $publish = 1 if ($options{publish});
+my $release = 1 if ($options{release});
+my $debug = 1 if ($options{debug});
+my $force = 1 if ($options{force});
+my $unrelease = 1 if ($options{unrelease});
 $release = 1 if ($unrelease);
 
 my $cwd = cwd();
@@ -30,8 +34,19 @@ unless ($ofile) {
         $ofile = $files[0];
         print "Using $ofile as stackfile\n";
     } else {
-        print "Usage: stackbuilder [-a] [-p] [-r] [-d] [-f] 'stackfile'\n-a activate\n-p publish\n-r rebuild\n-s release\n-d debug\n-f force activate\n-u unrelease\n";
-        print "To force rebuild, activate, publish and release in one go use -rapsf\n";
+        print <<end
+Usage: stackbuilder [-a] [-p] [-r] [-d] [-f] 'stackfile'
+-a, --activate
+-p, --publish
+-r, --rebuild
+-s, --release
+-d, --debug
+-f, --force
+-u, --unrelease
+
+end
+;
+        print "To force rebuild, activate and publish in one go use -frap\n";
         exit;
     }
 }
@@ -81,6 +96,7 @@ my $thumbnail = $config->get("THUMBNAIL") || '';
 my $summary = $config->get("SUMMARY") || '';
 my $description = $config->get("DESCRIPTION") || '';
 my $appid = $config->get("APPID") || '';
+my $instances = $config->get("INSTANCES") || '';
 my $dataimage = $config->get("DATAIMAGE") || '';
 my $fuelpath = ''; # Is set below if we are in a VM
 my $enginelinked = '';
@@ -267,8 +283,12 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     # Install debs
     if ($debs) {
         print ">> Installing packages\n";
-        print `chroot "/tmp/$dname" dpkg --clear-avail`;
-        print `chroot "/tmp/$dname" sync-available` if (-e "/tmp/$dname/usr/sbin/sync-available");
+    # Necessary for now to avoid corrupted apt caches
+        system(qq|perl -pi -e "s/(deb http.+ bionic-updates universe)/# \\\$1/" /etc/apt/sources.list|);
+        system(qq|perl -pi -e "s/(deb http.+ bionic-updates multiverse)/# \\\$1/" /etc/apt/sources.list|);
+    #    print `rm -r /var/lib/apt/lists/*`; # Start from a clean slate
+    #    print `chroot "/tmp/$dname" dpkg --clear-avail`;
+    #    print `chroot "/tmp/$dname" sync-available` if (-e "/tmp/$dname/usr/sbin/sync-available");
         print `chroot "/tmp/$dname" apt-get update`;
         print `chroot "/tmp/$dname" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -q -y --show-progress install $debs'`;
     }
@@ -423,7 +443,7 @@ if ($fuelpath) {
             if ($imageuuid) {
                 print "Uploading image with uuid $imageuuid to the registry\n";
                 print "Hang on - this may take a while...\n";
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&force=$force"`;
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&instances=$instances&force=$force"`;
                 print "$res";
             } else {
                 print "Something went wrong, did not get valid uuid $imageuuid - left it in your shared storage.\n";

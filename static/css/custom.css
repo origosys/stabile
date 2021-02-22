@@ -16,6 +16,9 @@ body {
 body.inframe {
     background-color: white !important;
 }
+ol li, ul li {
+    line-height: unset;
+}
 .inframe .modal-body {
     padding:0!important;
 }
@@ -88,7 +91,6 @@ body.tundra  {
     }
 }
 */
-
 .navbar-brand {
     height: 32px;
 }

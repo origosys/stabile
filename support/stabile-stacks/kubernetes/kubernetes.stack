@@ -1,0 +1,26 @@
+VERSION=1.0
+BASEIMAGE=ubuntu-bionic.1.0a.master.qcow2
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=kubernetes
+APPNAME=Kubernetes
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=docker.io kubeadm kubelet kubectl helm screen libyaml-libyaml-perl
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MEMORY=4096
+VCPU=2
+INSTANCES=2
+LOGO=https://www.stabile.io/irigo/images/apps/kubernetes-logo.png
+THUMBNAIL=https://www.stabile.io/irigo/images/apps/kubernetes-icon.svg
+SUMMARY=Kubernetes is an open-source system for automating deployment, scaling, and management of containerized applications.
+DESCRIPTION=Kubernetes is a portable, extensible, open-source platform for managing containerized workloads and services, that facilitates both declarative configuration and automation. It has a large, rapidly growing ecosystem. Kubernetes services, support, and tools are widely available. The name Kubernetes originates from Greek, meaning helmsman or pilot.\
+    Google open-sourced the Kubernetes project in 2014. Kubernetes combines over 15 years of Google's experience running production workloads at scale with best-of-breed ideas and practices from the community.

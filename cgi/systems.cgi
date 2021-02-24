@@ -589,6 +589,7 @@ END
     my $services = $obj->{'services'};
     my $recovery = $obj->{'recovery'};
     my $networkuuids = $obj->{'networkuuids'};
+    my $autostart = $obj->{'autostart'};
 
     if ((!$uuid)) {
         my $ug = new Data::UUID;
@@ -615,19 +616,21 @@ END
     if ($issystem) { # We are dealing with a system
         # Security check
         if (($user eq $reguser || $isadmin) && $register{$uuid}) { # Existing system
-
             my @props = ('name','fullname','email','phone','opfullname','opemail','opphone','alertemail'
-                ,'notes','services','recovery');
+                ,'notes','services','recovery','autostart');
             my %oldvals;
             foreach my $prop (@props) {
                 my $val = $obj->{$prop};
                 if ($val) {
                     $val = '' if ($val eq '--');
                     $oldvals{$prop} = $register{$uuid}->{$prop} || $userreg{$user}->{$prop};
-                if ($val eq $userreg{$user}->{$prop}) {
+                    if ($val eq $userreg{$user}->{$prop}) {
                         $register{$uuid}->{$prop} = ''; # Same val as parent (user val), reset
                     } else {
                         $register{$uuid}->{$prop} = $val;
+                    }
+                    if ($prop eq 'autostart') {
+                        $register{$uuid}->{$prop} = ($val)?'1':'';
                     }
                     if ($prop eq 'name') {
                         my $json_text = qq|{"uuid": "$uuid" , "name": "$val"}|;
@@ -647,7 +650,9 @@ END
                             my %domval = %{$domvalref};
                             $childrenhash{$domvalref->{'uuid'}} =\%domval unless ($childrenhash{$domvalref->{'uuid'}});
                             $childrenhash{$domvalref->{'uuid'}}->{$prop} = $val;
-                            if (!$domvalref->{$prop} || $domvalref->{$prop} eq $oldvals{$prop}) {
+                            if ($prop eq 'autostart') {
+                                $domvalref->{$prop} = ($val)?'1':''; # Always update child servers with autostart prop
+                            } elsif (!$domvalref->{$prop} || $domvalref->{$prop} eq $oldvals{$prop}) {
                                 $domvalref->{$prop} = '';
                                 if ($prop eq 'alertemail') {
                                     if (change_monitor_email($domvalref->{'uuid'}, $val, $oldvals{$prop})) {
@@ -712,6 +717,7 @@ END
             $valref->{'opphone'} = ($opphone eq '--'?'':$opphone) if ($opphone);
             $valref->{'services'} = ($services eq '--'?'':$services) if ($services);
             $valref->{'recovery'} = ($recovery eq '--'?'':$recovery) if ($recovery);
+            $valref->{'autostart'} = ($autostart && $autostart ne '--'?'1':'');
             if ($alertemail) {
                 $alertemail = '' if ($alertemail eq '--');
                 if ($valref->{'alertemail'} ne $alertemail) {
@@ -724,17 +730,17 @@ END
                 }
             }
 
-            $valref->{'autostart'} = ($obj->{'autostart'} && $obj->{'autostart'} ne 'false'?'true':'false');
             tied(%domreg)->commit;
             $postreply = getSystemsListing(); # Hard to see what else to do, than to send entire table
         }
     }
-    if ($networkuuids) { # link networks to this system
+    if ($networkuuids && $networkuuids ne '--') { # link networks to this system
         my @networks = split(/, ?/, $networkuuids);
         my @newnetworks = ();
         my @newnetworknames = ();
         unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {return "Unable to access networks register"};
         foreach my $networkuuid (@networks) {
+            next unless ($networkreg{$networkuuid});
             if (
                 !$networkreg{$networkuuid}->{'domains'} # a network cannot both be linked and in active use
                     && (!$networkreg{$networkuuid}->{'systems'} ||  $networkreg{$networkuuid}->{'systems'} eq $uuid) # check if network is already linked to another system
@@ -745,10 +751,10 @@ END
                 push @newnetworknames, $networkreg{$networkuuid}->{'name'};
             }
         }
-        if ($issystem) {
+        if ($issystem && $register{$uuid}) {
             $register{$uuid}->{'networkuuids'} = join(", ", @newnetworks);
             $register{$uuid}->{'networknames'} = join(", ", @newnetworknames);
-        } else {
+        } elsif ($domreg{$uuid}) {
             $domreg{$uuid}->{'networkuuids'} = join(", ", @newnetworks);
             $domreg{$uuid}->{'networknames'} = join(", ", @newnetworknames);
         }
@@ -955,7 +961,7 @@ sub Updateengineinfo {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-PUT:downloadmasters,externaliprangestart,externaliprangeend,proxyiprangestart,proxyiprangeend,proxygw,vmreadlimit,vmwritelimit,vmiopsreadlimit,vmiopswritelimit:
+PUT:downloadmasters, externaliprangestart, externaliprangeend, proxyiprangestart, proxyiprangeend, proxygw, vmreadlimit, vmwritelimit, vmiopsreadlimit, vmiopswritelimit:
 Save engine information.
 END
     }
@@ -1838,9 +1844,9 @@ sub Buildsystem {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET:name, master, storagepool, system, instances, networkuuid, bschedule, networktype1, ports, memory, vcpu, diskbus, cdrom, boot, nicmodel1, nicmac1, networkuuid2, nicmac2, monitors, managementlink, start:
+GET:name, master, storagepool, system, instances, networkuuid, bschedule, networktype1, ports, memory, vcpu, diskbus, cdrom, boot, nicmodel1, nicmac1, networkuuid2, nicmac2, storagepool2, monitors, managementlink, start:
 Build a complete system from cloned master image.
-master is the only required parameter.
+master is the only required parameter. Set [storagepool2] to -1 if you want data images to be put on node storage.
 END
     }
     $curuuid = $uuid unless ($curuuid);
@@ -1866,7 +1872,8 @@ END
         $obj->{monitors},
         $obj->{managementlink},
         $obj->{start},
-        $obj->{domuuid}
+        $obj->{domuuid},
+        $obj->{storagepool2}
     );
     
     return $postreply;
@@ -2686,6 +2693,7 @@ sub getSystemsListing {
                 $val{'opemail'} = $val{'opemail'} || $dbobj->{'opemail'} || $useropemail;
                 $val{'opphone'} = $val{'opphone'} || $dbobj->{'opphone'} || $useropphone;
                 $val{'alertemail'} = $val{'alertemail'} || $dbobj->{'alertemail'} || $useralertemail;
+                $val{'autostart'} = ($val{'autostart'})?'1':'';
 
                 foreach my $img (@imagenames) {
                     if ($imagereg{$val{$img}} && $imagereg{$val{$img}}->{'storagepool'} == -1) {
@@ -2702,7 +2710,7 @@ sub getSystemsListing {
                 $val{'imageuuid2'} = $imagereg{$val{'image2'}}->{'uuid'} if ($imagereg{$val{'image2'}} && $val{'image2'} && $val{'image2'} ne '--');
 
                 my $networkuuid1; # needed for generating management url
-                if ($sysuuid && $sysuuid ne '--') {
+                if ($sysuuid && $sysuuid ne '--') { # We are dealing with a server that's part of a system
                     if (!$register{$sysuuid}) { #System does not exist - create it
                         $sysname = $val{'name'};
                         $sysname = $1 if ($sysname =~ /(.+)\..*/);
@@ -2725,6 +2733,7 @@ sub getSystemsListing {
                     $pval{'opemail'} = $pval{'opemail'} || $useropemail;
                     $pval{'opphone'} = $pval{'opphone'} || $useropphone;
                     $pval{'alertemail'} = $pval{'alertemail'} || $useralertemail;
+                    $pval{'autostart'} = ($pval{'autostart'})?'1':'';
 
                     my @children;
                     if ($curreg{$sysuuid}->{'children'}) {
@@ -2867,7 +2876,7 @@ sub buildSystem {
     my ($name, $hmaster, $hstoragepool, $hsystem, $hinstances,
         $hnetworkuuid1, $hbschedule, $hnetworktype1, $hports, $hmemory, $hvcpu, $hdiskbus,
         $hcdrom, $hboot, $hnicmodel1, $hnicmac1, $hnetworkuuid2, $hnicmac2, $hmonitors,
-        $hmanagementlink, $hstart, $duuid ) = @_;
+        $hmanagementlink, $hstart, $duuid, $hstoragepool2 ) = @_;
 
     unless ( tie(%domreg,'Tie::DBI', Hash::Merge::merge({table=>'domains'}, $Stabile::dbopts)) ) {$postreply = "Unable to access domain register"; return $postreply;};
     unless ( tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {$postreply = "Unable to access image register"; return $postreply;};
@@ -2883,6 +2892,7 @@ sub buildSystem {
     }
     my $cdrom = $hcdrom;
     my $storagepool = $hstoragepool;
+    my $storagepool2 = $hstoragepool2 || '0';
     my $image2;
     $hinstances = 1 unless ($hinstances);
     my $ioffset = 0;
@@ -2934,7 +2944,6 @@ sub buildSystem {
 
     unless ($imagereg{$master}) {$postreply = "Status=Error Invalid master $master"; return $postreply;};
     my $masterimage2 = $imagereg{"$master"}->{'image2'};
-    my $storagepool2 = '0';
     my $sysuuid = $hsystem;
 
     if ($cdrom && $cdrom ne '--' && !$imagereg{"$cdrom"}) {
@@ -3008,7 +3017,7 @@ sub buildSystem {
     # Clone image
         my $imagename = $name;
         $imagename =~ s/system/Image/i;
-        $res = Stabile::Images::Clone($master, 'clone', '', $storagepool, '', "$imagename$istr", $hbschedule, 1, $hmanagementlink, $appid, 1, $hvcpu);
+        $res = Stabile::Images::Clone($master, 'clone', '', $storagepool, '', "$imagename$istr", $hbschedule, 1, $hmanagementlink, $appid, 1, $hvcpu, $hmemory);
         $postreply .= $res;
         if ($res =~ /path: (.+)/) {
             $ipath = $1;
@@ -3020,7 +3029,7 @@ sub buildSystem {
 
         # Secondary image - clone it
         if ($masterimage2 && $masterimage2 ne '--' && $masterimage2 =~ /\.master\.qcow2$/) {
-            $res = Stabile::Images::Clone($masterimage2, 'clone', '', $storagepool2, '', "$imagename$istr-data", $hbschedule, 1, '', '', 1);
+            $res = Stabile::Images::Clone($masterimage2, 'clone', '', $storagepool2, $mac, "$imagename$istr-data", $hbschedule, 1, '', '', 1);
             $postreply .= $res;
             $image2 = $1 if ($res =~ /path: (.+)/);
         }
@@ -3082,13 +3091,9 @@ sub buildSystem {
                  networkname1 => '',
                  nicmodel1 => $hnicmodel1,
                  nicmac1 => $hnicmac1,
-#                 networkuuid2 => $networkuuid2,
                  nicmac2 => $hnicmac2,
                  status => 'new',
                  notes => $notes,
-#                 autostart => $autostart,
-#                 locktonode => $locktonode,
-#                 mac => $mac,
                  system => $sysuuid,
                  newsystem => ($hinstances>1 && !$sysuuid),
                  buildsystem => 1,

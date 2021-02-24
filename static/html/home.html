@@ -262,6 +262,11 @@
             <div class="well well-sm info-services" style="overflow-y:auto; height:220px;" id="info_rtfs">
               <div style="display:none;" id="info_recovery">
                   <table style="width:100%;">
+                      <tr style="height: 32px; vertical-align: top;">
+                          <td><b>Auto-start:</b></td>
+                          <td><span data-dojo-type="dijit.form.CheckBox" id="info_autostart_field"
+                                    style="border:0;" onChange="home.grid.updateSystem('autostart');"></span></td>
+                      </tr>
                       <tr>
                           <td width="150"><b>Services provided:</b></td>
                           <td><span data-dojo-type="dijit.InlineEditBox" id="info_services_field" data-dojo-props="editor:'dijit.form.TextBox'"

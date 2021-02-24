@@ -80,7 +80,7 @@ sub getObj {
     }
     my $dbobj = $register{$uuid} || {};
     my $status = $dbobj->{'status'} || $h{"status"}; # Trust db status if it exists
-    if ((!$uuid && $uuid ne '0') && (!$status || $status eq 'new')) {
+    if ((!$uuid && $uuid ne '0') && (!$status || $status eq 'new') && ($action eq 'save')) {
         my $ug = new Data::UUID;
         $uuid = $ug->create_str();
         $status = 'new';
@@ -240,7 +240,6 @@ END
 
     $res .= header('application/json') unless ($console || $action eq 'tablelist');
     my @curregvalues;
-    my $nextid = getNextId();
 
     updateBilling();
     my @regkeys;
@@ -263,7 +262,6 @@ END
             my $dom = $domreg{$valref->{'domains'}};
             next unless (!$sysuuid || $dom->{'system'} eq $sysuuid || $valref->{'domains'} eq $sysuuid);
             validateStatus($valref);
-     #       $valref->{'nextid'} = $nextid;
 
             my %val = %{$valref}; # Deference and assign to new ass array, effectively cloning object
             $val{'id'} += 0;
@@ -286,7 +284,7 @@ END
                 }
 
             } elsif ($action eq "listnetworks") { # List available networks
-                if (($id>0 || index($privileges,"a")!=-1) && (!$valref->{'domains'} || $type eq 'gateway' || ($curnetwork eq $uuid && !$curnetwork1) || $curnetwork1 eq $uuid)) {
+                if (($id>0 || index($privileges,"a")!=-1) && ((!$valref->{'domains'} && !$valref->{'systems'}) || $type eq 'gateway' || ($curnetwork eq $uuid && !$curnetwork1) || $curnetwork1 eq $uuid)) {
                     push @curregvalues,\%val;
                 }
             } else {
@@ -1451,7 +1449,7 @@ END
                     # When receiving packet from client, if it's been routed (, and outgoing interface) is the external interface, map.
 #                    eval {`/sbin/iptables -I POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
                     unless ($Stabile::disablesnat) {
-                        eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
+                        eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
                             or do {$e=4; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                     }
                     eval {`/sbin/iptables -D INPUT -d $externalip -j DROP`; 1;} # Drop traffic to all other ports
@@ -1465,7 +1463,7 @@ END
                     # When receiving packet from client, if it's been routed (, and outgoing interface is the external interface), map.
 #                    eval {`/sbin/iptables -I POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
                     unless ($Stabile::disablesnat) {
-                        eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
+                        eval {`/sbin/iptables -I POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
                             or do {$e=8; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                     }
                 }
@@ -1762,9 +1760,9 @@ END
                 # repeat for good measure
                 for (my $di=0; $di < 2; $di++) {
                     # keep old deletion statement for clearing out old rules on running valves
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
-                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
+                    #eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
+                    #    or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
                         or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                 }
                 eval {`/sbin/iptables -D INPUT -d $externalip -j DROP`; 1;} # Drop traffic to all other ports
@@ -1776,9 +1774,9 @@ END
                         or do {$postreply .= "Status=ERROR $@\n"; $e=1};
 
                     # keep old deletion statement for clearing out old rules on running valves
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
-                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip -j SNAT --to-source $externalip`; 1; }
+                    #eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
+                    #    or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
                         or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                 }
                 # Below is only to support Chr.'s development environment...

@@ -83,9 +83,9 @@ if ($intip && $mip) {
                     `perl -pi -e 's/export KUBE_TOKEN=.*/export KUBE_TOKEN=$token/' /etc/apache2/envvars`;
                     `systemctl restart apache2`;
                 } else {
-                    sleep 10;
+                    sleep 15;
                     $adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
-                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret \$(kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}") -o go-template="{{.data.token | base64decode}}"`;
+                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
                     `echo "Tried again and got admin-user: $adminuser and token: $token" >> /root/initout.log`;
                     if ($token =~ /^ey/) {
                         `echo "$token" > /root/admin-user.token`;

@@ -57,6 +57,7 @@ define([
                 networkuuid2: "--",
                // nicmodel2: ["rtl8139"],
                 status: "new",
+                mac: "",
                 port: 0
             }, args || {});
         },

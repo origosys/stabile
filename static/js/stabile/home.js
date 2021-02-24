@@ -55,7 +55,7 @@ define([
                 if (!identifier) identifier = "uuid";
                 var url;
                 var postData;
-                if (key=='downloadmasters' ||key=='disablesnat' || key.indexOf('externalip')==0 || key.indexOf('proxy')==0 || key.indexOf('vm')==0) {
+                if (key=='downloadmasters' ||key=='disablesnat' || key.indexOf('externalip')==0 || key.indexOf('proxy')==0 || key.indexOf('vm')==0) {
                     url = "/stabile/systems/";
                     postData = { "action": "updateengineinfo" };
                     postData[key] = jvalue;
@@ -408,6 +408,8 @@ define([
                 } else if (fieldname.indexOf("vmreadlimit")!=-1 || fieldname.indexOf("vmwritelimit")!=-1) {
                     var newval = ""+Math.round(value/1024/1024);
                     if (newval!=field.get('value')) field.set('value', newval);
+                } else if (field.type == 'checkbox') {
+                    field.set('value', ((value && value!='--')?true:false));
                 } else {
                     if (value!=field.get('value')) field.set('value', value);
                 }
@@ -443,7 +445,7 @@ define([
         userprops: ['fullname','email','phone','opfullname','opemail','opphone','alertemail','services','name','allowfrom',
                         'lastlogin','lastloginfrom', 'allowinternalapi', 'downloadmasters', 'disablesnat', 'enginename',
                         'externaliprangestart', 'externaliprangeend', 'proxyiprangestart', 'proxyiprangeend', 'proxygw',
-                        'vmreadlimit', 'vmiopsreadlimit', 'vmwritelimit', 'vmiopswritelimit'],
+                        'vmreadlimit', 'vmiopsreadlimit', 'vmwritelimit', 'vmiopswritelimit', 'autostart'],
         linkenginemsg: 'This engine is not linked to Stabile Registry <span style="float:right; display:block"><a href="#home" onClick="home.showLinkEngine()" >Link Engine...</a> <a id="irigo-externaliprangestart-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/linkengine" rel="help" target="_blank" class="irigo-tooltip">help</a></span>',
         unlinkenginemsg: 'This engine is linked to Stabile Registry <span style="float:right; display:block"><a href="#home" onClick="home.showLinkEngine()">Engine linking...</a> <a id="irigo-externaliprangestart-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/linkengine" rel="help" target="_blank" class="irigo-tooltip">help</a></span>',
 
@@ -986,7 +988,7 @@ define([
                 else
                     applink = "https://www.stabile.io/cloud#app-" + image.appid;
             }
-            if (image && image.managementlink && image.managementlink!='--') {
+            if (image && image.managementlink && image.managementlink!='--' && home.currentItem) {
                 link = image.managementlink.replace(/\{uuid\}/, home.currentItem.networkuuid1);
                 link = link.replace(/\{externalip\}/, home.currentExternalip);
                 link = link.replace(/\{internalip\}/, home.currentInternalip);
@@ -2225,6 +2227,8 @@ define([
                 if (home.currentItem && (home.currentItem[prop] || home.currentItem[prop]=='')) {
                     var curpropvalue = home.currentItem[prop];
                     var curfieldvalue = dijit.byId("info_"+prop+"_field").value;
+                    if (dijit.byId("info_"+prop+"_field").checked===false) curfieldvalue = "";
+                    if (dijit.byId("info_"+prop+"_field").checked===true) curfieldvalue = "1";
                     if (curpropvalue == "--") curpropvalue = "";
                     if (!(curfieldvalue=="" && prop=="name") &&  curpropvalue != curfieldvalue) {
                         console.log("saving item value",prop,curpropvalue,curfieldvalue,home.currentItem);
@@ -2253,13 +2257,17 @@ define([
                             },
                                 onError: function(err) { console.debug("error: ", err) }
                         });
+                    } else {
+                        console.log("Not saving", prop, curpropvalue,curfieldvalue,home.currentItem)
                     }
-                } else if (user[prop] || user[prop]==="") {
+                } else if (user[prop] || user[prop]==="") {
                     var value = dijit.byId("info_"+prop+"_field").value;
                     if (prop.indexOf("vmreadlimit")==0 || prop.indexOf("vmwritelimit")==0) value = value*1024*1024;
                     if (dijit.byId("info_"+prop+"_field").checked===false) value = "--";
                     if (dijit.byId("info_"+prop+"_field").checked===true) value = "1";
-                    if (value != user[prop]) {
+                    if (user[prop]=='' && value=='--') { // This is OK, do nothing
+                        ;
+                    } else if (value != user[prop]) {
                         if (!value) value = '--';
                         console.log("Saving server value", prop, user[prop], value, dijit.byId("info_"+prop+"_field").checked);
                         home.saveServerValue(user.username, prop, value, "username");

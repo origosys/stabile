@@ -153,17 +153,25 @@ define([
                         '<option value="0">Shared</option>',
                         '</select>',
                         '</td></tr>',
-                    '<tr id="tr_cdrom" class="wizardRow"><td class="wizardLabel">',
-                        '<label>CD-rom:</label>',
+                    '<tr id="tr_storagepool2" class="wizardRow"><td class="wizardLabel">',
+                        '<label>Data storage:</label>',
                         '</td><td class="wizardLabel">',
-                        '<select id="wizard_cdrom" name="wizard_cdrom">',
-                        '<option value="--">--</option>',
+                        '<select id="wizard_storagepool2" name="wizard_storagepool2">',
+                        '<option value="0">Shared</option>',
+                        '<option value="-1">On node</option>',
                         '</select>',
                         '</td></tr>',
                     '<tr id="tr_image2" class="wizardRow"><td class="wizardLabel">',
                         '<label>Data image master:</label>',
                         '</td><td class="wizardLabel">',
                         '<input id="wizard_image2" /> <span class="small">secondary image for data storage</span>',
+                        '</td></tr>',
+                    '<tr id="tr_cdrom" class="wizardRow"><td class="wizardLabel">',
+                        '<label>CD-rom:</label>',
+                        '</td><td class="wizardLabel">',
+                        '<select id="wizard_cdrom" name="wizard_cdrom">',
+                        '<option value="--">--</option>',
+                        '</select>',
                         '</td></tr>',
                     '<tr id="tr_boot" class="wizardRow"><td class="wizardLabel">',
                         '<label>Boot device:</label>',
@@ -289,6 +297,7 @@ define([
                     style: "width: 40px;"
                 }, 'wizard_instances');
                 dijit.form.Select({}, 'wizard_storagepool');
+                dijit.form.Select({}, 'wizard_storagepool2');
                 dijit.form.Select({store: stores.diskbus, value: 'virtio'}, 'wizard_diskbus');
                 dijit.form.Select({store: stores.networkInterfaces, value: 'virtio'}, 'wizard_nicmodel1');
                 dijit.form.Select({store: stores.cdroms, value: '--'}, 'wizard_cdrom');
@@ -318,8 +327,8 @@ define([
                 dijit.byId("wizard_boot").setStore(stores.bootDevices, 'hd');
             }
 
-
             if (user.privileges.indexOf("n")==-1 && !user.is_admin) dijit.byId("wizard_storagepool").set('disabled', true);
+            if (user.privileges.indexOf("n")==-1 && !user.is_admin) dijit.byId("wizard_storagepool2").set('disabled', true);
 
             dialog.show();
 
@@ -782,6 +791,7 @@ define([
                 var nicmodel = dijit.byId('wizard_nicmodel1').value;
                 var diskbus = dijit.byId('wizard_diskbus').value;
                 var storagepool = dijit.byId('wizard_storagepool').value;
+                var storagepool2 = dijit.byId('wizard_storagepool2').value;
                 var cdrom = dijit.byId('wizard_cdrom').value;
                 var boot = dijit.byId('wizard_boot').value;
                 var bschedule = dijit.byId('wizard_bschedule').value;
@@ -802,6 +812,7 @@ define([
                         '"nicmodel1": "' + nicmodel + '",' +
                         '"diskbus": "' + diskbus + '",' +
                         '"storagepool": "' + storagepool + '",' +
+                        '"storagepool2": "' + storagepool2 + '",' +
                         '"cdrom": "' + cdrom + '",' +
                         '"boot": "' + boot + '",' +
                         '"bschedule": "' + bschedule + '",' +

@@ -3,8 +3,10 @@
 # This script is executed in the image chroot
 echo "Performing pre-install operations"
 
-# Disable data image - this stack does not really need a data image
-perl -pi -e 's/(\/dev\/vdb1.+)/#$1/;' /etc/fstab
+# Make mountpoint for local storage
+mkdir /mnt/local
+# Change mount path for data image
+perl -pi -e 's/(\/mnt\/data)/\/mnt\/local/;' /etc/fstab
 # Disable swap
 perl -pi -e 's/(\/swapfile.+)/#$1/;' /etc/fstab
 
@@ -36,6 +38,3 @@ Environment="HOME=/root"
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/stabile-kubernetes.service'
 chmod 664 /etc/systemd/system/stabile-kubernetes.service
-
-# Make mountpoint for local storage
-mkdir /mnt/local

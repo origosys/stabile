@@ -60,9 +60,10 @@ sub getObj {
     $api = 1 if $h{"api"};
     my $uuid = $h{"uuid"};
     $uuid = $curuuid if ($uuid eq 'this');
-
     my $obj;
-    if ($h{'action'} eq 'destroy' || $action eq 'destroy' || $action eq 'attach' || $action eq 'detach') {
+    $action = $action || $h{'action'};
+
+    if ($h{'action'} eq 'destroy' || $action eq 'destroy' || $action eq 'attach' || $action eq 'detach' || $action =~ /changepassword|sshaccess/) {
         $obj = \%h;
         return $obj;
     }
@@ -304,12 +305,16 @@ sub Init {
     *do_remove = \&privileged_action;
     *do_move = \&action;
     *do_mountcd = \&action;
+    *do_changepassword = \&privileged_action;
+    *do_sshaccess = \&privileged_action;
 
     *do_gear_start = \&do_gear_action;
     *do_gear_autostart = \&do_gear_action;
     *do_gear_showautostart = \&do_gear_action;
     *do_gear_autostartall = \&do_gear_action;
     *do_gear_remove = \&do_gear_action;
+    *do_gear_changepassword = \&do_gear_action;
+    *do_gear_sshaccess = \&do_gear_action;
 
 }
 
@@ -482,7 +487,7 @@ END
 
         $json_text =~ s/\x/ /g;
         $json_text =~ s/\"\"/"--"/g;
-        #$json_text =~ s/null/"--"/g;
+        $json_text =~ s/null/"--"/g;
         $json_text =~ s/"autostart":"true"/"autostart":true/g;
         $json_text =~ s/"autostart":"--"/"autostart":false/g;
         $json_text =~ s/"locktonode":"true"/"locktonode":true/g;
@@ -1807,6 +1812,7 @@ sub locateTargetNode {
             $avhash{$nmac}->{'index'} = $aindex;
 
             $avhash{$nmac}->{'storfree'} = $node->{'storfree'};
+            $avhash{$nmac}->{'memfree'} = $node->{'memfree'};
             $avhash{$nmac}->{'ip'} = $node->{'ip'};
             $avhash{$nmac}->{'identity'} = $node->{'identity'};
             $avhash{$nmac}->{'status'} = $node->{'status'};
@@ -2822,6 +2828,67 @@ END
         $postreply .= qq|{"error": 1, "message": "ERROR problem moving $register{$uuid}->{'name'} ($dbstatus)"}|;
     }
     return $postreply;
+}
+
+sub Changepassword {
+    my ($uuid, $action, $obj) = @_;
+    if ($help) {
+        return <<END
+POST:uuid,username,password:
+Attempts to set password for [username] to [password] using guestfish. If no username is specified, user 'stabile' is assumed.
+END
+    }
+    my $img = $register{$uuid}->{'image'};
+    my $username = $obj->{'username'} || 'stabile';
+    my $password = $obj->{'password'};
+    return "Status=Error Please supply a password\n" unless ($password);
+    return "Status=Error Please shut down the server before changing password\n" unless ($register{$uuid} && $register{$uuid}->{'status'} eq 'shutoff');
+    return "Status=Error Not allowed\n" unless ($isadmin || $register{$uuid}->{'user'} eq $user);
+
+    unless (tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access images register"}|; return $res;};
+    my $cmd = qq/guestfish --rw -a $img -i command "bash -c 'echo $username:$password | chpasswd'" 2>\&1/;
+    if ($imagereg{$img} && $imagereg{$img}->{'mac'}) {
+        my $mac = $imagereg{$img}->{'mac'};
+        my $macip = $nodereg{$mac}->{'ip'};
+        $cmd = "$sshcmd $macip $cmd";
+    }
+    my $res = `$cmd`;
+    $res = $1 if ($res =~ /guestfish: (.*)/);
+    chomp $res;
+    return "Status=OK Ran chpasswd for user $username in server $register{$uuid}->{'name'}: $res\n";
+}
+
+sub Sshaccess {
+    my ($uuid, $action, $obj) = @_;
+    if ($help) {
+        return <<END
+POST:uuid,address:
+Attempts to change the ip addresses you can access the server over SSH (port 22) from, by adding [address] to /etc/hosts.allow.
+[address] should either be an IP address or a range in CIDR notation. Please note that no validation of [address] is performed.
+END
+    }
+    my $img = $register{$uuid}->{'image'};
+    my $address = $obj->{'address'};
+    return "Status=Error Please supply an aaddress\n" unless ($address);
+    return "Status=Error Please shut down the server before changing SSH access\n" unless ($register{$uuid} && $register{$uuid}->{'status'} eq 'shutoff');
+    return "Status=Error Not allowed\n" unless ($isadmin || $register{$uuid}->{'user'} eq $user);
+
+    unless (tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access images register"}|; return $res;};
+
+    my $isshcmd = '';
+    my $cmd = qq[guestfish --rw -a $img -i command "sed -i -re 's|(sshd: .*)#stabile|\\1 $address #stabile|' /etc/hosts.allow"];
+#    my $cmd = qq[guestfish --rw -a $img -i command "bash -c 'echo sshd: $address >> /etc/hosts.allow'"];
+    if ($imagereg{$img} && $imagereg{$img}->{'mac'}) {
+        my $mac = $imagereg{$img}->{'mac'};
+        my $macip = $nodereg{$mac}->{'ip'};
+        $isshcmd = "$sshcmd $macip ";
+    }
+    my $res = `$isshcmd$cmd`;
+    chomp $res;
+    #$cmd = qq[guestfish --rw -a $img -i command "bash -c 'cat /etc/hosts.allow'"];
+    #$res .= `$isshcmd$cmd`;
+    #chomp $res;
+    return "Status=OK Tried to add sshd: $address to /etc/hosts.allow in server $register{$uuid}->{'name'}\n";
 }
 
 sub Mountcd {

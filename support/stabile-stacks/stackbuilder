@@ -98,6 +98,8 @@ my $description = $config->get("DESCRIPTION") || '';
 my $appid = $config->get("APPID") || '';
 my $instances = $config->get("INSTANCES") || '';
 my $dataimage = $config->get("DATAIMAGE") || '';
+my $storagepool = $config->get("STORAGEPOOL") || '';
+my $storagepool2 = $config->get("STORAGEPOOL2") || '';
 my $fuelpath = ''; # Is set below if we are in a VM
 my $enginelinked = '';
 my $imageuuid = '';
@@ -376,10 +378,10 @@ END
     # Rebase image
     if ($rebase) { # Flatten image
         print ">> Rebasing and flattening image...\n";
-        print `qemu-img rebase -f qcow2 -b "" "$cwd/$dname.master.qcow2"`;
+        print `qemu-img rebase --force-share -f qcow2 -b "" "$cwd/$dname.master.qcow2"`;
     } elsif ($masterpath) { # Update backing file path
         print ">> Rebasing to new backing file path ...\n";
-        print `qemu-img rebase -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"` if ($masterpath);
+        print `qemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"` if ($masterpath);
     }
 }
 
@@ -443,7 +445,7 @@ if ($fuelpath) {
             if ($imageuuid) {
                 print "Uploading image with uuid $imageuuid to the registry\n";
                 print "Hang on - this may take a while...\n";
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&instances=$instances&force=$force"`;
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force"`;
                 print "$res";
             } else {
                 print "Something went wrong, did not get valid uuid $imageuuid - left it in your shared storage.\n";

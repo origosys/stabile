@@ -245,10 +245,10 @@ END
         $engine_h{"vmiopswritelimit"} = $iopswritelimit;
 
         $engine_h{"zfsavailable"} = $zbackupavailable;
-        $engine_h{"enginename"} = $enginename;
-        $engine_h{"enginelinked"} = $enginelinked;
         $engine_h{"downloadmasters"} = $downloadmasters;
     }
+    $engine_h{"enginename"} = $enginename;
+    $engine_h{"enginelinked"} = $enginelinked;
     $jsontext .= "\"showcost\": \"$showcost\", ";
     $jsontext .= "\"externalipquota\": $externalipquota, \"rxquota\": $rxquota, \"txquota\": $txquota, ";
     $jsontext .= qq|"defaultstoragequota": $defaultstoragequota, "defaultnodestoragequota": $defaultnodestoragequota, "defaultmemoryquota": $defaultmemoryquota, "defaultvcpuquota": $defaultvcpuquota, |;
@@ -1180,7 +1180,6 @@ END
             my $cmd = qq|/usr/bin/curl -f --cookie -O -L -F action=getbackup -F restorefile=$urifile -F engineid=$engineid -F enginetkthash=$enginetkthash "$uri" > "/tmp/$restorefile"|;
             my $res = `$cmd`;
             if (-s "/tmp/$restorefile") {
-                return "Status=OK $restorefile\n";
                 $res .= `(mkdir $restoredir/stabile; cd $restoredir/stabile; /bin/tar -zxf "/tmp/$restorefile")`;
                 $res .= `/usr/bin/mysql -e "create database $dbname;"`;
                 $res .= `/usr/bin/mysql $dbname < $restoredir/stabile/steamregister.sql`;
@@ -1405,11 +1404,11 @@ sub collectBillingData {
         unless ( tie(%bserversreg,'Tie::DBI', Hash::Merge::merge({table=>'billing_domains', key=>'usernodetime'}, $Stabile::dbopts)) ) {return "Unable to access billing register"};
         unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac'}, $Stabile::dbopts)) ) {return "Unable to access billing register"};
 
-        my %usernodes = keys %nodereg;
+        my @usernodes = keys %nodereg;
         untie %nodereg;
 
         my @nodebills;
-        foreach $mac (%usernodes) {
+        foreach $mac (@usernodes) {
             my $bserverobj = $bserversreg{"$buser-$mac-$byear-$bmonth"};
             $vcpu += $bserverobj->{'vcpu'};
             $memory += $bserverobj->{'memory'};

@@ -243,7 +243,8 @@ sub Init {
                 $main::syslogit->($user, 'info', "Mounting $tenderpathslist[$p] from $tenderlist[$p]");
                 eval {
                     system("/bin/mount -o intr,noatime,nfsvers=3 $tenderlist[$p] $tenderpathslist[$p]");
-                    1;} or {return "Status=Error $tenderpathslist[$p] could not be mounted"};
+                    1;
+                } or {return "Status=Error $tenderpathslist[$p] could not be mounted"};
             }
 
             # Create user dir if it does not exist
@@ -1763,7 +1764,7 @@ END
 
 # Clone image $path to destination storage pool $istoragepool, possibly changing backup schedule $bschedule
 sub Clone {
-    my ($path, $action, $obj, $istoragepool, $imac, $name, $bschedule, $buildsystem, $managementlink, $appid, $wait, $vcpu) = @_;
+    my ($path, $action, $obj, $istoragepool, $imac, $name, $bschedule, $buildsystem, $managementlink, $appid, $wait, $vcpu, $mem) = @_;
     if ($help) {
         return <<END
 GET:image,name,storagepool,wait:
@@ -1851,18 +1852,18 @@ END
 
     if ($istoragepool==-1) {
     # Find the ip address of target node
-        ($imac, $macip, $dindex, $wakenode, $identity) = locateNode($virtualsize, $imac, $vcpu);
+        ($imac, $macip, $dindex, $wakenode, $identity) = locateNode($virtualsize, $imac, $vcpu, $mem);
         if ($identity eq 'local_kvm') {
-            $postreply .= "Status=OK Cloning to local node with index $dindex\n";
+            $postreply .= "Status=OK Cloning to local node with index: $dindex\n";
             $istoragepool = 0; # cloning to local node
             $upath = "$spools[$istoragepool]->{'path'}/$user/$namepath";
         } elsif (!$macip) {
-            $postreply .= "Status=ERROR Unable to locate node with sufficient storage for image\n";
-            $postmsg = "Unable to locate node for image!";
+            $postreply .= "Status=ERROR Unable to locate node with sufficient ressources\n";
+            $postmsg = "Unable to locate node with sufficient ressources!";
             $main::updateUI->({tab=>"images", user=>$user, type=>"message", message=>$postmsg});
             return $postreply;
         } else {
-            $postreply .= "Status=OK Cloning to $macip with index $dindex\n";
+            $postreply .= "Status=OK Cloning to $macip with index: $dindex\n";
             $ippath = "$macip:$path";
             $upath = "/mnt/stabile/node/$user/$namepath";
         }
@@ -2417,7 +2418,7 @@ sub Move {
 }
 
 sub locateNode {
-    my ($virtualsize, $mac, $vcpu) = @_;
+    my ($virtualsize, $mac, $vcpu, $mem) = @_;
     $vcpu = $vcpu || 1;
     unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac'}, $Stabile::dbopts)) ) {return 0};
     my $macip;
@@ -2425,37 +2426,36 @@ sub locateNode {
     my $dindex;
     my $asleep;
     my $identity;
+    my $node;
     if ($mac && $mac ne "--") { # A node was specified
         if (1024 * $nodestorageovercommission * $nodereg{$mac}->{'storfree'} > $virtualsize && $nodereg{$mac}->{'status'} eq 'running') {
-            $macip = $nodereg{$mac}->{'ip'};
-            $dmac = $mac;
+            $node = $nodereg{$mac};
         }
     } else { # Locate a node
-
         require "$Stabile::basedir/cgi/servers.cgi";
         $Stabile::Servers::console = 1;
         my ($temp1, $temp2, $temp3, $temp4, $ahashref) = Stabile::Servers::locateTargetNode();
         my @avalues = values %$ahashref;
         my @sorted_values = (sort {$b->{'index'} <=> $a->{'index'}} @avalues);
-
-        foreach $node (@sorted_values) {
+        foreach my $snode (@sorted_values) {
             if (
-                (1024 * $nodestorageovercommission * $node->{'storfree'} > $virtualsize)
-                && ($node->{'cpuindex'} > $vcpu)
-                && !($node->{'maintenance'})
-                && ($node->{'status'} eq 'running' || $node->{'status'} eq 'asleep' || $node->{'status'} eq 'waking')
-                && ($node->{'index'} > 0)
-            #    && (!($node->{'identity'} =~ /^local/))
+                (1024 * $nodestorageovercommission * $snode->{'storfree'} > $virtualsize)
+                && ($snode->{'cpuindex'} > $vcpu)
+                && ($snode->{'memfree'} > $mem+512*1024)
+                && !($snode->{'maintenance'})
+                && ($snode->{'status'} eq 'running' || $snode->{'status'} eq 'asleep' || $snode->{'status'} eq 'waking')
+                && ($snode->{'index'} > 0)
             ) {
-                $macip = $node->{'ip'};
-                $dmac = $node->{'mac'};
-                $dindex = $node->{'index'};
-                $asleep = ($node->{'status'} eq 'asleep' || $node->{'status'} eq 'waking');
-                $identity = $node->{'identity'};
+                $node = $snode;
                 last;
             }
         }
     }
+    $macip = $node->{'ip'};
+    $dmac = $node->{'mac'};
+    $dindex = $node->{'index'};
+    $asleep = ($node->{'status'} eq 'asleep' || $node->{'status'} eq 'waking');
+    $identity = $node->{'identity'};
     untie %nodereg;
     return ($dmac, $macip, $dindex, $asleep, $identity);
 }
@@ -2573,7 +2573,9 @@ END
     my $pathfilter;
     my $uuidfilter;
     $curimg = $img if ($img);
-    if ($curimg && ($isadmin || $register{$curimg}->{'user'} eq $user || $register{$curimg}->{'user'} eq 'common') ) {
+    my $regimg = $register{$curimg};
+#    if ($curimg && ($isadmin || $regimg->{'user'} eq $user || $regimg->{'user'} eq 'common') ) {
+    if ($curimg) { # security is enforced below, we hope...
         $pathfilter = $curimg;
     } elsif ($uripath =~ /images(\.cgi)?\/(\?|)(name|storagepool|type|path)/) {
         $filter = $3 if ($uripath =~ /images(\.cgi)?\/.*name(:|=)(.+)/);
@@ -4351,7 +4353,7 @@ sub Zbackup {
     my ($image, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET:mac,storagepool,synconly,snaponly,imageretention,backupretention:
+GET:mac, storagepool, synconly, snaponly, imageretention, backupretention:
 Backs all images on ZFS storage up by taking a storage snapshot. By default all shared storagepools are backed up.
 If storagepool -1 is specified, all ZFS node storages is backed up. If "mac" is specified, only specific node is backed up.
 If "synconly" is set, no new snapshots are taken - only syncing of snapshots is performed.

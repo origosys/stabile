@@ -18,5 +18,6 @@ CREATE TABLE IF NOT EXISTS `systems` (
   `internalip` varchar(15) DEFAULT NULL,
   `networkuuids` varchar(2048) DEFAULT NULL,
   `networknames` varchar(2048) DEFAULT NULL,
+  `autostart` varchar(16) DEFAULT NULL,
   PRIMARY KEY (`uuid`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

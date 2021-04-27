@@ -2,8 +2,6 @@
 
 <p style="text-align: center;"><img src="./static/img/logo-icon.png" alt="Stabile Logo" width="80"/></p>
 
-![](static/img/logo-icon.png)
-
 Stabile is a open source software platform for infrastructure orchestration. It is distributed in the hope of being useful, but without any warranty what so ever.
 
 This is the source code distribution of Stabile, and is intended for developers who want to contribute or explore the inner workings of the system. For general product information please see https://www.stabile.io.

@@ -81,7 +81,7 @@ define([
                     '<div dojoType="dijit.layout.ContentPane" id="wizardSubForm1">',
                     '<div nostyle="margin-left:auto; font-family:sans-serif; margin-right:auto; text-align:center; padding-top:15%; border: 0px solid;"><h3>',
                     '<img src="/stabile/static/img/loader.gif" style="vertical-align:middle; margin-right:20px;" alt="loading..." />',
-                    'Loading app settings...',
+                    'Loading stack settings...',
                     '</h3></div>',
                     '</div>',
                     '<div dojoType="dijit.layout.ContentPane" nostyle="left:0;" id="wizardSubForm2">',
@@ -601,7 +601,7 @@ define([
                 document.getElementById("wizardTitle").innerHTML = "";
             }
             if (sys_tpl && sys_tpl.appid) {
-                document.getElementById("wizardTitle").innerHTML += " <a class=\"dimlink\" target=\"_blank\" href=\"https://www.stabile.io/cloud#app-" + sys_tpl.appid + "\">(view in Stabile Registry)</a>";
+                document.getElementById("wizardTitle").innerHTML += " <a class=\"dimlink\" target=\"_blank\" href=\"https://www.stabile.io/registry#app-" + sys_tpl.appid + "\">(view in Stabile Registry)</a>";
             }
             if (sys_tpl && sys_tpl.managementlink && sys_tpl.managementlink!='' && sys_tpl.upgradelink && sys_tpl.upgradelink!='') {
                 dijit.byId('wizard_managementlink').set("value", sys_tpl.managementlink);

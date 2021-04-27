@@ -183,6 +183,7 @@
                           <td width="150"><b>Download masters:</b></td>
                           <td><span data-dojo-type="dijit.form.CheckBox" id="info_downloadmasters_field"
                                     style="border:0;" onChange="home.grid.updateSystem('downloadmasters');"></span>
+                              <button id="checkfordownloads" style="display:none;" class="btn btn-xs btn-info" onclick="home.saveServerValue(IRIGO.user.username, 'downloadmasters', 2);" >check now</button>
                               <a id="irigo-downloadmasters-tooltip" href="https://www.origo.io/info/stabiledocs/web/dashboard/info-tab/downloadmasters" rel="help" target="_blank" class="irigo-tooltip">help</a>
                           </td>
                       </tr>

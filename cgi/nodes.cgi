@@ -758,7 +758,8 @@ END
         my $mac = $val->{'mac'};
         $action = "reboot";
         my $name = $val->{'name'};
-        if ($curstatus eq "running" || $curstatus eq "maintenance")
+        my $identity = $val->{'identity'};
+        if (($curstatus eq "running" || $curstatus eq "maintenance") && $identity ne 'local_kvm')
         {
               $uistatus = "rebooting";
               $uiuuid = $mac;
@@ -779,18 +780,20 @@ sub do_haltall {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET::
+GET:nowait:
 Unceremoniously halt all active nodes.
 END
     }
     my @regvalues = values %register;
+    my $nowait = $obj->{'nowait'};
 # Only include pistons we have heard from in the last 20 secs
     foreach $val (@regvalues) {
         my $curstatus =  $val->{'status'};
+        my $identity = $val->{'identity'};
         my $mac = $val->{'mac'};
         $action = "halt";
         my $name = $val->{'name'};
-        if ($curstatus eq "running" || $curstatus eq "maintenance")
+        if (($curstatus eq "running" || $curstatus eq "maintenance") && $identity ne 'local_kvm')
         {
               $uistatus = "halting";
               $uiuuid = $mac;
@@ -802,6 +805,26 @@ END
               $main::syslogit->($user, "info", $logmsg);
               $postreply .= "Status=OK $uistatus $name\n";
         }
+    }
+    unless ($nowait) {
+        $postreply .= "Status=OK Waiting up to 100 seconds for running nodes to shut down\n";
+        my $livenodes = 0;
+        for (my $i; $i<10; $i++) {
+            $livenodes = 0;
+            do_list();
+            foreach $val (@regvalues) {
+                my $curstatus =  $val->{'status'};
+                my $identity = $val->{'identity'};
+                my $mac = $val->{'mac'};
+                my $name = $val->{'name'};
+                if (($curstatus eq "running" || $curstatus eq "maintenance" || $curstatus eq "halting") && $identity ne 'local_kvm') {
+                    $livenodes = 1;
+                }
+            }
+            last unless ($livenodes);
+            sleep 10;
+        }
+
     }
     $postreply = $postreply || "Status=ERROR No active nodes found\n";
     return $postreply;

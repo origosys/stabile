@@ -1,6 +1,7 @@
 #!/bin/sh
 
 steamExec backupallimages
+steamExec backupallfuel
 steamExec unmountallimages
 steamExec backupengine
 

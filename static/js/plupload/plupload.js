@@ -950,6 +950,8 @@ plupload.Uploader = function(options) {
 			file = files[i];
 
 			if (file.size !== undef) {
+				file.origSize = parseInt(file.origSize); // Clearly a patch
+				file.size = parseInt(file.size);
 				// We calculate totals based on original file size
 				total.size += file.origSize;
 

@@ -59,22 +59,7 @@ if ($i_password) {
 my $letsencrypt = get("stabile/letsencrypt");
 $letsencrypt = '' if ($letsencrypt eq 'false');
 
-# Enumerate network interfaces
-my $droute = `ip route show default`;
-my $externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
-my $internalnic = "$externalnic";
-my $niclist = `ifconfig -s`;
-# my $niclist = `netstat -in`;
-my @nics = ();
-push @nics, $externalnic if ($externalnic);
-foreach my $line (split("\n", $niclist)) {
-	my $nic = $1 if ($line =~ /(\S+) /);
-	if ($nic ne 'lo' && $nic ne $externalnic &&  !($nic=~/^virbr/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
-		push @nics, $1;
-	}
-}
-$externalnic = $nics[0] unless ($externalnic);
-$internalnic = $nics[1] if (scalar @nics > 1);
+my ($internalnic, $externalnic) = getNics();
 print $out "Using these network interfaces: $externalnic, $internalnic\n";
 
 my $oldversion = 0;
@@ -545,6 +530,11 @@ individual pistons using SSH without providing a password.
 	}
 
     # Copy cgroup rules configuration
+	`touch /etc/cgconfig.conf`; # In case it does not exist - needed by cgrulesgend.service. pressurecontrol uses file in /etc/stabile
+	unless (-e '/etc/stabile/cgconfig.conf') {
+		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', '/etc/stabile/cgconfig.conf');
+		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+	}
 	if (-e '/etc/cgrules.conf') {
         print $out " *** cgroups are already configured on this engine\n";
         unless (`grep stabile /etc/cgrules.conf`) {
@@ -554,8 +544,6 @@ individual pistons using SSH without providing a password.
 	} else {
 		print $out "Setting up cgroups on engine\n";
 		$ret = cp_conf('/usr/share/stabile/valve-cgrules.conf', '/etc/cgrules.conf');
-		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
-		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', '/etc/stabile/cgconfig.conf');
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
 		$ret = cp_conf('/usr/share/stabile/valve-cgrulesgend.service', '/etc/systemd/system/cgrulesgend.service');
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
@@ -569,15 +557,24 @@ individual pistons using SSH without providing a password.
 	my $rootdev = '/dev/sda';
 	$rootdev = $1 if (`df /` =~ /(\/dev\/\w+)/);
 	# It seems that cgroups cannot handle individual partitions for blkio
-	$rootdev = $1 if ($rootdev =~ /(\w+)\d+/);
+	if ($rootdev =~ /(\/dev\/\w+)p\d+/) { # nvme naming - e.g. nvme0n1p1
+		$rootdev = $1;
+	} elsif ($rootdev =~ /(\/dev\/\w+)\d+/) {
+		$rootdev = $1; # sata naming e.g. sda1
+	}
 	$majmin = $1 if (`lsblk -l $rootdev` =~ /\S+ +(\d+:\d+)/);
-	`perl -pi -e 's/8:0 /$majmin /' /etc/stabile/cgconfig.conf` if ($majmin);
+	if ($majmin) {
+		print $out "Identified maj:min as $majmin on device $rootdev\n";
+		`perl -pi -e 's/8:0 /$majmin /' /etc/stabile/cgconfig.conf`;
+ 	} else {
+		print $out "Unable to analyse root device $rootdev for Cgroups disk throttling - please edit /etc/stabile/cgconfig.conf manually\n"
+	}
 
     my $allowusers = <<END
 AllowUsers irigo\@10.0.*
 AllowUsers irigo\@localhost
 AllowUsers irigo\@127.0.0.1
-AllowUsers origo
+AllowUsers stabile
 END
 ;
     unless (`grep "AllowUsers irigo\@localhost" /etc/ssh/sshd_config`) {
@@ -710,8 +707,8 @@ ConfigureWithoutCarrier=true
 Address=10.0.0.1/24
 END
 ;
-
-	if ($internalnic ne $externalnic) { # Let pressurecontrol bring up virtual nic with 10.0.0.1 if only one nic
+	`rm /etc/systemd/network/10-*.network`; # first remove any previous configuration
+	if ($internalnic ne $externalnic) {
 		if (-d "/etc/netplan") {
 	#		$ret = `echo "$enp2s0_netplan" >> "/etc/netplan/$internalnic.yaml"` unless (-e "/etc/netplan/$internalnic.yaml");
 	#		$ret .= `netplan apply`;
@@ -721,10 +718,10 @@ END
 			$ret .= `systemctl restart systemd-networkd.service`;
 		} else {
 			$ret = `echo "$enp2s0" >> /etc/network/interfaces` unless (`grep enp2s0 /etc/network/interfaces`);
-			$ret .= `ifup enp2s0`;
+			$ret .= `ifconfig enp2s0 up`;
 		}
-	} else {
-		my $ret = copy("/usr/share/stabile/stabile.dhclient-hook", "/etc/dhcp/dhclient-enter-hooks.d/stabile");
+	} else { # Let pressurecontrol bring up virtual nic with 10.0.0.1 if only one nic
+		$ret = copy("/usr/share/stabile/stabile.dhclient-hook", "/etc/dhcp/dhclient-enter-hooks.d/stabile");
 		`chmod 755 /etc/dhcp/dhclient-enter-hooks.d/stabile`;
 		if(!$ret && !ask("Error: $!. Ignore error...")) {
 			return 1;
@@ -743,14 +740,14 @@ END
         }
     }
 	print $out "Setting $internalnic as DHCP interface\n";
-	`perl -pi -e 's/enp2s0/$internalnic/' $cfg_dest`;
+	`perl -pi -e 's/interface .+;/interface $internalnic;/' $cfg_dest`;
 
-	if ($internalnic ne $externalnic) { # Disable dhcp server if only one nic
+	if ($internalnic ne $externalnic) {
 		$ret = sysexec('systemctl restart isc-dhcp-server');
 		if($ret != 0 && !ask("Ignore error...")) {
 			return $?;
 		}
-	} else {
+	} else { # Disable dhcp server if only one nic
 		$ret = sysexec('systemctl stop isc-dhcp-server');
 		$ret .= sysexec('systemctl disable isc-dhcp-server');
 		if($ret != 0 && !ask("Ignore error...")) {
@@ -777,31 +774,36 @@ sub setup_ntpd_mon_etc {
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
 	}
 
-	unless (`grep ENGINE_DATA_NIC=. /etc/stabile/config.cfg`) {
-		print $out "Setting ENGINE_DATA_NIC to $externalnic\n";
-        `perl -pi -e 's/ENGINE_DATA_NIC=.*/ENGINE_DATA_NIC=$externalnic/' /etc/stabile/config.cfg`;
-    }
-	unless (`grep EXTERNAL_NIC=. /etc/stabile/config.cfg`) {
-		print $out "Setting EXTERNAL_NIC to $externalnic\n";
-        `perl -pi -e 's/EXTERNAL_NIC=.*/EXTERNAL_NIC=$externalnic/' /etc/stabile/config.cfg`;
-    }
-	`chmod 644 /etc/stabile/config.cfg`; # Tomcat needs to be able to read this
+	# unless (`grep ENGINE_DATA_NIC=. /etc/stabile/config.cfg`) {
+	# 	print $out "Setting ENGINE_DATA_NIC to $externalnic\n";
+    #     `perl -pi -e 's/ENGINE_DATA_NIC=.*/ENGINE_DATA_NIC=$externalnic/' /etc/stabile/config.cfg`;
+    # }
+	# unless (`grep EXTERNAL_NIC=. /etc/stabile/config.cfg`) {
+	# 	print $out "Setting EXTERNAL_NIC to $externalnic\n";
+    #     `perl -pi -e 's/EXTERNAL_NIC=.*/EXTERNAL_NIC=$externalnic/' /etc/stabile/config.cfg`;
+    # }
 
 	my $ret = cp_conf('/usr/share/stabile/nodeconfig.template.cfg', '/etc/stabile/nodeconfig.cfg');
 	if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
+
+	# unless (`grep DATA_NIC=. /etc/stabile/nodeconfig.cfg`) {
+	# 	print $out "Setting local node DATA_NIC to $externalnic\n";
+    #     `perl -pi -e 's/DATA_NIC=.*/DATA_NIC=$externalnic/' /etc/stabile/nodeconfig.cfg`;
+    # }
+	# unless (`grep ADMIN_NIC=. /etc/stabile/nodeconfig.cfg`) {
+	# 	print $out "Setting local node ADMIN_NIC to $internalnic\n";
+    #     `perl -pi -e 's/ADMIN_NIC=.*/ADMIN_NIC=$internalnic/' /etc/stabile/nodeconfig.cfg`;
+    # }
+
 	`chmod 644 /etc/stabile/nodeconfig.cfg`;
+	`chmod 644 /etc/stabile/config.cfg`; # Tomcat needs to be able to read this
 
-	unless (`grep DATA_NIC=. /etc/stabile/nodeconfig.cfg`) {
-		print $out "Setting local node DATA_NIC to $externalnic\n";
-        `perl -pi -e 's/DATA_NIC=.*/DATA_NIC=$externalnic/' /etc/stabile/nodeconfig.cfg`;
-    }
-	unless (`grep ADMIN_NIC=. /etc/stabile/nodeconfig.cfg`) {
-		print $out "Setting local node ADMIN_NIC to $internalnic\n";
-        `perl -pi -e 's/ADMIN_NIC=.*/ADMIN_NIC=$internalnic/' /etc/stabile/nodeconfig.cfg`;
-    }
-#	print $out "Setting node ADMIN_SERVER_ADDRESS to 127.0.0.1\n";
-#   `perl -pi -e 's/ADMIN_SERVER_ADDRESS=.*/ADMIN_SERVER_ADDRESS=127.0.0.1/' /etc/stabile/nodeconfig.cfg`;
-
+	if (system ("systemctl is-active --quiet docker")) {
+		print $out "Disabling Docker - Docker networking (10.0.0.1) is not compatible with Stabile\n";
+		`systemctl stop docker`;
+		`systemctl disable docker`;
+		`ip link delete docker0`;
+	}
 	`systemctl enable pressurecontrol`;
 	`systemctl enable movepiston`;
 	`systemctl enable stabile`;
@@ -1171,9 +1173,9 @@ sub configure_apache {
 	print $out `$cmd`;
 
 	# Baseurl required for updatescript
-	open(my $baseurl, '>', '/etc/stabile/baseurl');
-	print $baseurl "https://$hostname/stabile";
-	close($baseurl);
+	#open(my $baseurl, '>', '/etc/stabile/baseurl');
+	#print $baseurl "https://$hostname/stabile";
+	#close($baseurl);
 
 	my $sslcert = '/etc/apache2/ssl/stabile.crt';
 	my $sslkey = '/etc/apache2/ssl/stabile.key';
@@ -2057,6 +2059,30 @@ sub expand_template {
 	}
 
 	return 1;
+}
+
+# Enumerate and return network interfaces
+sub getNics {
+	my $externalnic = '';
+	my $droute = `ip route show default`;
+	$externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
+	my $niclist = `ifconfig | grep flags= | sed -n -e 's/: .*//p'`;
+	if (-e "/mnt/stabile/tftp/$piston_versions[0]") { # If a piston root exists, assume we will be providing boot services over secondary NIC even if it has no link
+		$niclist = `ifconfig -a | grep flags= | sed -n -e 's/: .*//p'`;
+	}
+	# my $niclist = `netstat -in`;
+	my @nics = ();
+	push @nics, $externalnic if ($externalnic);
+	foreach my $line (split("\n", $niclist)) {
+		my $nic = $1 if ($line =~ /(\S+)/);
+		if ($nic ne 'lo' && $nic ne $externalnic && !($nic=~/^virbr/) && !($nic=~/^docker/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
+			push @nics, $1;
+		}
+	}
+	$externalnic = $nics[0] unless ($externalnic);
+	my $internalnic = $externalnic;
+	$internalnic = $nics[1] if (scalar @nics > 1);
+	return ($internalnic, $externalnic);
 }
 
 # hardlink a file, overwriting the destination

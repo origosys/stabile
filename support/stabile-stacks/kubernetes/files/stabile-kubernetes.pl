@@ -39,18 +39,19 @@ if ($intip && $mip) {
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-roles.yaml >> /root/initout.log 2>\&1`;
                 my $json = `stabile-helper mountpools`;
                 my $spools = from_json($json);
-                my $pool0path = $spools->{'0'}->{'path'};
-                $pool0path =~ s/\//\\\//g;
+            #    my $pool0path = $spools->{'0'}->{'path'};
+            #    $pool0path =~ s/\//\\\//g;
                 my @pools=keys(%{$spools});
                 $json = `curl -ks https://$gw/stabile/users/me`;
                 my $me = from_json($json);
                 my $username = $me->[0]->{'username'};
                 $username =~ s/\@/\\\@/;
-                for (my $i; $i< scalar @pools; $i++) {
+                for (my $i=0; $i< scalar @pools; $i++) {
                     my $pool = $pools[$i];
                     my $poolpath = $spools->{$pool}->{'path'};
+                    $poolpath =~ s/\//\\\//g;
                     `perl -pi -e 's/pool\\d+/pool$pool/' /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-storage.yaml`;
-                    `perl -pi -e 's/nfspath/$poolpath\\/$username\\/fuel/' /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-storage.yaml`;
+                    `perl -pi -e 's/: (.+) #nfspath/: $poolpath\\/$username\\/fuel #nfspath/' /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-storage.yaml`;
                     `perl -pi -e 's/gatewayip/$gw/' /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-storage.yaml`;
                     `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f /usr/share/webmin/stabile/tabs/kubernetes/manifests/nfs-storage.yaml >> /root/initout.log 2>\&1`;
                 }

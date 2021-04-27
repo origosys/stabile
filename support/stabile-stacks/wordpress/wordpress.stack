@@ -17,7 +17,8 @@ POSTEXEC=/tmp/files/postexec.sh
 SERVICE=
 TERMINALLINK=/stabile/pipe/http://{uuid}:4200
 MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
-MEMORY=1024
+MEMORY=2048
+VSPU=2
 LOGO=https://www.stabile.io/images/apps/wplogo.png
 THUMBNAIL=https://www.stabile.io/images/apps/wplogo.png
 SUMMARY=A no-nonsense way to run your own WordPress with support for multiple, independent sites.
@@ -30,6 +31,5 @@ DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site WordPress server.
 		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the web UI</li>\
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 	</ul>\
-	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>
-
-
+	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
+	<div><a href="https://github.com/origosys/stabile-stacks/tree/master/wordpress">Stack source code</a></div>

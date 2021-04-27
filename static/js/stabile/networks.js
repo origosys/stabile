@@ -212,7 +212,7 @@ define([
                 return ((item.domains=="--" && item.systems=="--")?_delete + (item.type=="gateway"?up:""):up) + save;
             }
             else if(status == "up"){
-                return (item.type=="gateway"?down:(item.type=="internalip" && item.systems!="--"?'':_break)) + save;
+                return (item.type=="gateway"?down:(item.type=="internalip" && item.systems!="--"?_delete:'')) + save + _break;
             }
             else if(status == "new"){
                 return save;
@@ -222,7 +222,7 @@ define([
             }
             else if(status == "nat"){
                 if ((item.internalip!="--" || item.externalip!="--") && item.domains!="--") return up  + (item.type=="gateway"?down:"") + save;
-                else if ((item.internalip!="--" || item.externalip!="--") && item.systems!="--") return up + save;
+                else if ((item.internalip!="--" || item.externalip!="--") && item.systems!="--") return up + save + _delete;
                 else return (item.type=="gateway"?down:"") + save + ((item.domains=="--" && item.systems=="--")?_delete:"");
             }
             console.error("WTF? unknown status : ", status);

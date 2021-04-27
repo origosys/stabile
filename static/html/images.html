@@ -1,7 +1,7 @@
 <div>
     <div class="border_container" style="padding: 8px; border-bottom: 1px solid #ddd;">
 
-        <div class="plupload_progress">
+        <div class="plupload_progress" onclick="upload.showDialog();" style="cursor: pointer;">
             <div class="plupload_progress_container">
                 <div class="plupload_progress_bar"></div>
             </div>
@@ -17,8 +17,7 @@
                 <li id="imagesUploadButton"><a href="#images" onclick="upload.showDialog();">Upload&hellip;</a></li>
             </ul>
         </div>
-
-        <span id="missingbackups" style="color:red; margin-left:140px; margin-right:20px; vertical-align: -webkit-baseline-middle; vertical-align: -moz-middle-with-baseline;"></span>
+        <span id="missingbackups" class="missingbackups" style="color:red; margin-left:250px; margin-right:20px; vertical-align: -webkit-baseline-middle; vertical-align: -moz-middle-with-baseline;"></span>
 
         <div class="pull-right" style="margin-left:10px;">
             <form action="#images" method="get" onsubmit="document.getElementById('images_search_query').blur(); return false;">

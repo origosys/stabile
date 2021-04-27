@@ -368,7 +368,7 @@ my $head = <<END
 <div class="container app-container">
     <nav class="navbar navbar-default" role="navigation">
         <h4 style="display:inline-block; vertical-align:middle; margin-bottom:0;">
-            <img src="images/centos-logo.png" style="margin:0 6px 6px 12px; width:45px;"> Welcome to $appinfo{name}
+            <img src="images/centos-logo.png" style="margin:0 6px 6px 12px; width:45px;"> Welcome to $appinfo{systemname}
         </h4>
         <span style="margin:5px 0 10px 0; position:relative; float: right;">
             <span class="dropdown" >

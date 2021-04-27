@@ -6,6 +6,7 @@ define([
 
     var logoutInProgress = false;
     var loginUrl = '/stabile/login';
+    if (location.pathname != '' || location.hash!='') loginUrl += "?back=" + location.pathname + location.hash;
 
     aspect.around(dojo, "xhr", function(originalXhr){
         return function(method, args){
@@ -17,7 +18,7 @@ define([
                 if(error.status === 401 || error.status === 403){
                     logoutInProgress = true;
                     topic.publish("message", {
-                        message: "Your session has timed out",
+                        message: "Your session has timed out...",
                         duration: 2000,
                         type:"warning"
                     });

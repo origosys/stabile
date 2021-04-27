@@ -17,6 +17,7 @@ use Date::Format;
 use Date::Parse;
 use Getopt::Std;
 #use Encode::Escape;
+use String::Escape;
 use File::Glob qw(bsd_glob);
 use Sys::Guestfs;
 use Data::Dumper;
@@ -106,19 +107,23 @@ sub Init {
 
     *do_save = \&privileged_action_async;
     *do_sync_save = \&privileged_action;
+    *do_sync_backup = \&privileged_action;
     *do_sync_clone = \&privileged_action;
     *do_updateregister = \&action;
     *do_fullupdateregister = \&action;
     *do_tablelistall = \&do_list;
     *do_tablelist = \&do_list;
     *Sync_save = \&Save;
+    *Sync_backup = \&Backup;
     *Sync_clone = \&Clone;
     *do_help = \&action;
 
     *do_mount = \&privileged_action;
     *do_unmount = \&privileged_action;
+    *do_convert = \&privileged_action;
     *do_activate = \&privileged_action;
     *do_publish = \&privileged_action;
+    *do_uploadtoregistry = \&privileged_action;
     *do_release = \&privileged_action;
     *do_download = \&privileged_action;
     *do_linkmaster = \&privileged_action;
@@ -153,14 +158,18 @@ sub Init {
     *do_getimagesdevice = \&privileged_action;
     *do_getbackupdevice = \&privileged_action;
     *do_setstoragedevice = \&privileged_action;
+    *do_backupfuel = \&privileged_action;
 
     *do_gear_save = \&do_gear_action;
     *do_gear_sync_save = \&do_gear_action;
+    *do_gear_sync_backup = \&do_gear_action;
     *do_gear_sync_clone = \&do_gear_action;
     *do_gear_mount = \&do_gear_action;
     *do_gear_unmount = \&do_gear_action;
+    *do_gear_convert = \&do_gear_action;
     *do_gear_activate = \&do_gear_action;
     *do_gear_publish = \&do_gear_action;
+    *do_gear_uploadtoregistry = \&do_gear_action;
     *do_gear_release = \&do_gear_action;
     *do_gear_download = \&do_gear_action;
     *do_gear_linkmaster = \&do_gear_action;
@@ -193,6 +202,7 @@ sub Init {
     *do_gear_getimagesdevice = \&do_gear_action;
     *do_gear_getbackupdevice = \&do_gear_action;
     *do_gear_setstoragedevice = \&do_gear_action;
+    *do_gear_backupfuel = \&do_gear_action;
 
     *Fullupdateregister = \&Updateregister;
 
@@ -273,14 +283,16 @@ sub getObj {
     my $status = $h{"status"};
     $console = 1 if $h{"console"};
     $api = 1 if $h{"api"};
-
     my $obj;
     $action = $action || $h{'action'};
-    if ($action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|^release|^download|^gear_publish|^gear_release|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice/) {
+    if ($action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|uploadtoregistry|^release|^download|^gear_publish|^gear_release|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice|backupfuel|sync_backup/) {
         $obj = \%h;
         return $obj;
     }
     my $uuid = $h{"uuid"};
+    if ($uuid && $uuid =~ /^\// ) { # Ugly clutch
+        $uuid = $register{$uuid}->{'uuid'};
+    }
     if ($uuid eq 'this' && $curimg
         && ($register{$curimg}->{'user'} eq $user || $isadmin )) { # make an ugly exception
         $uuid = $register{$curimg}->{'uuid'};
@@ -316,7 +328,6 @@ sub getObj {
     my $path = '';
     $path = $img->{'path'} unless ($status eq "new"); # Only trust path from db /co
     my $dbobj = $register{$path} || {};
-
     return 0 unless (($path && $dbobj->{'user'} eq $user) || $isadmin || $status eq "new"); # Security check
 
     unless (($uuid && $imagereg{$uuid} && $status ne 'new') || ($status eq 'new' && !$imagereg{$uuid} && (!$uuid || length($uuid) == 36))) {
@@ -368,6 +379,8 @@ sub getObj {
     $obj->{'restorepath'} = $h{'restorepath'} if ($h{'restorepath'});
     $obj->{'files'} = $h{'files'} if ($h{'files'});
     $obj->{'sync'} = 1 if ($h{'sync'});
+    # For backup
+    $obj->{'skipzfs'} = 1 if ($h{'skipzfs'});
 
     # Sanity checks
     if (
@@ -460,9 +473,9 @@ END
             foreach my $f (@thefiles) {
                 next if ($spath && $spath ne $f); # Only specific image being updated
                 if ($f =~ /(.+)(-s\d\d\d\.vmdk$)/) {
-                    `touch "$1.vmdk" 2>/dev/null` unless -e "$1.vmdk";
+                #   `touch "$1.vmdk" 2>/dev/null` unless -e "$1.vmdk";
                 } elsif ($f =~ /(.+)(-flat\.vmdk$)/) {
-                    `touch "$1.vmdk" 2>/dev/null` unless -e "$1.vmdk";
+                #    `touch "$1.vmdk" 2>/dev/null` unless -e "$1.vmdk";
                 } elsif(-s $f && $f =~ /(\.vmdk$)|(\.img$)|(\.vhd$)|(\.qcow$)|(\.qcow2$)|(\.vdi$)|(\.iso$)/i) {
                     my($fname, $dirpath, $suffix) = fileparse($f, ("vmdk", "img", "vhd", "qcow", "qcow2", "vdi", "iso"));
                     my $uuid;
@@ -853,7 +866,7 @@ END
             $subdir = $1;
         }
         my $sbname = "$subdir/$bname";
-        $sbname =~ s/ /\\ /;
+        $sbname =~ s/ /\\ /g;
         $sbname = $1 if ($sbname =~ /(.+)/); # untaint
         foreach my $spool (@spools) {
             my $imgbasedir = $spool->{"path"};
@@ -953,7 +966,7 @@ sub getBtime {
         my $imgbasedir = $spool->{"path"};
         if (-d "$imgbasedir/.zfs/snapshot") {
             my $sbname = "$subdir/$bname";
-            $sbname =~ s/ /\\ /;
+            $sbname =~ s/ /\\ /g;
             my $cmd = qq|/bin/ls -l --time-style=full-iso $imgbasedir/.zfs/snapshot/*/$buser$sbname 2>/dev/null|;
             my $snaps = `$cmd`;
             my @snaplines = split("\n", $snaps);
@@ -1020,6 +1033,7 @@ END
     }
 #    my $mounts2 = decode('ascii-escape', `/bin/cat /proc/mounts`);
     my $mounts2 = `/bin/cat /proc/mounts`;
+    $mounts2 = String::Escape::unbackslash($mounts2);
     my $mounted2 = ($mounts2 =~ /$mountpath/);
     eval {`/bin/rmdir "$mountpath"` if (!$mounted2 && -e $mountpath); 1;}
         or do {$postreply .= "Status=ERROR Problem removing mount point $@\n";};
@@ -1033,7 +1047,7 @@ END
             return $postreply;
         }
     } else {
-        $postreply .= "Status=OK Image $register{$path}->{'name'} not mounted\n";
+        $postreply .= "Status=OK Image $path not mounted\n";
         return $postreply;
     }
 }
@@ -1070,12 +1084,12 @@ END
     }
     my($bname, $dirpath, $suffix) = fileparse($path, (".vmdk", ".img", ".vhd", ".qcow", ".qcow2", ".vdi", ".iso"));
     my $mountpath = "$dirpath.$bname$suffix";
-#    my $mounts = decode('ascii-escape', `/bin/cat /proc/mounts`);
     my $mounts = `/bin/cat /proc/mounts`;
+    $mounts = String::Escape::unbackslash($mounts);
     my $mounted = ($mounts =~ /$mountpath/);
     if ($mounted) {
         unless (`ls "$mountpath"`) { # Check if really mounted
-            Unmount($path);
+            Unmount($mountpath);
             $mounted = 0;
         }
     }
@@ -1112,8 +1126,8 @@ END
 
         my $mounts2;
         for (my $i=0; $i<5; $i++) {
-#            $mounts2 = decode('ascii-escape', `/bin/cat /proc/mounts`);
             $mounts2 = `/bin/cat /proc/mounts`;
+            $mounts2 = String::Escape::unbackslash($mounts2);
             next if ( $mounts2 =~ /$mountpath/);
             sleep 2;
         }
@@ -1243,7 +1257,7 @@ END
             $res .= to_json(\@comb, {pretty => 1});
         }
     } else {
-        $res .= qq|{"status": "Error", "message": "Image not mounted. Mount first."}|;
+        $res .= qq|{"status": "Error", "message": "Image $curimg not mounted. Mount first."}|;
     }
     return $res;
 }
@@ -2728,6 +2742,7 @@ END
     }
 
     # Sort @uservalues
+    @uservalues = (sort {$a->{'name'} cmp $b->{'name'}} @uservalues); # Always sort by name first
     my $sort = 'status';
     $sort = $2 if ($uripath =~ /sort\((\+|\-)(\S+)\)/);
     my $reverse;
@@ -2759,6 +2774,7 @@ END
             $json_text = to_json($uservalues[0], {pretty => 1}) if (@uservalues);
         }
     } else {
+    #    $json_text = JSON->new->canonical(1)->pretty(1)->encode(\@uservalues) if (@uservalues);
         $json_text = to_json(\@uservalues, {pretty => 1}) if (@uservalues);
     }
     $json_text = "{}" unless $json_text;
@@ -2896,7 +2912,7 @@ END
     $res .= header('application/json') unless ($console);
     if ($params{'probe'} && $params{'url'}) {
         my $url = $params{'url'};
-        my $cmd = qq!curl -kIL "$url" 2>&1!;
+        my $cmd = qq!curl --http1.1 -kIL "$url" 2>&1!;
         my $headers = `$cmd`;
         my $filename;
         my $filesize = 0;
@@ -2904,7 +2920,7 @@ END
         $filesize = $1 if ($headers =~ /content-length: (\d+)/i);
         my $ok;
         if (!$filename) {
-            my $cmd = qq[curl -kIL "$url" 2>&1 | grep -i " 200 OK"];
+            my $cmd = qq[curl --http1.1 -kIL "$url" 2>&1 | grep -i " 200 OK"];
             $ok =  `$cmd`; chomp $ok;
             $filename = `basename "$url"` if ($ok);
             chomp $filename;
@@ -2916,14 +2932,16 @@ END
             my $filepath = $spools[0]->{'path'} . "/$user/$filename";
             $res .= qq|{"status": "OK", "name": "$filename", "message": "200 OK", "size": $filesize, "path": "$filepath"}|;
         } else {
-            $res .= qq|{"status": "ERROR", "message": "An image file cannot be downloaded from this URL.", "url": "$url"}|;
+            $res .= qq|{"status": "ERROR", "message": "An image file cannot be downloaded from this URL.", "url": "$url", "filename": "$filename"}|;
         }
     } elsif ($params{'path'} && $params{'url'} && $params{'name'} && defined $params{'size'}) {
         my $imagepath = $params{'path'};
         my $imagename = $params{'name'};
         my $imagesize = $params{'size'};
         my $imageurl = $params{'url'};
-        if (-e $imagepath) {
+        if (-e "$imagepath.meta" && $imagepath =~ /\.master\.qcow2$/) { # This image is being downloaded by pressurecontrol
+            $res .= qq|{"status": "OK", "name": "$imagename", "message": "Now downloading master", "path": "$imagepath"}|;
+        } elsif (-e $imagepath) {
             $res .= qq|{"status": "ERROR", "message": "An image file with this name already exists on the server.", "name": "$imagename"}|;
         } elsif ($imagepath !~ /^$spools[0]->{'path'}\/$user\/.+/) {
             $res .= qq|{"status": "ERROR", "message": "Invalid path"}|;
@@ -2959,19 +2977,18 @@ END
                 $main::syslogit->($user, "info", "urlupload $imageurl, $imagepath");
                 1;
             } or do {$res .= qq|{"status": "ERROR", "message": "ERROR $@"}|;};
-
             $res .= qq|{"status": "OK", "name": "$imagename", "message": "Now uploading", "path": "$imagepath"}|;
         }
     } elsif ($params{'path'} && $params{'getsize'}) {
         my $imagepath = $params{'path'};
         if (!(-e $imagepath)) {
             $res .= qq|{"status": "ERROR", "message": "Image not found.", "path": "$imagepath"}|;
-        } elsif ($imagepath !~ /^$spools[0]->{'path'}\/$user\/.+/) {
+        } elsif ($imagepath !~ /^$spools[0]->{'path'}\/$user\/.+/  && $imagepath !~ /^$spools[0]->{'path'}\/common\/.+/) {
             $res .= qq|{"status": "ERROR", "message": "Invalid path"}|;
         } else {
             my @stat = stat($imagepath);
             my $imagesize = $stat[7];
-            $res .= qq|{"status": "OK", "size": $imagesize, "path": "imagepath"}|;
+            $res .= qq|{"status": "OK", "size": $imagesize, "path": "$imagepath"}|;
         }
     }
     return $res;
@@ -3000,7 +3017,7 @@ END
     my $chunks = int($params{'chunks'});
 
     if ($chunk == 0 && -e $f) {
-        $res .= qq|Error: File already exists $name|;
+        $res .= qq|Error: File $f already exists $name|;
     } else {
         open (FILE, ">>$f");
 
@@ -3036,13 +3053,15 @@ sub Download {
     #    my ($name, $managementlink, $upgradelink, $terminallink, $version) = @{$argref};
     if ($help) {
         return <<END
-GET:image:
+GET:image,console:
 Returns http redirection with URL to download image
 END
     }
+    $baseurl = $argref->{baseurl} || $baseurl;
     my %uargs = %{$argref};
     $f = $uargs{'image'} unless ($f);
     $baseurl = $uargs{'baseurl'} || $baseurl;
+    $console = $console || $uargs{'console'};
     my $res;
     my $uf =  URI::Escape::uri_unescape($f);
     if (! $f) {
@@ -3089,7 +3108,7 @@ EOT
     if (($fid || $fid eq '0') && $fpath && -e "$f") {
         my $fileurl = "$baseurl/download/$fid/$fpath";
         if ($console) {
-            $res .= "$fileurl\n";
+            $res .= header(). $fileurl;
         } else {
             $res .= "Status: 302 Moved\nLocation: $fileurl\n\n";
             $res .= "$fileurl\n";
@@ -3103,7 +3122,7 @@ EOT
 
 
 sub Liststoragedevices {
-    my ($image, $action) = @_;
+    my ($image, $action, $obj) = @_;
     if ($help) {
         return <<END
 GET::
@@ -3141,6 +3160,8 @@ END
     foreach my $fs (sort {$a->{'Filesystem'} cmp $b->{'Filesystem'}} @{$jobj}) {
         # Note that physical disk devicess in general may be either disks, partitions with regular file systems (like ext4) or zfs pools, which may contain many file systems
         if ($fs->{Filesystem} =~ /\/dev\/(.+)/) {
+            next if ($fs->{Type} eq 'squashfs');
+            next if ($fs->{Filesystem} =~ /\/dev\/loop/);
             my $name = $1;
             if ($name =~ /mapper\/(\w+-)(.+)/) {
                 $name = "$1$2";
@@ -3255,6 +3276,8 @@ END
         my $rootdev = $1 if ($fs->{name} =~ /([A-Za-z]+)\d*/);
         if ($fs->{children}) {
             foreach my $fs2 (@{$fs->{children}}) {
+                next if ($fs2->{type} eq 'loop');
+                next if ($fs2->{type} eq 'squashfs');
                 if ($filesystems{$fs2->{name}}) {
                     $filesystems{$fs2->{name}}->{blocksize} = $fs2->{size};
                 } elsif (!$zdevs{$fs2->{name}} && !$zdevs{$rootdev}) { # Don't add partitions already used for ZFS
@@ -3271,6 +3294,8 @@ END
                 }
             }
         } elsif (!$zdevs{$fs->{name}}) { # Don't add disks already used for ZFS
+            next if ($fs->{type} eq 'loop');
+            next if ($fs->{type} eq 'squashfs');
             my $mp = $fs->{mountpoint};
             next if ($fs->{type} eq 'rom');
             $filesystems{$fs->{name}} = {
@@ -3309,6 +3334,8 @@ END
     my $jsonreply;
     if ($action eq 'getbackupdevice' || $action eq 'getimagesdevice') {
         return ''; # We should not get here
+    } elsif ($action eq 'getstoragedevices') {
+        return \%filesystems;
     } elsif ($action eq 'listimagesdevices') {
         $jsonreply .= qq|{"identifier": "name", "label": "nametype", "action": "$action", "items": |;
         my @vals = sort {$b->{'isimagesdev'} cmp $a->{'isimagesdev'}} values %filesystems;
@@ -3535,6 +3562,7 @@ END
             $register{$curimg}->{'btime'} = $btime ;
             $res .= "Status=OK $curimg has btime: " . scalar localtime( $btime ) . "\n";
         } else {
+            $register{$curimg}->{'btime'} = '' ;
             $res .= "Status=OK $curimg has no btime\n";
         }
     } else {
@@ -3686,6 +3714,23 @@ END
         $postreply .=  "Status=OK Activated $newpath, $name, $newuuid\n";
     } else {
         $postreply .=  "Status=ERROR Unable to activate $imagepath to $newpath\n";
+    }
+    return $postreply;
+}
+
+sub Uploadtoregistry {
+    my ($path, $action, $obj) = @_;
+    if ($help) {
+        return <<END
+GET:image, force:
+Upload an image to the registry. Set [force] if you want to force overwrite images in registry - use with caution.
+END
+    }
+    $force = $obj->{'force'};
+    if (-e $path && ($register{$path}->{'user'} eq $user || $isadmin)) {
+        $postreply .= $main::uploadToOrigo->($engineid, $path, $force);
+    } else {
+        $postreply .= "Status=Error Not allowed\n";
     }
     return $postreply;
 }
@@ -4163,12 +4208,12 @@ END
             my $pid = $daemon->Init() or do {$postreply .= "Status=ERROR $@\n";};
             $postreply .=  "Status=OK $uistatus $obj->{type} image: $obj->{name}\n";
             $main::syslogit->($user, "info", "$uistatus $obj->{type} image: $obj->{name}: $uuid");
-            1;
         } or do {$postreply .= "Status=ERROR $@\n";};
         $main::updateUI->({tab=>"images", user=>$user, type=>"update"});
     } else {
         $postreply .= "Status=ERROR Only img and vmdk images can be converted\n";
     }
+    return $postreply;
 }
 
 sub Snapshot {
@@ -4543,6 +4588,8 @@ END
                     } else {
                         $cmd = qq[zfs send -R $ipath\@SNAPSHOT-$snap1 | zfs receive $bpath];
                         $res .= `$cmd 2>&1`;
+                        $cmd = qq|zfs set readonly=on $bpath|;
+                        $res .= `$cmd 2>&1`;
                     }
                     $postreply .= "Status=OK Sending complete ZFS snapshot of $macip:$ipath\@$snap1 to $bpath $res\n";
                     $main::syslogit->($user, 'info', "OK Sending complete ZFS snapshot of $macip:$ipath\@$snap1 to $bpath $res");
@@ -4652,21 +4699,86 @@ END
     return $postreply;
 }
 
+sub Backupfuel {
+    my ($image, $action, $obj) = @_;
+    if ($help) {
+        return <<END
+GET:username, dozfs:
+Backs up a user's fuel storage. If [dozfs] is set, fuel on ZFS volumes is backed up, even if it should be handled by regular ZFS backups.
+END
+    }
+    my $username = $obj->{'username'} || $user;
+    return "Status=Error Not allowed\n" unless ($isadmin || $username eq $user);
+
+    my $remolder = "14D";
+    my $stordevs = Liststoragedevices('', 'getstoragedevices');
+    my $backupdev = Getbackupdevice('', 'getbackupdevice');
+    my $backupdevtype = $stordevs->{$backupdev}->{type};
+    foreach my $spool (@spools) {
+        my $ppath = $spool->{"path"};
+        my $pid = $spool->{"id"};
+        if (($spool->{"zfs"} && $backupdevtype eq 'zfs') && !$obj->{'dozfs'}) {
+            $postreply .= "Status=OK Skipping fuel on ZFS storage: $ppath/$username/fuel\n";
+        } elsif ($pid eq '-1') {
+            ;
+        } elsif (!$backupdir || !(-d $backupdir)) {
+            $postreply .= "Status=OK Backup dir $backupdir does not exist\n";
+        } elsif (-d "$ppath/$username/fuel" && !is_folder_empty("$ppath/$username/fuel")) {
+            my $srcdir = "$ppath/$username/fuel";
+            my $destdir = "$backupdir/$username/fuel/$pid";
+
+            `mkdir -p "$destdir"` unless (-e "$destdir");
+            # Do the backup
+            my $cmd = qq|/usr/bin/rdiff-backup --print-statistics "$srcdir" "$destdir"|;
+            my $res = `$cmd`;
+            $cmd = qq|/usr/bin/rdiff-backup --print-statistics --force --remove-older-than $remolder "$destdir"|;
+            $res .= `$cmd`;
+            if ($res =~ /Errors 0/) {
+                my $change = $1 if ($res =~ /TotalDestinationSizeChange \d+ \((.+)\)/);
+                $postreply .= "Status=OK Backed up $change, $srcdir -> $destdir\n";
+                $main::syslogit->($user, "info", "OK backed up $change, $srcdir -> $destdir") if ($change);
+            } else {
+                $res =~ s/\n/ /g;
+                $postreply .= "Status=Error There was a problem backup up $srcdir -> $destdir: $res\n";
+                $main::syslogit->($user, "there was a problem backup up $srcdir -> $destdir");
+            }
+        } else {
+            $postreply .= "Status=OK Skipping empty fuel on: $ppath/$username/fuel\n";
+        }
+    }
+    return $postreply;
+}
+
+sub is_folder_empty {
+    my $dirname = shift;
+    opendir(my $dh, $dirname) or die "Not a directory";
+    return scalar(grep { $_ ne "." && $_ ne ".." } readdir($dh)) == 0;
+}
+
 sub Backup {
     my ($image, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET:image:
-Backs an image up.
+GET:image, skipzfs:
+Backs an image up. Set [skipzfs] if ZFS backup is configured, and you do not want to skip images on ZFS storage.
 END
     }
-    my $path = $obj->{path};
+    my $path = $obj->{path} || $image;
     my $status = $obj->{status};
+    my $skipzfs = $obj->{skipzfs};
     $uistatus = "backingup";
     $uipath = $path;
     my $remolder;
     $remolder = "14D" if ($obj->{bschedule} eq "daily14");;
     $remolder = "7D" if ($obj->{bschedule} eq "daily7");
+
+    my $stordevs = Liststoragedevices('', 'getstoragedevices');
+    my $backupdev = Getbackupdevice('', 'getbackupdevice');
+    my $backupdevtype = $stordevs->{$backupdev}->{type};
+    # Nodes are assumed to alwasy use ZFS
+    if ($backupdevtype eq 'zfs' && $skipzfs && ($obj->{regstoragepool} == -1 || $spools[$obj->{regstoragepool}]->{'zfs'})) {
+        return "Status=OK Skipping image on ZFS $path\n";
+    }
     if ($status eq "snapshotting" || $status eq "unsnapping" || $status eq "reverting" || $status eq "cloning" ||
         $status eq "moving" || $status eq "converting") {
         $postreply .= "Status=ERROR Problem backing up $obj->{type} image: $obj->{name}\n";

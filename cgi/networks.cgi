@@ -19,8 +19,7 @@ use List::Util qw(shuffle);
 use lib dirname (__FILE__);
 use Stabile;
 
-$datanic = $Stabile::config->get('ENGINE_DATA_NIC') || "eth0";
-$extnic = $Stabile::config->get('EXTERNAL_NIC') || $datanic;
+($datanic, $extnic) = $main::getNics->();
 $extsubnet = $Stabile::config->get('EXTERNAL_SUBNET_SIZE');
 $proxynic = $Stabile::config->get('PROXY_NIC') || $extnic;
 $proxyip = $Stabile::config->get('PROXY_IP');
@@ -69,6 +68,7 @@ sub getObj {
     $console = 1 if $h{"console"};
     $api = 1 if $h{"api"};
     my $uuid = $h{"uuid"};
+    my $action = $h{'action'};
     $uuid = $curuuid if ($uuid eq 'this');
     if ($uuid =~ /(\d+\.\d+\.\d+\.\d+)/) { # ip addresses are unique across networks so we allow this
         foreach my $val (values %register) {
@@ -1289,14 +1289,15 @@ END
     # Enable nat'ing
     eval {
         my $masq = `/sbin/iptables -L -n -t nat`;
-        if (!($masq =~ "MASQUERADE.+all.+--.+0\.0\.0\.0/0")) {
-            `/sbin/iptables --table nat --append POSTROUTING --out-interface $extnic -s 10.0.0.0/8 -j MASQUERADE`;
+#        if (!($masq =~ "MASQUERADE.+all.+--.+0\.0\.0\.0/0")) {
+        `/sbin/iptables -D POSTROUTING -t nat --out-interface $extnic -s 10.0.0.0/8 -j MASQUERADE`;
+        `/sbin/iptables -A POSTROUTING -t nat --out-interface $extnic -s 10.0.0.0/8 -j MASQUERADE`;
             # Christian's dev environment
 #            my $interfaces = `/sbin/ifconfig`;
 #            if ($interfaces =~ m/ppp0/) {
 #                `/sbin/iptables --table nat --append POSTROUTING --out-interface ppp0 -s 10.0.0.0/8 -j MASQUERADE`;
 #            }
-        };
+#        };
         1;
     } or do {print "Unable to enable masquerading: $@\n";};
 
@@ -1414,8 +1415,9 @@ END
 
         # Check if external ip exists and routing configured, if not create and configure it
         if ($type eq "ipmapping") {
-            if ($internalip && $internalip ne "--" && $externalip && $externalip ne "--" && !($interfaces =~ m/$externalip/g)) {
-                $externalip =~ /\d+\.\d+\.\d+\.(\d+)/; my $ipend = $1;
+            if ($internalip && $internalip ne "--" && $externalip && $externalip ne "--" && !($interfaces =~ m/$externalip /g)) { # the space is important
+                $externalip =~ /\d+\.\d+\.(\d+\.\d+)/;
+                my $ipend = $1; $ipend =~ s/\.//g;
                 eval {`/sbin/ifconfig $extnic:$id-$ipend $externalip/$extsubnet up`; 1;}
                     or do {$e=1; $postreply .= "Status=ERROR Problem adding interface $extnic:$id-$ipend $@\n";};
                 unless (`ip addr show dev $extnic` =~ /$externalip/) {
@@ -1444,6 +1446,14 @@ END
                                 or do {$e=2; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                             eval {`/sbin/iptables -A PREROUTING -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
                                 or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            # PREROUTING is not parsed for packets coming from local host...
+                            eval {`/sbin/iptables -A OUTPUT -t nat -p tcp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
+                                or do {$e=2; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            eval {`/sbin/iptables -A OUTPUT -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
+                                or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            # We masquerade packets going to internalip from externalip to avoid confusion
+                            eval {`/sbin/iptables -A POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`; 1;}
+                                or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
                         }
                     }
                     # When receiving packet from client, if it's been routed (, and outgoing interface) is the external interface, map.
@@ -1459,6 +1469,11 @@ END
                 } else {
                     eval {`/sbin/iptables -A PREROUTING -t nat -d $externalip -j DNAT --to $internalip`; 1;}
                         or do {$e=7; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    eval {`/sbin/iptables -A OUTPUT -t nat -d $externalip -j DNAT --to $internalip`; 1;}
+                        or do {$e=7; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    # We masquerade packets going to internalip from externalip to avoid confusion
+                    eval {`/sbin/iptables -A POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`; 1;}
+                        or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
 
                     # When receiving packet from client, if it's been routed (, and outgoing interface is the external interface), map.
 #                    eval {`/sbin/iptables -I POSTROUTING -t nat -o $extnic -s $internalip -j SNAT --to-source $externalip`; 1; }
@@ -1621,9 +1636,9 @@ END
         my @regvalues = values %register;
         if (
             $id!=0 && $id!=1 && (!$domains || $domains eq '--')
-                && (!$systems || $systems eq '--' || $force)
+                && ((!$systems || $systems eq '--' || $force)
                 # allow internalip's to be removed if active and only linked, i.e. not providing dhcp
-                && ($status eq 'down' || $status eq 'new' || $status eq 'nat' || ($type eq 'internalip' && ($systems eq '--' || $force)))
+                || ($status eq 'down' || $status eq 'new' || $status eq 'nat' || ($type eq 'internalip' && $systems && $systems ne '--')))
         ) {
             # Deconfigure internal dhcp server and DNS
             if ($type eq "internalip") {
@@ -1722,17 +1737,20 @@ END
         return $postreply;
     }
 
+    my $idleft = ($id>99)?(substr $id,0,-2)+0 : 0;
+    my $idright = (substr $id,-2) + 0;
     my $e = 0;
+    my $duprules = 0;
     # Check if external ip exists and take it down if so
     if ($type eq "ipmapping") {
         if ($internalip && $internalip ne "--" && $externalip && $externalip ne "--" && ($interfaces =~ m/$externalip/g)) {
-            $externalip =~ /\d+\.\d+\.\d+\.(\d+)/; my $ipend = $1;
-            my $res;
+            $externalip =~ /\d+\.\d+\.(\d+\.\d+)/;
+            my $ipend = $1; $ipend =~ s/\.//g;
             eval {`/sbin/ifconfig $extnic:$id-$ipend down`; 1;} or do {$e=1; $postreply .= "Status=ERROR $@\n";};
 
             if ($ports && $ports ne "--") { # Port mapping is defined
                 my @portslist = split(/, ?| /, $ports);
-                foreach $port (@portslist) {
+                foreach my $port (@portslist) {
                     my $ipfilter;
                     if ($port =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)(\/\d+)?:(\d+)/) {
                         my $portip = "$1.$2.$3.$4$5";
@@ -1746,45 +1764,47 @@ END
                         $ports = "--";
                         last;
                     }
-
                     if ($port>1 || $port<65535) {
                         # repeat for good measure
-                        for (my $di=0; $di < 2; $di++) {
-                            eval {`/sbin/iptables -D PREROUTING -t nat -p tcp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
+                        for (my $di=0; $di < 10; $di++) {
+                            $duprules = 0;
+                            eval {$duprules++ if (`/sbin/iptables -D PREROUTING -t nat -p tcp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`); 1;}
                                 or do {$postreply .= "Status=ERROR $@\n"; $e=1};
-                            eval {`/sbin/iptables -D PREROUTING -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`; 1;}
+                            eval {$duprules++ if (`/sbin/iptables -D PREROUTING -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`); 1;}
                                 or do {$postreply .= "Status=ERROR $@\n"; $e=1};
+                            eval {$duprules++ if (`/sbin/iptables -D OUTPUT -t nat -p tcp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`); 1;}
+                                or do {$postreply .= "Status=ERROR $@\n"; $e=1};
+                            eval {$duprules++ if (`/sbin/iptables -D OUTPUT -t nat -p udp $ipfilter -d $externalip --dport $port -j DNAT --to $internalip`); 1;}
+                                or do {$postreply .= "Status=ERROR $@\n"; $e=1};
+                            eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`); 1;}
+                                or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                            last if ($duprules >4);
                         }
                     }
                 }
                 # repeat for good measure
-                for (my $di=0; $di < 2; $di++) {
-                    # keep old deletion statement for clearing out old rules on running valves
-                    #eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
-                    #    or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
+                for (my $di=0; $di < 10; $di++) {
+                    $duprules = 0;
+                    eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`); 1; }
                         or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    last if ($duprules);
                 }
                 eval {`/sbin/iptables -D INPUT -d $externalip -j DROP`; 1;} # Drop traffic to all other ports
                     or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
             } else {
                 # repeat for good measure
-                for (my $di=0; $di < 2; $di++) {
-                    eval {`/sbin/iptables -D PREROUTING -t nat -d $externalip -j DNAT --to $internalip`; 1;}
+                for (my $di=0; $di < 10; $di++) {
+                    $duprules = 0;
+                    eval {$duprules++ if (`/sbin/iptables -D PREROUTING -t nat -d $externalip -j DNAT --to $internalip`); 1;}
                         or do {$postreply .= "Status=ERROR $@\n"; $e=1};
-
-                    # keep old deletion statement for clearing out old rules on running valves
-                    #eval {`/sbin/iptables -D POSTROUTING -t nat -o $extnic -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
-                    #    or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                    eval {`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
+                    eval {$duprules++ if (`/sbin/iptables -D OUTPUT -t nat -d $externalip -j DNAT --to $internalip`); 1;}
+                        or do {$postreply .= "Status=ERROR $@\n"; $e=1};
+                    eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`); 1;}
+                        or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`); 1; }
                         or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+                    last if ($duprules >3);
                 }
-                # Below is only to support Chr.'s development environment...
-#                if ($interfaces =~ m/ppp0/) {
-#                    eval {`/sbin/iptables -D POSTROUTING -t nat -o ppp0 -s $internalip -j SNAT --to-source $externalip`; 1; }
-#                        or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-#                }
-        #		eval {`/sbin/iptables -D INPUT -p tcp -m state --state NEW -i eth0 -d $seip -j ACCEPT`; 1;} or do {$e=1; print "\nStatus=ERROR $@";};
             }
         }
     } elsif ($type eq "externalip") {
@@ -1792,17 +1812,15 @@ END
             # We are dealing with multiple upstream routes - configure local routing
             if ($proxynic && $proxynic ne $extnic) {
                 my $proxyroute = `/sbin/ip route show table proxyarp`;
-#                `/sbin/ip route del $externalip/32 dev $datanic.$id:proxy src $proxyip table proxyarp` if ($proxyroute =~ /$externalip/);
                 `/sbin/ip route del $externalip/32 dev br$id:proxy src $proxyip table proxyarp` if ($proxyroute =~ /$externalip/);
             }
 
-#            eval {`/sbin/ip route del $externalip/32 dev $datanic.$id:proxy`; 1;}
             eval {`/sbin/ip route del $externalip/32 dev br$id:proxy`; 1;}
                 or do {$e=1; $postreply .= "Status=ERROR Problem deconfiguring proxy arp $@\n";};
 
             if ($ports && $ports ne "--") {
                 my @portslist = split(/, ?| /, $ports);
-                foreach $port (@portslist) {
+                foreach my $port (@portslist) {
                     my $ipfilter;
                     if ($port =~ /(\d+)\.(\d+)\.(\d+)\.(\d+)(\/\d+)?:(\d+)/) {
                         my $portip = "$1.$2.$3.$4$5";
@@ -1819,16 +1837,18 @@ END
 
                     if ($port>1 || $port<65535) {
                         # repeat for good measure
-#                        for (my $di=0; $di < 2; $di++) {
-                            eval {`/sbin/iptables -D FORWARD -p tcp -i $proxynic $ipfilter -d $externalip --dport $port -j ACCEPT`; 1;}
+                        for (my $di=0; $di < 10; $di++) {
+                            $duprules = 0;
+                            eval {$duprules++ if (`/sbin/iptables -D FORWARD -p tcp -i $proxynic $ipfilter -d $externalip --dport $port -j ACCEPT`); 1;}
                                 or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                            eval {`/sbin/iptables -D FORWARD -p udp -i $proxynic $ipfilter -d $externalip --dport $port -j ACCEPT`; 1;}
+                            eval {$duprules++ if (`/sbin/iptables -D FORWARD -p udp -i $proxynic $ipfilter -d $externalip --dport $port -j ACCEPT`); 1;}
                                 or do {$e=1; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-#                        }
+                            last if ($duprules > 1);
+                        }
                     }
                 }
             }
-            # Remove rule to allow forwading from $externalip
+            # Remove rule to allow forwarding from $externalip
 	        `/sbin/iptables --delete FORWARD --in-interface $datanic.$id -s $externalip -j ACCEPT`;
             # Remove rule to disallow setting up a dhcp server
             eval {`/sbin/iptables -D FORWARD -p udp -i $proxynic -d $externalip --dport 67 -j REJECT`; 1;}

@@ -65,4 +65,5 @@ DESCRIPTION=<div class="app-description">
         <li>No lock-in: At any time you can download your images in qcow2-format</li>\
         <li>Size the server (after installation) as you like.</li>\
     </ul>\
-</div>
+</div>\
+<div><a href="https://github.com/origosys/stabile-stacks/tree/master/ubuntu-bionic">Stack source code</a></div>

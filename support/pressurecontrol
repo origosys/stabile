@@ -56,10 +56,15 @@ my $datanic = $cfg->param('ENGINE_DATA_NIC');
 my $basedir = "/var/www/stabile";
 $basedir = `cat /etc/stabile/basedir` if -e "/etc/stabile/basedir";
 chomp $basedir;
-
-my $baseurl = "https://localhost/stabile";
-$baseurl = `cat /etc/stabile/baseurl` if -e "/etc/stabile/baseurl";
-chomp $baseurl;
+my $baseurl;
+if (-e "/etc/stabile/baseurl") {
+    $baseurl = `cat /etc/stabile/baseurl`;
+    chomp $baseurl;
+} else {
+    my $hostname = `hostname`; chomp $hostname;
+    chomp $hostname;
+    $baseurl = "https://$hostname/stabile";
+}
 
 unless (checkDB()) {
     die "Unable to connect to db...\n";
@@ -337,9 +342,14 @@ if ($pid) {
             $cfg = new Config::Simple("/etc/stabile/config.cfg");
             my $dl = $cfg->param('DOWNLOAD_MASTERS');
             # Monitor changes in downloadmasters - only download if changed - periodic check is done below
-            if (!$downloadmasters && $dl) {
+            if ((!$downloadmasters && $dl) || $dl==2) { # 2 is force one-shot download
                 print "Now downloading master images...\n";
-                downloadMasters();
+                my $mastersavailable = downloadMasters();
+                if ($dl==2) {
+                    $cfg->param('DOWNLOAD_MASTERS',1 );
+                    $cfg->save();
+                    $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>"No new or updated masters available"}) unless ($mastersavailable);
+                }
             } else {
                 print "Not downloading master images right now...\n";
             }
@@ -791,6 +801,7 @@ sub downloadMasters {
     # Reload config in case storage setup changed
     $cfg = new Config::Simple("/etc/stabile/config.cfg");
     @spoolpaths = $cfg->param('STORAGE_POOLS_LOCAL_PATHS');
+    my @dlmasters;
 
     unless (tie %imagereg,'Tie::DBI', { # Needed for ValidateItem
         db=>'mysql:steamregister',
@@ -810,7 +821,7 @@ sub downloadMasters {
     my @cmds;
     foreach my $stackuser (keys %$stacks) {
         my $ustacks = $stacks->{$stackuser};
-        my @dowloadalerts;
+        my @downloadalerts;
         foreach my $stack (@$ustacks) {
             my $fname = $stack->{'filename'};
             my $name = $stack->{'name'};
@@ -827,6 +838,7 @@ sub downloadMasters {
             my $vsize = $stack->{'virtualsize'};
             my $fsize2 = $stack->{'size2'};
             my $frealsize = $stack->{'realsize'};
+            my $frealsize2 = $stack->{'realsize2'};
             my $imgurl = "$stack->{'url'}?auth_tkt=$stack->{'tkt'}";
             my $imgurl2;
             my $match;
@@ -863,7 +875,8 @@ sub downloadMasters {
                     $msg = "Image $fname not found. Downloading $fsize bytes to $f ($stack->{url})... ";
                     my $msize = int($fsize /1024/1024);
                     my $uimsg = qq|Now downloading $name ($msize) MB)|;
-                    push @dowloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg};
+                    push @downloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg, download=>$f, name=>$name, size=>$frealsize};
+                    push @dlmasters, $name;
 #                    $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
                     $cmd = qq|wget --no-check-certificate --no-verbose --tries=4 -a /mnt/stabile/images/stacks-xfer.log -O "$f" $imgurl|;
                     $cmd .= qq|; rm "$f.meta"; steamExec updateimagestatus "$f" installable $vsize; steamExec updatebackingfile "$f"|;
@@ -941,8 +954,8 @@ sub downloadMasters {
                         $msg .= "Image2 $fname2 not found. Downloading $fsize2 bytes to $f2... ";
                         my $msize = int($fsize2 /1024/1024);
                         my $uimsg = qq|Now downloading $name2 ($msize) MB)|;
-                        push @dowloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg};
-#                        $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
+                        push @downloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg, download=>$f2, name=>$name2, size=>$frealsize2};
+                        push @dlmasters, $name;
                         $cmd2 = qq|wget --no-check-certificate --no-verbose --tries=4 -a /mnt/stabile/images/stacks-xfer.log -O "$f2" $imgurl2|;
                         $cmd2 .= qq|; rm "$f2.meta"; steamExec updateimagestatus "$f2" downloaded $fsize2; steamExec updatebackingfile "$f2"|;
                     } else {
@@ -974,7 +987,7 @@ sub downloadMasters {
             push @cmds, $cmd if ($cmd);
             push @cmds, $cmd2 if ($cmd2);
             print "$msg\n" if ($msg);
-            $main::updateUI->(@dowloadalerts) if (@dowloadalerts); # notify user
+            $main::updateUI->(@downloadalerts) if (@downloadalerts); # notify user
             $main::syslogit->($stackuser, 'info', $msg) if ($msg && ($cmd || $cmd2));
         }
     }
@@ -989,6 +1002,7 @@ sub downloadMasters {
             ) or do {$msg = "Error downloading $fname $@";};
         my $pid = $daemon->Init() or do {$msg = "Error downloading $fname $@";};
     }
+    return @dlmasters;
 }
 
 sub TERMINATE {

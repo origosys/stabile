@@ -113,7 +113,7 @@ END
 
     \$(document).ready(function () {
         \$( "#resize_storage" ).prop( "disabled", true );
-        updatestorageStatus();
+        setTimeout(function(){ updatestorageStatus(); }, 10000);
     });
 
 END

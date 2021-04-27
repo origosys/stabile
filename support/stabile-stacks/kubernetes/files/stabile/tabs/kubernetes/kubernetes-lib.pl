@@ -159,7 +159,14 @@ END
 END
             ;
         } else {
-            return qq|Content-type: text/html\n\n$form|;
+            return <<END
+Content-type: text/htm
+
+$form
+<script>
+    \$( "#accordion" ).accordion({header: "h6", heightStyle: "content", icons: { "header": "glyphicon glyphicon-chevron-right", "activeHeader": "glyphicon glyphicon-chevron-down" }});
+</script>
+END
         }
 
     } elsif ($action eq 'js') {
@@ -285,7 +292,7 @@ END
                     $res = `curl -ks -X POST -d '{"uuid": "$ip", "action": "activate"}' https://$gw/stabile/networks`;
                 }
                 else {
-                    $message = "Unable to allocate $iptype IP - check your quota";
+                    $message = "Unable to allocate $iptype - check your quota";
                 }
             } elsif ($kubeip =~ /\d+\.\d+\.\d+\.\d+/) { # Remove an ip address
                 my @newlines = ();

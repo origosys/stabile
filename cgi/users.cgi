@@ -294,7 +294,8 @@ END
         my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
 
         $postreq->{'engineid'} = $engineid;
-        $postreq->{'user'} = $tktuser;
+#        $postreq->{'user'} = $tktuser;
+        $postreq->{'user'} = $user;
         $postreq->{'enginetkthash'} = Digest::SHA::sha512_hex($tktkey);
 
         my $content = $browser->post("https://www.stabile.io/irigo/engine.cgi?action=listengines", $postreq)->content();
@@ -355,11 +356,11 @@ END
              }
 
          } elsif ($action eq "billingstatus" || $action eq "usagestatus") {
-             $virtualsizegb = $stats{'virtualsize'};
-             $backupsizegb = $stats{'backupsize'};
-             $externalip = $stats{'externalip'};
-             $memorygb = $stats{'memory'};
-             $nodevirtualsizegb = $stats{'nodevirtualsize'};
+             my $virtualsizegb = $stats{'virtualsize'};
+             my $backupsizegb = $stats{'backupsize'};
+             my $externalip = $stats{'externalip'};
+             my $memorygb = $stats{'memory'};
+             my $nodevirtualsizegb = $stats{'nodevirtualsize'};
              $rx = $stats{'rx'};
              $tx = $stats{'tx'};
              $vcpu = $stats{'vcpu'};
@@ -406,10 +407,10 @@ END
                  $postreply .= to_json($bill, {pretty=>1});
              }
          } elsif ($action eq "billingavgstatus" || $action eq "usageavgstatus") {
-             $virtualsizeavggb = $stats{'virtualsizeavg'};
-             $backupsizeavggb = $stats{'backupsizeavg'};
-             $memoryavggb = $stats{'memoryavg'};
-             $nodevirtualsizeavggb = $stats{'nodevirtualsizeavg'};
+             my $virtualsizeavggb = $stats{'virtualsizeavg'};
+             my $backupsizeavggb = $stats{'backupsizeavg'};
+             my $memoryavggb = $stats{'memoryavg'};
+             my $nodevirtualsizeavggb = $stats{'nodevirtualsizeavg'};
              $vcpuavg = $stats{'vcpuavg'};
              $externalipavg = $stats{'externalipavg'};
              $rx = $stats{'rx'};
@@ -1341,8 +1342,8 @@ sub collectBillingData {
                 $networkuuid = $valref->{'networkuuid2'};
                 if ($networkreg{$networkuuid}) {
                     $networktype = $networkreg{$networkuuid}->{'type'};
+                    $externalip++ if ($networktype eq 'externalip'|| $networktype eq 'ipmapping');
                 }
-                $externalip++ if ($networktype eq 'externalip'|| $networktype eq 'ipmapping');
             }
         }
         untie %domreg;

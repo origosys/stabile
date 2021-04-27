@@ -195,8 +195,9 @@ sub getObj {
     }
 
     # Security check
-    if ($status eq 'new' && (($action && $action ne '--') || !$image || $image eq '--')) {
-        $posterror .= "Status=ERROR Bad server data: $name\n";
+    if ($status eq 'new' && (($action && $action ne '--' && $action ne 'save') || !$image || $image eq '--')) {
+        $postreply .= "Status=ERROR Bad server data: $name\n";
+        $postmsg = "Bad server data";
         return 0;
     }
     if (!$reguser && $status ne 'new'
@@ -429,6 +430,7 @@ END
     @curregvalues = (sort {$a->{'status'} cmp $b->{'status'}} @curregvalues); # Sort by status
 
     # Sort @curregvalues
+    @curregvalues = (sort {$b->{'name'} <=> $a->{'name'}} @curregvalues); # Always sort by name first
     my $sort = 'status';
     $sort = $2 if ($uripath =~ /sort\((\+|\-)(\S+)\)/);
     my $reverse;
@@ -795,7 +797,8 @@ END
         $Stabile::Networks::console = 1;
 
         foreach my $dom (values %register) {
-            if ($dom->{'autostart'} eq 'true') {
+            if ($dom->{'autostart'} eq '1' || $dom->{'autostart'} eq 'true') {
+                $res .= "Checking if $dom->{'name'} ($dom->{'user'}, $dom->{'uuid'}) should be started\n";
                 my $networkstatus1 = $networkreg{$dom->{'networkuuid1'}}->{status};
                 my $networkstatus2 = ($networkreg{$dom->{'networkuuid2'}})?$networkreg{$dom->{'networkuuid2'}}->{status}:'';
                 my $networkstatus3 = ($networkreg{$dom->{'networkuuid3'}})?$networkreg{$dom->{'networkuuid3'}}->{status}:'';
@@ -807,7 +810,7 @@ END
                 for ($i=0; $i<5; $i++) { # wait for status newer than 10 secs
                     validateItem($dom);
                     last if (time() - $dom->{timestamp} < 10);
-                    $mes .= "Waiting for newer timestamp, current is " . (time() - $dom->{timestamp}) . " old\n";
+                    $mes = "Waiting for newer timestamp, current is " . (time() - $dom->{timestamp}) . " old\n";
                     print $mes if ($console);
                     $res .= $mes;
                     sleep 2;
@@ -853,6 +856,8 @@ END
                         }
                     }
                 }
+            } else {
+                $res .= "Not marked for autostart $dom->{'name'} ($dom->{'user'}, $dom->{'uuid'})\n";
             }
         }
     }
@@ -1076,10 +1081,14 @@ END
             my $fmt2 = ($image2 =~ /\.qcow2$/)?'qcow2':'raw';
             my $fmt3 = ($image3 =~ /\.qcow2$/)?'qcow2':'raw';
             my $fmt4 = ($image4 =~ /\.qcow2$/)?'qcow2':'raw';
-            $driver1 = "\n      <driver name='qemu' type='$fmt1' cache='default'/>";
-            $driver2 = "\n      <driver name='qemu' type='$fmt2' cache='default'/>";
-            $driver3 = "\n      <driver name='qemu' type='$fmt3' cache='default'/>";
-            $driver4 = "\n      <driver name='qemu' type='$fmt4' cache='default'/>";
+            my $cache1 = ($image =~ /\/node\//)?'default':'writeback';
+            my $cache2 = ($image2 =~ /\/node\//)?'default':'writeback';
+            my $cache3 = ($image3 =~ /\/node\//)?'default':'writeback';
+            my $cache4 = ($image4 =~ /\/node\//)?'default':'writeback';
+            $driver1 = "\n      <driver name='qemu' type='$fmt1' cache='$cache1'/>";
+            $driver2 = "\n      <driver name='qemu' type='$fmt2' cache='$cache2'/>";
+            $driver3 = "\n      <driver name='qemu' type='$fmt3' cache='$cache3'/>";
+            $driver4 = "\n      <driver name='qemu' type='$fmt4' cache='$cache4'/>";
         }
 
         my $networktype1 = "user";

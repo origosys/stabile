@@ -31,8 +31,7 @@ my $engineid = $Stabile::config->get('ENGINEID') || "";
 my $enginename = $Stabile::config->get('ENGINENAME') || "";
 my $doxmpp = $Stabile::config->get('DO_XMPP') || "";
 my $disablesnat = $Stabile::config->get('DISABLE_SNAT') || "";
-my $datanic = $Stabile::config->get('ENGINE_DATA_NIC') || "eth0";
-my $extnic = $Stabile::config->get('EXTERNAL_NIC') || $datanic;
+my ($datanic, $extnic) = $main::getNics->();
 my $extiprangestart = $Stabile::config->get('EXTERNAL_IP_RANGE_START');
 my $extiprangeend = $Stabile::config->get('EXTERNAL_IP_RANGE_END');
 
@@ -970,7 +969,8 @@ END
         return $postreply;
     }
     my $msg = "Engine updated";
-    if ($obj->{'downloadmasters'} eq '--' || $obj->{'downloadmasters'} eq '0') {
+    my $dl = $obj->{'downloadmasters'};
+    if ($dl eq '--' || $dl eq '0') {
         if ($downloadmasters) {
             $downloadmasters = '';
             `perl -pi -e 's/DOWNLOAD_MASTERS=.*/DOWNLOAD_MASTERS=0/;' /etc/stabile/config.cfg`;
@@ -978,13 +978,17 @@ END
         $postreply .= "Status=OK Engine updated\n";
         my @ps = split("\n",  `pgrep pressurecontrol` ); `kill -HUP $ps[0]`;
     }
-    elsif ($obj->{'downloadmasters'} eq '1') {
-        unless ($downloadmasters) {
+    elsif ($dl eq '1' || $dl eq '2') {
+        if (!$downloadmasters || $dl eq '2') { # We use a value of 2 to force check for downloads
             $downloadmasters = 1;
-            `perl -pi -e 's/DOWNLOAD_MASTERS=.*/DOWNLOAD_MASTERS=1/;' /etc/stabile/config.cfg`;
+            `perl -pi -e 's/DOWNLOAD_MASTERS=.*/DOWNLOAD_MASTERS=$dl/;' /etc/stabile/config.cfg`;
+        }
+        if ($dl eq '2') {
+            $msg = "Checking for new or updated masters...";
         }
         $postreply .= "Status=OK Engine updated\n";
-        my @ps = split("\n",  `pgrep pressurecontrol` ); `kill -HUP $ps[0]`;
+        my @ps = split("\n",  `pgrep pressurecontrol` );
+        `kill -HUP $ps[0]`;
     }
     elsif ($obj->{'disablesnat'} eq '--' || $obj->{'disablesnat'} eq '0') {
         if ($disablesnat) {
@@ -2832,7 +2836,8 @@ sub getSystemsListing {
     }
 
     @curregvalues = values %curreg;
-    my @sorted_systems = sort {$a->{'status'} cmp $b->{'status'}} @curregvalues;
+    my @sorted_systems = sort {$a->{'name'} cmp $b->{'name'}} @curregvalues;
+    @sorted_systems = sort {$a->{'status'} cmp $b->{'status'}} @sorted_systems;
 
     if ($action eq 'tablelist') {
         my $t2 = Text::SimpleTable->new(40,24,14);
@@ -3509,7 +3514,7 @@ sub remove {
                         {tab=>'servers',
                         user=>$user,
                         type=>'update',
-                        message=>((scalar @domains==1)?"Server has been removed":"App has been removed!")
+                        message=>((scalar @domains==1)?"Server has been removed":"Stack has been removed!")
                         },
                         {tab=>'images',
                         user=>$user

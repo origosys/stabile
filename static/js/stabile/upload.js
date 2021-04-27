@@ -199,7 +199,7 @@ define([
                     jQuery.get("/stabile/images?action=urlupload\&path=" + encodeURIComponent(file.path) + "\&getsize=1",
                         function(data) {
                             if (data.status == 'OK') {
-                                percent = 100*data.size/file.size;
+                                percent = Math.round(100*data.size/file.size);
                                 file.loaded = data.size;
                                 file.percent = percent;
                                 uploader.trigger('UploadProgress', file);
@@ -288,7 +288,7 @@ define([
             '</div>'].join('\n');
 
             upload.dialog = new dijit.Dialog({ id: 'uploadDialog', onCancel: function() {if (upload.files_uploaded) {upload.files_uploaded=false;images.grid.refresh();}}});
-            upload.dialog.set('title', 'Upload Image');
+            upload.dialog.set('title', 'Image Transfers');
             upload.dialog.set('content', content);
             var q = dojo.query('#irigo-upload-tooltip', upload.dialog.domNode);
             if(q.irigoTooltip){q.irigoTooltip();};
@@ -341,7 +341,7 @@ define([
                                 IRIGO.toast("Error #" + err.code + ": " + err.message);
                             }
                         }
-                        $('div.plupload_progress').css('display', 'none');
+                        //$('div.plupload_progress').css('display', 'none');
                     },
                     FilesAdded: function(up, files) {
                         updateList();
@@ -355,9 +355,9 @@ define([
                         handleStatus(file);
                         dojo.publish('upload:file_uploaded');
                         upload.files_uploaded = true;
-                        $('div.plupload_progress').css('display', 'none');
+                        //$('div.plupload_progress').css('display', 'none');
                     },
-                    QueueChanged: function(){
+                    QueueChanged: function() {
                         updateList();
                     },
                     StateChanged: function(up) {

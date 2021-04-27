@@ -377,11 +377,18 @@ END
 
     # Rebase image
     if ($rebase) { # Flatten image
+        sleep 5;
         print ">> Rebasing and flattening image...\n";
         print `qemu-img rebase --force-share -f qcow2 -b "" "$cwd/$dname.master.qcow2"`;
     } elsif ($masterpath) { # Update backing file path
-        print ">> Rebasing to new backing file path ...\n";
-        print `qemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"` if ($masterpath);
+        sleep 5;
+        print ">> Rebasing to new backing file path $masterpath...\n";
+        my $res = `qemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2" 2>\&1`;
+        if ($res =~ /Failed/) {
+            print ">> Trying agin to rebasing to new backing file path $masterpath...\n";
+            $res = `qemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2" 2>\&1`;
+            print qq|>> Rebasing failed - please rebase manually before activating:\nqemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"\n| if ($res =~ /failed/i);
+        }
     }
 }
 

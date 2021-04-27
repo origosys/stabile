@@ -35,6 +35,7 @@ spec:
       containers:
         - image: nginx
           name: nginx-nfs-site
+          command: [ 'sh', '-c', 'echo "<h1>The remote NFS volume is mounted!</h1>" > /usr/share/nginx/html/index.html && sleep 3600' ]
           resources:
             limits:
               memory: 100Mi

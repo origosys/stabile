@@ -47,35 +47,25 @@ my $mainvalvepwd = $cfg->param('ADMIN_SERVER_HTTP_PWD') ||'sunshine';
 
 my $cgset; # Have cgroup values been set?
 
-my $adminnic = $cfg->param('ADMIN_NIC');
-my $datanic = $cfg->param('DATA_NIC');
 my $initdisk = $cfg->param('INITIALIZE_LOCAL_DISK');
 $identity = $identity || $cfg->param('IDENTITY');
+
+my $adminnic = $cfg->param('ADMIN_NIC'); # This is the interface used for nfs-roots and for communcating with admin node on 10.0.0.1
+my $datanic = $cfg->param('DATA_NIC'); # This is the interface used for VM vlans
+$adminnic = $datanic if (!$adminnic && $datanic);
+$datanic = $adminnic if (!$datanic && $adminnic);
+
+if (!($datanic) || !(`ifconfig | grep flags= | sed -n -e 's/ .*//p'` =~ /^$datanic::/)) { # Make sure device exists
+    ($adminnic, $datanic) = getNics();
+}
+
+print "Using $adminnic as admin NIC\n";
+print "Using $datanic as data NIC\n";
 
 if ($identity eq 'local_kvm') {
     `iptables -D INPUT --in-interface $datanic -d 10.0.0.1 -j DROP 2>/dev/null`; # Disallow outside access to virtual internal network
     `iptables -A INPUT --in-interface $datanic -d 10.0.0.1 -j DROP`;
 }
-if (!($adminnic) || !(`/bin/cat /proc/net/dev` =~ /$adminnic:/)) { # Make sure device exists
-	# Parse the interface from a line like e.g.:
-	# 10.0.0.0        0.0.0.0         255.255.255.0   U     0      0        0 p0s31f6
-	# The nic name is the last string, preceded by a single space
-	$adminnic = `route -n | grep '10\.0\.0\.0' | sed -n -e 's/.* //p'`;
-	chomp $adminnic;
-}
-if (!($datanic) || !(`/bin/cat /proc/net/dev` =~ /$datanic:/)) { # Make sure device exists
-	my $nics = `ifconfig | grep Link | sed -n -e 's/ .*//p'`;
-	my @anics = split("\n", $nics);
-	foreach my $nic (@anics) {
-		if ($nic =~ /^lo/ || $nic =~ /$adminnic/ || $nic =~ /^br/ || $nic =~ /^virbr/) {next;}
-		elsif ($nic =~ /^en/) {$datanic = $nic; last}
-	}
-}
-$adminnic = "eno1" unless ($adminnic);
-$datanic = $adminnic unless ($datanic); # Make sure device exists
-
-print "Using $adminnic as admin NIC\n";
-print "Using $datanic as data NIC\n";
 
 # Make sure data nic is up...
 print `ifconfig $datanic up`;
@@ -171,9 +161,16 @@ if (`ifconfig $adminnic`) {
 my $mac;
 $mac = $1 if ($ifinfo =~ /HWaddr (\S+)(\s*)\n/);
 $mac = $1 if ($ifinfo =~ /ether (\S+)(\s*)/);
-print "Using mac $mac as id for this node\n";
 my $nmac = $mac;
 $nmac =~ tr/://d;
+print "Using mac $mac as id for this node\n";
+
+if ($identity eq "local_kvm" && $nmac ne $cfg->param('MAC')) {
+    $identity = '';
+    print "Network interface change detected - rejoining\n";
+}
+
+
 my $hostname = $mac;
 $mac = uri_escape($mac);
 $hostname =~ tr/://d;
@@ -238,6 +235,7 @@ while ($running) {
     	$test = 1;
         initializeLocalDisk($initdisk) if ($initdisk && $identity ne 'local_kvm');
     	updatePistonInfo();
+        TERMINATE();
     } elsif ($ARGV[0] eq 'stats' && $identity) {
     	$test = 1;
     	updatePistonStats();
@@ -417,6 +415,7 @@ while ($running) {
                 $identity = 'kvm';
             }
             $cfg->param("IDENTITY", $identity);
+            $cfg->param("MAC", $nmac);
             $cfg->save();
             logit('info', "Assimilation completed...");
     	}
@@ -610,7 +609,7 @@ sub updatePistonInfo {
                 $url .= "&status=$status&logentry=" . uri_escape($logentry);
                 my $newcontent = $browser->get($url)->content();
                 sleep 5;
-                print `/sbin/initctl --no-wait stop movepiston`;
+                print `systemctl stop movepiston`;
                 `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
                 print `poweroff`;
                 if ($@) {
@@ -621,10 +620,8 @@ sub updatePistonInfo {
             elsif ($task_1 eq "SLEEP" && $identity ne 'local_kvm') {
                 if ($identity eq "kvm") {
                     logit('info', "Taking down KVM piston");
-                    print `/etc/init.d/qemu-kvm stop`,"\n";
                 } elsif ($identity eq "vbox") {
                     logit('info', "Taking down Virtual Box piston");
-                    print `/etc/init.d/vboxdrv stop`,"\n";
                 }
                 $status = "asleep";
                 my $logentry = "$task_2: nodes: $nmac: $status: Sleep request received - putting node to sleep";
@@ -644,7 +641,7 @@ sub updatePistonInfo {
                     #print `/etc/acpi/sleep.sh`;
                     print `/bin/echo -n "mem" > /sys/power/state`;
                 } else {
-                    print `/sbin/initctl --no-wait stop movepiston`;
+                    print `systemctl stop movepiston`;
                     `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
                     print `poweroff`;
 #                    print `/sbin/shutdown -P now`;
@@ -874,7 +871,7 @@ sub updatePistonInfo {
                     changeHosts($targethost, "piston$targetmac") or
                         $logentry = "$user: servers: /etc/hosts could not be updated\n".$@."\n"; # probably only needed for KVM but...
                     my $uriport = 15900 + int(rand(200)); # Choose a random port for live migration
-                    my $cmd = "sudo -u irigo virsh -c qemu:///system migrate --migrateuri tcp://$targethost:$uriport --live $vm qemu+ssh://$targethost/system";
+                    my $cmd = "sudo -u irigo virsh -c qemu:///system migrate --migrateuri tcp://$targethost:$uriport --live --unsafe $vm qemu+ssh://$targethost/system";
                     logit('info', $cmd);
                     run_in_bg($cmd);
                 }
@@ -1269,7 +1266,7 @@ sub drowse {
             print `/etc/init.d/libvirt-bin stop`,"\n" if ($identity eq "vbox");
             print `/etc/acpi/sleep.sh`;
         } else {
-            print `/sbin/initctl --no-wait stop movepiston`;
+            print `systemctl stop movepiston`;
            `echo 0 > /proc/sys/kernel/hung_task_timeout_secs`;
             print `poweroff`;
 #            print `/sbin/shutdown -P +1`;
@@ -1649,10 +1646,15 @@ sub initializeLocalDisk {
     my $initld = shift;
     my $force = shift;
     my $res;
-    if ((-e "/dev/sda" || -e "/dev/vda")&& -e '/sbin/sfdisk') {
+    if ((-e "/dev/sda" || -e "/dev/vda" || -e "/dev/nvme0n1") && -e '/sbin/sfdisk') {
         my $dev = "sda";
         $dev = "vda" if (-e "/dev/vda");
         my $part = $dev . "1";
+        if (-e "/dev/nvme0n1") {
+            $dev = "nvme0n1";
+            $part = $dev . "p1";
+        }
+
         `chmod 666 /dev/zfs` if (-e '/dev/zfs'); # TODO: This should be removed once we upgrade to Bionic and zfs allow is supported
         my $partinfo = `/sbin/sfdisk -q -d /dev/$dev`;
         my $zlist = `zpool list`;
@@ -1751,7 +1753,7 @@ sub run_in_bg {
 
 sub setCgroups {
     if (-d "/sys/fs/cgroup") {
-        print `cgconfigparser -l /etc/cgconfig.conf`;
+        print `cgconfigparser -l /etc/stabile/cgconfig.conf`;
     } else {
         print "cgroups are not enabled!!\n";
     }
@@ -1760,11 +1762,33 @@ sub setCgroups {
 sub updateInterfaces {
     if ($identity eq 'local_kvm' || -e "/etc/stabile/config.cfg") {
         unless (`ifconfig | grep "inet 10\.0\.0\.1"`) {
-            print "Adding 10.0.0.1 as to $datanic\n";
-            `ifconfig $datanic:1 10.0.0.1/24 up`;
+#            print "Adding 10.0.0.1 as to $datanic\n";
+#            `ifconfig $datanic:1 10.0.0.1/24 up`;
+            print "Adding 10.0.0.1 as to $adminnic\n";
+            `ifconfig $adminnic:1 10.0.0.1/24 up`;
             `steamExec post-wake`;
         }
     }
+}
+
+# Enumerate and return network interfaces
+sub getNics {
+    my $droute = `ip route show default`;
+    my $externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
+    my $internalnic = $externalnic;
+    my $niclist = `ifconfig | grep flags= | sed -n -e 's/: .*//p'`;
+    # my $niclist = `netstat -in`;
+    my @nics = ();
+    push @nics, $externalnic if ($externalnic);
+    foreach my $line (split("\n", $niclist)) {
+        my $nic = $1 if ($line =~ /(\S+)/);
+        if ($nic ne 'lo' && $nic ne $externalnic && !($nic=~/^virbr/) && !($nic=~/^docker/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
+            push @nics, $1;
+        }
+    }
+    $externalnic = $nics[0] unless ($externalnic);
+    $internalnic = $nics[1] if (scalar @nics > 1);
+    return ($internalnic, $externalnic);
 }
 
 sub TERMINATE {

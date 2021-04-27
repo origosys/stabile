@@ -93,6 +93,18 @@ var ui_update = {
                 } else if (ev.type == "serial" && ev.serial) {
                     ui_update.lastev = ev.serial;
                 }
+                if (ev.download) {
+                    console.log("Starting downloader UI...");
+                    if (!upload.inited) upload.init();
+                    var nfile = new plupload.File({name: ev.name, size: ev.size, destroy: function(){;}  });
+                    nfile.url = "http://download";
+                    nfile.path = ev.download;
+                    uploader.files.push(nfile);
+                    upload.updateList();
+                    var download = new plupload.Downloader(nfile);
+                    download.start();
+                    uploader.start();
+                }
                 if ( ev.backup ) {
                     console.log("Updating missing backups...");
                     images.updateMissingBackups();
@@ -109,14 +121,16 @@ var ui_update = {
     },
 
     logout: function(msg) {
-        if (!msg) msg = "Your session has timed out";
+        var loginUrl = '/stabile/login';
+        if (location.pathname != '' || location.hash!='') loginUrl += "?back=" + location.pathname + location.hash;
+        if (!msg) msg = "Your session has timed out!";
         topic.publish("message", {
             message: msg,
             duration: 2000,
             type:"warning"
         });
         var to_login_page = function(){
-            window.location.href = '/stabile/login';
+            window.location.href = loginUrl;
         };
         setTimeout(to_login_page, 2000);
     },

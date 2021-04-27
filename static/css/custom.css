@@ -2586,3 +2586,25 @@ span.dijitContentPaneLoading {
 
 .tundra .dojoxGridLoading {
 }
+
+.plupload_progress::before {
+    content: "\e025";
+    position: absolute;
+    left: -20px;
+    font-family: 'Glyphicons Halflings';
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.missingbackups::before {
+    content: " ";
+    background-image: url("../img/icons/umbrella.png");
+    background-repeat: no-repeat;
+    display: inline-block;
+    height: 16px;
+    line-height: 16px;
+    vertical-align: text-bottom;
+    width: 22px;
+}

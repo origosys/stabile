@@ -39,9 +39,9 @@ spec:
             - name: NFS_SERVER
               value: gatewayip
             - name: NFS_PATH
-              value: nfspath
+              value: replaceme #nfspath
       volumes:
         - name: nfs-client-pool0
           nfs:
             server: gatewayip
-            path: nfspath
+            path: replaceme #nfspath

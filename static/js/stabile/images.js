@@ -742,7 +742,7 @@ define([
                     else if (backed_up>0)
                         home.missingbackups.innerHTML = '<span style="font-size:90%; color:#AAAAAA;">All your images are backed up</span>';
                     else
-                        home.missingbackups.innerHTML = '<span style="font-size:90%; color:#AAAAAA;"></span>';
+                        home.missingbackups.innerHTML = '<span style="font-size:90%; color:#AAAAAA;">No missing backups</span>';
                 }});
             }
     }
@@ -782,7 +782,16 @@ define([
         });
 
         // refresh stores on image delete
-        dojo.subscribe('images:delete', function(){
+        dojo.subscribe('images:delete', function(task) {
+            if (typeof uploader !== 'undefined' && uploader.files) { // Remove file from uploader if we just uploaded it
+                var pathname = task.path.substring(task.path.lastIndexOf("/")+1);
+                $.each(uploader.files, function(index, value) {
+                    if (value && (value.name == pathname || (value.path && value.path == task.path))) {
+                        console.log("Removing upload", pathname);
+                        uploader.removeFile(value.id);
+                    }
+                });
+            }
             // update stores.
             stores.cdroms.close();
             stores.masterimages.close();

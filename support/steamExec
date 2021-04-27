@@ -65,6 +65,8 @@ my $tenderpaths = $config->get('STORAGE_POOLS_LOCAL_PATHS') || "/mnt/stabile/ima
 my @tenderpathslist = split(/,\s*/, $tenderpaths);
 my $tendernames = $config->get('STORAGE_POOLS_NAMES') || "Standard storage";
 my @tendernameslist = split(/,\s*/, $tendernames);
+my $opentcpports = $config->get('OPEN_TCP_PORTS');
+my $openudpports = $config->get('OPEN_UDP_PORTS');
 
 $sshcmd = "ssh -l irigo -i /var/www/.ssh/id_rsa_www -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no";
 
@@ -111,10 +113,46 @@ if (lc($arg1) eq "backupallimages" ) {
     debuglog("Unmounting all images...");
     print "Unmounting all images - hang on...\n";
     unmountAllImages();
+} elsif (lc($arg1) eq "backupallfuel" ) {
+    debuglog("Backup up fuel for all users...");
+    print "Backup up fuel for all users, hang on...\n";
+    backupAllFuel();
 } elsif (lc($arg1) eq "post-wake") {
     debuglog("Running post-wake routines...");
     print `REMOTE_USER=irigo $base/cgi/networks.cgi -a gear_restoreall`;
 } elsif (lc($arg1) eq "post-boot") {
+    my $baseip;
+    if ($opentcpports || $openudpports) {
+        my $basedom = `awk -F'[/:]' '/https:/{print \$4}' /etc/stabile/baseurl`;
+        chomp $basedom;
+        $baseip = `dig +short $basedom`;
+        chomp $baseip;
+        $baseip = '' if ($baseip =~ /^127/);
+    }
+    if (($opentcpports || $openudpports) && $baseip) {
+        print `iptables -D INPUT -p icmp --icmp-type 8 -s 0/0 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 2>/dev/null`;
+        print `iptables -I INPUT -p icmp --icmp-type 8 -s 0/0 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT`;
+        print `iptables -D OUTPUT -p icmp --icmp-type 0 -d 0/0 -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null`;
+        print `iptables -I OUTPUT -p icmp --icmp-type 0 -d 0/0 -m state --state ESTABLISHED,RELATED -j ACCEPT`;
+        print `iptables -D INPUT -m conntrack -j ACCEPT --ctstate RELATED,ESTABLISHED 2>/dev/null`;
+        print `iptables -I INPUT -m conntrack -j ACCEPT --ctstate RELATED,ESTABLISHED`;
+        print `iptables -D INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null`;
+        print `iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT`;
+        print `iptables -D INPUT -d $baseip -j DROP 2>/dev/null`;
+        print `iptables -A INPUT -d $baseip -j DROP`;
+    }
+    if ($opentcpports && $baseip) {
+        print "Allowing incoming TCP traffic to $baseip for ports $opentcpports\n";
+        my $ports = join(",",split(/, ?/, $opentcpports));
+        print `iptables -D INPUT -p tcp -m tcp -m multiport --dports $ports -j ACCEPT 2>/dev/null`;
+        print `iptables -I INPUT -p tcp -m tcp -m multiport --dports $ports -j ACCEPT`;
+    }
+    if ($openudpports && $baseip) {
+        print "Allowing incoming UDP traffic to $baseip for ports $openudpports\n";
+        my $ports = join(",",split(/, ?/, $openudpports));
+        print `iptables -D INPUT -p udp -m tcp -m multiport --dports $ports -j ACCEPT 2>/dev/null`;
+        print `iptables -I INPUT -p udp -m tcp -m multiport --dports $ports -j ACCEPT`;
+    }
     if (`pgrep pressurecontrol`) {
         debuglog("Running post-boot routines...");
         print `REMOTE_USER=irigo $base/cgi/networks.cgi -a restoreall`;
@@ -124,9 +162,10 @@ if (lc($arg1) eq "backupallimages" ) {
         debuglog("Not running post-boot routines...");
     }
 } elsif (lc($arg1) eq "pre-shutdown") {
-    debuglog("Running pre-shutdown routine...");
+    debuglog("Running pre-shutdown routines...");
     unmountAllImages();
-    # TODO: if we ever mount images writable, uncomment the next line
+    debuglog("Halting nodes...");
+    `echo "nodes/haltall" | /usr/local/bin/stash`;
     #updateBillingAllNetworks();
 } elsif (lc($arg1) eq "daily") {
     debuglog("Running daily maintenance routine...");
@@ -269,19 +308,18 @@ if (lc($arg1) eq "backupallimages" ) {
             $res .= `$sshcmd $macip "/usr/bin/qemu-img convert $esc_localpath -O qcow2 $esc_localpath2"`;
         } else {
             my $mpath;
-            my $type;
             if (substr($path1,-5) eq '.vmdk' && ( -s (substr($path1,0,-5) . "-flat.vmdk") ) ) {
                 my $pathname = substr($path1,0,-5);
-                $mpath .= "\"$pathname-flat.vmdk\" ";
-            } elsif (substr($path1,-5) eq '.vmdk' && ( -s (substr($path1,0,-5) . "-s001.vmdk")) ) {
-                my $pathname = substr($path1,0,-5);
-                my $i = 1;
-                my $num = '001';
-                while (-e "$pathname-s$num.vmdk") {
-                    $mpath .= "\"$pathname-s$num.vmdk\" ";
-                    $i++;
-                	$num = substr("00$i", -3);
-                }
+                $mpath = "\"$pathname-flat.vmdk\" ";
+            # } elsif (substr($path1,-5) eq '.vmdk' && ( -s (substr($path1,0,-5) . "-s001.vmdk")) ) {
+            #     my $pathname = substr($path1,0,-5);
+            #     my $i = 1;
+            #     my $num = '001';
+            #     while (-e "$pathname-s$num.vmdk") {
+            #         $mpath .= "\"$pathname-s$num.vmdk\" ";
+            #         $i++;
+            #     	$num = substr("00$i", -3);
+            #     }
             } else {
                 $mpath = "\"$path1\"";
             }
@@ -688,10 +726,9 @@ if (lc($arg1) eq "backupallimages" ) {
                }
            }
         # Update btime
-            $localpath =~ /(.+)/;
             my $buser = $user;
             $buser = 'irigo' if ($user eq 'common');
-            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a updatebtime -i " . uri_escape($1);
+            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a updatebtime -i " . uri_escape($localpath);
             my $scmd = "/usr/bin/$sshcmd 127.0.0.1";
             $res .= "$scmd $bcmd\n";
             $res .= `$scmd $bcmd`;
@@ -1051,7 +1088,7 @@ sub updateImageStatus {
     tied(%imagereg)->commit;
     untie %imagereg;
     if ((defined $newvsize) || (defined $newbsize)) {
-        updateBilling($imageuser) if ($arg1 !~ /\//);
+        updateBilling($arg1) if ($arg1 !~ /\//);
     }
 }
 
@@ -1173,6 +1210,29 @@ sub releaseOldDhcpLeases {
     untie %networkreg;
 }
 
+sub backupAllFuel {
+    unless (tie %userreg,'Tie::DBI', {
+        db=>'mysql:steamregister',
+        table=>'users',
+        key=>'username',
+        autocommit=>0,
+        CLOBBER=>1,
+        user=>$dbiuser,
+        password=>$dbipasswd}) {return 0};
+
+    my @regvalues = values %userreg;
+    foreach my $valref (@regvalues) {
+        my $buser = $valref->{'username'};
+        my $privileges = $valref->{'privileges'};
+        unless (index($privileges,"d")!=-1) {
+            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a backupfuel";
+            print `$bcmd`;
+        }
+    }
+    untie %userreg;
+}
+
+
 sub unmountAllImages {
     unless (tie %userreg,'Tie::DBI', {
         db=>'mysql:steamregister',
@@ -1224,7 +1284,7 @@ sub backupAllImages {
         my $buser = $valref->{'user'};
         my $bschedule = $valref->{'bschedule'};
         if ($bschedule =~ /daily/) {
-            my $bcmd = "REMOTE_USER=$buser $base/cgi/images.cgi -a backup -u $uuid";
+            my $bcmd = qq|REMOTE_USER=$buser $base/cgi/images.cgi -a backup -u $uuid -g '{"skipzfs":1}'|;
             print "Backing up ($bschedule): $valref->{'name'} ($uuid)\n";
         # Actually do the backup
             print `$bcmd`;

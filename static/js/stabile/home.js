@@ -164,6 +164,7 @@ define([
                         document.title = enginename;
                         message = "Engine is now linked to Stabile Registry";
                         dojo.byId("info_linkengine_button").innerHTML = home.unlinkenginemsg;
+                        if (IRIGO.user.downloadmasters) $("#checkfordownloads").show();
                         stores.engines.close();
                         home.engines_field.setStore(stores.engines);
                         q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();
@@ -177,6 +178,7 @@ define([
                         home.engines_field.setStore(stores.engines);
                         q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();
                         message = "Engine is now unlinked";
+                        $("#checkfordownloads").hide();
                     } else if (response.indexOf("Engine updated")!=-1) {
                         user.enginename = enginename;
                         document.title = enginename;
@@ -614,8 +616,13 @@ define([
                     //home_add_empty.style.display = "none";
                     $(".info-engine").hide();
                 } else {
-                    if (user.enginelinked) info_linkengine.innerHTML = home.unlinkenginemsg;
-                    else info_linkengine.innerHTML = home.linkenginemsg;
+                    if (user.enginelinked) {
+                        info_linkengine.innerHTML = home.unlinkenginemsg;
+                        if (IRIGO.user.downloadmasters) $("#checkfordownloads").show();
+                    } else {
+                        info_linkengine.innerHTML = home.linkenginemsg;
+                        $("#checkfordownloads").hide();
+                    }
                     info_linkengine_tr.style.display = "table-row";
                     info_downloadmasters_tr.style.display = "table-row";
                     q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();
@@ -986,7 +993,7 @@ define([
                 if (IRIGO.user.appstoreurl)
                     applink = IRIGO.user.appstoreurl + "#app-" + image.appid;
                 else
-                    applink = "https://www.stabile.io/cloud#app-" + image.appid;
+                    applink = "https://www.stabile.io/registry#app-" + image.appid;
             }
             if (image && image.managementlink && image.managementlink!='--' && home.currentItem) {
                 link = image.managementlink.replace(/\{uuid\}/, home.currentItem.networkuuid1);
@@ -2076,7 +2083,7 @@ define([
             var issystem = item.issystem;
             var remove_button = grid.actionButton({'action':"delete_system", 'uuid':uuid, 'confirm': false,
                 'name': item.name , actionHandler: grid.actionHandler,
-                'title': 'remove system', 'type': 'stack'});
+                'title': 'remove stack', 'type': 'stack'});
             var delete_button = grid.actionButton({'action':"removesystem", 'uuid':uuid, 'confirm': true,
                 'name': item.name , actionHandler: grid.actionHandler,
                 'title': 'completely delete stack and delete associated servers, images and connections', 'type': 'stack'});
@@ -2272,6 +2279,11 @@ define([
                         console.log("Saving server value", prop, user[prop], value, dijit.byId("info_"+prop+"_field").checked);
                         home.saveServerValue(user.username, prop, value, "username");
                         user[prop] = value;
+                        if (prop=="downloadmasters") {
+                            if (value && value != '--') $("#checkfordownloads").show();
+                            else $("#checkfordownloads").hide();
+                        }
+
                     }
                 } else {
                     console.log("Not saving", prop);

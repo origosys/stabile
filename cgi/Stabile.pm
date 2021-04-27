@@ -85,7 +85,7 @@ $Stabile::config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
 $dbiuser =  $Stabile::config->get('DBI_USER') || "irigo";
 $dbipasswd = $Stabile::config->get('DBI_PASSWD') || "";
 $dnsdomain = $Stabile::config->get('DNS_DOMAIN') || "stabile.io";
-$appstoreurl = $Stabile::config->get('APPSTORE_URL') || "https://www.origo.io/cloud";
+$appstoreurl = $Stabile::config->get('APPSTORE_URL') || "https://www.origo.io/registry";
 $appstores = $Stabile::config->get('APPSTORES') || "stabile.io"; # Used for publishing apps
 $engineuser = $Stabile::config->get('ENGINEUSER') || "";
 $imageretention = $Stabile::config->get('Z_IMAGE_RETENTION') || "";
@@ -110,9 +110,26 @@ $year += 1900;
 $month = substr("0" . ($mon+1), -2);
 $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
 
-$baseurl = "https://localhost/stabile";
-$baseurl = `cat /etc/stabile/baseurl` if (-e "/etc/stabile/baseurl");
-chomp $baseurl;
+if ($ENV{'HTTP_HOST'}) {
+    if ($ENV{'HTTP_HOST'} ne '10.0.0.1' && $ENV{'HTTP_HOST'} ne 'localhost' && !($ENV{'HTTP_HOST'} =~ /^127/)) {
+        $baseurl = "https://$ENV{'HTTP_HOST'}/stabile";
+        `echo "$baseurl" > /tmp/baseurl` if ((! -e "/tmp/baseurl") && $baseurl);
+    }
+} else  {
+    if (!$baseurl && (-e "/tmp/baseurl" || -e "/etc/stabile/baseurl")) {
+        if (-e "/etc/stabile/baseurl") {
+            $baseurl = `cat /etc/stabile/baseurl`;
+        } else {
+            $baseurl = `cat /tmp/baseurl`;
+            chomp $baseurl;
+            `echo "$baseurl" >/etc/stabile/baseurl` unless (-e "/etc/stabile/baseurl");
+        }
+    }
+}
+if (!$baseurl) {
+    my $hostname = `hostname`; chomp $hostname;
+    $baseurl = "https://$hostname/stabile";
+}
 $baseurl = $1 if ($baseurl =~ /(.+)/); #untaint
 
 $Stabile::basedir = "/var/www/stabile";
@@ -198,23 +215,70 @@ $main::uploadToOrigo = sub {
     if (!$filepath || !(-e $filepath)) {
         $ret = "Status=Error Invalid file path\n";
     } elsif ($tktkey && $engineid) {
+        $HTTP::Request::Common::DYNAMIC_FILE_UPLOAD = 1;
         my $browser = LWP::UserAgent->new;
         $browser->timeout(15 * 60); # 15 min
         $browser->agent('pressurecontrol/1.0b');
         $browser->protocols_allowed( [ 'http','https'] );
         my $fname = $1 if ($filepath =~ /.*\/(.+\.qcow2)$/);
         return "Status=Error Invalid file\n" unless ($fname);
-        my $postreq = [
-            'file'          => [ $filepath ],
-            'filename'      => $fname,
-            'engineid'      => $engineid,
-            'enginetkthash' => sha512_hex($tktkey),
-            'appuser'       => $user,
-            'force'         => $force
-        ];
         my $posturl = "https://www.origo.io/irigo/engine.cgi?action=uploadimage";
-        my $content = $browser->post($posturl, $postreq, 'Content_Type' => 'form-data')->content();
-        $ret .= $content;
+
+# -- using ->post
+#         my $postreq = [
+#             'file'          => [ $filepath ],
+#             'filename'      => $fname,
+#             'engineid'      => $engineid,
+#             'enginetkthash' => sha512_hex($tktkey),
+#             'appuser'       => $user,
+#             'force'         => $force
+#         ];
+#         my $content = $browser->post($posturl, $postreq, 'Content_Type' => 'form-data')->content;
+#         $ret .= $content;
+
+# -- using ->request
+        my $req = POST $posturl,
+            Content_Type => 'form-data',
+            Content => [
+                'file'          => [ $filepath ],
+                'filename'      => $fname,
+                'engineid'      => $engineid,
+                'enginetkthash' => sha512_hex($tktkey),
+                'appuser'       => $user,
+                'force'         => $force
+            ];
+        my $total;
+        my $callback = $req->content;
+        if (ref($callback) eq "CODE") {
+            my $size = $req->header('content-length');
+            my $counter = 0;
+            my $progress = '';
+            $req->content(
+                sub {
+                    my $chunk = $callback->();
+                    if ($chunk) {
+                        my $length = length $chunk;
+                        $total += $length;
+                        if ($total / $size * 100 > $counter) {
+                            $counter = 1+ int $total / $size * 100;
+                            $progress .= "#";
+                            `echo "$progress$counter" >> /tmp/upload-$fname`;
+                        }
+#                        printf "%+5d = %5.1f%%\n", $length, $total / $size * 100;
+#                        printf "%5.1f%%\n", $total / $size * 100;
+
+                    } else {
+#                        print "Done\n";
+                    }
+                    $chunk;
+                }
+            );
+            my $resp = $browser->request($req)->content();
+            $ret .= $resp;
+            $ret .= "Status=OK $progress\n";
+        } else {
+            $ret .= "Status=Error Did not get a callback";
+        }
     } else {
         $ret .= "Status=Error Unable to get engine tktkey...";
     }
@@ -586,6 +650,34 @@ $main::xmppSend = sub {
     }
 };
 
+# Enumerate and return network interfaces
+$main::getNics = sub {
+    my $internalnic = $Stabile::config->get('ENGINE_DATA_NIC');
+    my $externalnic = $Stabile::config->get('EXTERNAL_NIC');
+    if (!$externalnic) {
+        my $droute = `ip route show default`;
+        $externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
+    }
+    my @nics = ();
+    if (!$externalnic || !$internalnic) {
+        my $niclist = `ifconfig | grep flags= | sed -n -e 's/: .*//p'`;
+        if (-e "/mnt/stabile/tftp/bionic") { # If a piston root exists, assume we will be providing boot services over secondary NIC even if it has no link
+            $niclist = `ifconfig -a | grep flags= | sed -n -e 's/: .*//p'`;
+        }
+        # my $niclist = `netstat -in`;
+        push @nics, $externalnic if ($externalnic);
+        foreach my $line (split("\n", $niclist)) {
+            if ($line =~ /^(\w+)$/) {
+                my $nic = $1;
+                push(@nics, $nic) if ($nic ne 'lo' && $nic ne $externalnic && !($nic=~/^virbr/) && !($nic=~/^docker/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/));
+            }
+        }
+    }
+    $externalnic = $externalnic || $nics[0];
+    $internalnic = $internalnic || $nics[1] || $externalnic;
+    return ($internalnic, $externalnic);
+};
+
 $main::updateUI = sub {
     my @parslist = @_;
     my $newtasks;
@@ -611,6 +703,8 @@ $main::updateUI = sub {
         my $title = $pars->{title};
         my $managementlink = $pars->{managementlink};
         my $backup = $pars->{backup};
+        my $download = $pars->{download};
+        my $size = $pars->{size};
         my $sender = $pars->{sender};
         my $path = $pars->{path};
         my $snap1 = $pars->{snap1};
@@ -644,6 +738,8 @@ $main::updateUI = sub {
                 ($displayport?",\"displayport\":\"$displayport\"":"") .
                 ($name?",\"name\":\"$name\"":"") .
                 ($backup?",\"backup\":\"$backup\"":"") .
+                ($download?",\"download\":\"$download\"":"") .
+                ($size?",\"size\":\"$size\"":"") .
                 ($mac?",\"mac\":\"$mac\"":"") .
                 ($macname?",\"macname\":\"$macname\"":"") .
                 ($progress?",\"progress\":$progress":"") . # This must be a number between 0 and 100
@@ -721,6 +817,7 @@ sub privileged_action {
     my $res;
     $obj = {} unless ($obj);
     $obj->{'console'} = 1 if ($console || $options{c});
+    $obj->{'baseurl'} =  $baseurl if ($baseurl);
     my $client = Gearman::Client->new;
     $client->job_servers('127.0.0.1:4730');
     # Gearman server will try to call a method named "do_gear_$action"
@@ -785,7 +882,7 @@ sub do_gear_action {
     my $res;
     return "This only works with elevated privileges\n" if ($>);
     if ($register{$target} || $action =~
-        /all$|save|^monitors|^packages|^changemonitoremail|^buildsystem|^removesystem|^updateaccountinfo|^updateengineinfo|^removeusersystems|^removeuserimages|^updateamtinfo|^updatedownloads|^releasepressure|linkmaster$|activate$|engine$|^syncusers|^deletesystem|^getserverbackups|^listserverbackups|^fullstats|^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices|^setstoragedevice|^updateui|configurecgroups|backup/
+        /all$|save|^monitors|^packages|^changemonitoremail|^buildsystem|^removesystem|^updateaccountinfo|^updateengineinfo|^removeusersystems|^removeuserimages|^updateamtinfo|^updatedownloads|^releasepressure|linkmaster$|activate$|engine$|^syncusers|^deletesystem|^getserverbackups|^listserverbackups|^fullstats|^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices|^setstoragedevice|^updateui|configurecgroups|backup|sync_backup/
         || ($action eq 'remove' && $package eq 'images' && $target =~ /\.master\.qcow2$/) # We allow removing master images by name only
     ) {
         my $func = ucfirst $action;
@@ -1044,7 +1141,7 @@ sub process {
     if ($package eq 'images') {
         $target = $curimg || $params{'path'} || $params{'image'} || $target unless ($target =~ /^\/.+/);
         $params{'restorepath'} = $params{'path'} if ($action eq 'listfiles');
-        $params{'baseurl'} = "https://$ENV{'SERVER_NAME'}/stabile" if ($action eq 'download' && !($baseurl =~ /\./)); # send baseurl if configured value not valid
+        $params{'baseurl'} = "https://$ENV{'HTTP_HOST'}/stabile" if ($action eq 'download' && $ENV{'HTTP_HOST'} && !($baseurl =~ /\./)); # send baseurl if configured value not valid
     } elsif ($package eq 'systems') {
         $target = $params{'id'} || $target if ($action =~ /^monitors_/);
     } elsif ($package eq 'nodes') {
@@ -1078,6 +1175,7 @@ sub process {
             $obj = getObj(\%params);
         }
         $obj->{'console'} = $console if ($console);
+        $obj->{'baseurl'} = $params{baseurl} if ($params{baseurl});
     # Perform the action
         $postreply = &{"do_$action"}($target, $action, $obj);
         if (!$postreply) { # We expect some kind of reply
@@ -1096,7 +1194,7 @@ sub process {
 
     } elsif (($params{'PUTDATA'} || $params{"keywords"} || $params{"POSTDATA"})  && !$isreadonly) {
         # We got a save post with JSON. Look for interesting stuff and perform action or save
-		my @json_array;
+        my @json_array;
 		if ($params{'PUTDATA'}) {
 		    my $json_text = $params{'PUTDATA'};
             utf8::decode($json_text);
@@ -1121,12 +1219,14 @@ sub process {
                 @json_array = @$json_array_ref;
             }
 		}
+
         foreach (@json_array) {
 			my %h = %$_;
 			$console = 1 if $h{"console"};
             my $objaction = $h{'action'} || $action;
             $objaction = 'save' if (!$objaction || $objaction eq "--");
             $h{'action'} = $objaction = $action.'_'.$objaction if ($action eq "monitors" || $action eq "packages"); # Allow sending e.g. disable action to monitors by calling monitors_disable
+            $h{'action'} = $objaction if ($objaction && !$h{'action'});
             my $obj = getObj(\%h);
             next unless $obj;
             $obj->{'console'} = $console if ($console);

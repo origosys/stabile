@@ -11,7 +11,7 @@ int main( int argc, char * argv[], char ** envp )
       sprintf(cmdLine, "/opt/samba4/bin/smbpasswd %s %s %s %s", argv[1], argv[2], argv[3], argv[4]);
       system(cmdLine); */
 
-      argv[0] = "/opt/samba4/bin/smbpasswd";
+      argv[0] = "/usr/bin/smbpasswd";
       execv( argv[0], argv );
 
       /* blocks IFS attack on non-bash shells */

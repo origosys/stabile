@@ -1,4 +1,5 @@
-VERSION=1.0a
+VERSION=1.0b
+APPID=1017
 MAINTAINER=Origo HQ <hq@origo.io>
 BASEIMAGE=centos-8-base.8.2.master.qcow2
 REBASE=1
@@ -22,7 +23,7 @@ DATAIMAGE=20G
 LOGO=https://www.stabile.io/images/apps/centos-logo.png
 THUMBNAIL=https://www.stabile.io/images/apps/centos-logo.png
 SUMMARY=This is a lean install of the CentOS Server 8.2 with Stabile API integration.
-DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-weight Origo Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.</div>\
+DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-weight Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.</div>\
 	<ul>\
 		<li>Install your very own powerful CentOS Linux Server on SSD with one click.</li>\
 		<li>Easily scale out with more servers.</li>\
@@ -31,4 +32,4 @@ DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-we
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 		<li>Size the server (after installation) as you like, and only pay for the minutes your servers are running.</li>\
 	</ul>\
-	<div><a href="https://github.com/origosys/stabile-stacks/tree/master/centos-8">Stack source code</a></div>
+	<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/mastercentos-8">Stack source code</a></div>

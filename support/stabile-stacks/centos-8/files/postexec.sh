@@ -30,6 +30,7 @@ DefaultDependencies=no
 Description=Utility script for Origo Stabile
 Wants=network-online.target
 After=stabile-networking.service
+After=webmin.service
 After=network.target network-online.target
 
 [Service]

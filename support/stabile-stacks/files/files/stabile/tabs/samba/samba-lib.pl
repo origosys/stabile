@@ -7,21 +7,24 @@ sub samba {
 
     my $dominfo;
     my $intip = `cat /tmp/internalip`;
-    $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+    $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
+    chomp $intip;
     $dominfo = `samba-tool domain info $intip` unless ($action eq 'restore');
     my $sambadomain;
     $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     my $sambahost;
     $sambahost = `hostname` unless ($action eq 'restore');
     chomp $sambahost;
+    $sambahost = $1 if ($sambahost =~ /(\w+)\..*/);
 
-    if ($action ne 'restore' && `grep "AjyxgfFJ69234u" /etc/apache2/conf.d/auth_tkt.conf`) { #Change default tkt secret
-        my @chars = ("A".."Z", "a".."z", "0".."9");
-        my $secret;
-        $secret .= $chars[rand @chars] for 1..24;
-        `perl -pi -e 's/AjyxgfFJ69234u/$secret/;' /etc/apache2/conf.d/auth_tkt.conf`;
-        `/etc/init.d/apache2 restart`;
-    }
+    # We do this in stabile-files unit now
+    # if ($action ne 'restore' && `grep "AjyxgfFJ69234u" /etc/apache2/conf-available/auth_tkt.conf`) { #Change default tkt secret
+    #     my @chars = ("A".."Z", "a".."z", "0".."9");
+    #     my $secret;
+    #     $secret .= $chars[rand @chars] for 1..24;
+    #     `perl -pi -e 's/AjyxgfFJ69234u/$secret/;' /etc/apache2/conf-available/auth_tkt.conf`;
+    #     `systemctl reload apache2`;
+    # }
 
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
@@ -71,41 +74,57 @@ sub samba {
         }
 
         my $form = <<END
-<div class="tab-pane" id="samba-provision">
+<div class="tab-pane container" id="samba-provision">
     <form class="passwordform" action="index.cgi?action=changesambadomain\&tab=samba\&show=samba-provision" id="sambaform" method="post" accept-charset="utf-8" onsubmit="provisionSpinner();">
         <small>Host name (e.g. "dc"):</small>
         <input id="sambahost" type="text" name="sambahost" autocomplete="off" value="$sambahost">
         <br />
-        <small>Domain name (e.g. "hq.company.int"):</small>
+        <small>Full domain (e.g. "stabile.lan"):</small>
         <input id="sambadomain" type="text" name="sambadomain" autocomplete="off" value="$sambadomain">
         <br />
         <small>Administrator password:</small>
         <input id="sambapwd" name="sambapwd" type="password" name="sambapwd" autocomplete="off" value="" class="password">
         <br />
     </form>
-    <div style="width:422px;">
-        <button id="provision_button" class="btn btn-default btn-info pull-right" style="margin-top:10px;" type="submit" onclick="confirmSambaAction('#sambaform');">Provision new domain!</button>
+    <div>
+        <button id="provision_button" class="btn btn-default btn-info" style="margin-top:10px;" type="submit" onclick="confirmSambaAction('#sambaform');">Provision new domain!</button>
     </div>
 </div>
-<div class="tab-pane" id="samba-config">
+<div class="tab-pane container" id="samba-config">
     <form class="passwordform" accept-charset="utf-8" id="sambaconfigform">
         <small>Write list (e.g. "administrator, Domain Admins"):</small><br />
-        <input type="text" name="sambawritelist" id="sambawritelist" value="$sambawritelist" class="password">
-        <button id="changewritelist_button" class="btn btn-default" type="button" onclick="changeWritelist();">Set!</button>
-        <span style="float: left; font-size: 13px;">leave empty to allow all users write access to "shared".</span>
-        <br style="clear:both;" />
+        <div class="row">
+            <div class="col-sm-10">
+                <input type="text" name="sambawritelist" id="sambawritelist" value="$sambawritelist" class="password">
+                <span style="float: left; font-size: 13px;">leave empty to allow all users write access to "shared".</span>
+            </div>
+            <div class="col-sm-2">
+                <button id="changewritelist_button" class="btn btn-default" type="button" onclick="changeWritelist();">Set!</button>
+            </div>
+        </div>
         <small>External users (e.g. "friend1, Domain Guests"):</small><br />
-        <input type="text" name="sambainvalids" id="sambainvalids" value="$sambainvalids" class="password">
-        <button id="changeinvalids_button" class="btn btn-default" type="button" onclick="changeInvalids();">Set!</button>
-        <span style="float: left; font-size: 13px;">these users do not have access to "shared" and have no home-dir.</span>
-        <br style="clear:both;" />
-        <small>Hosts to allow (e.g. "192.168.1. 195.41.32.80"):</small><br />
-        <input type="text" name="sambahostsallow" id="sambahostsallow" value="$sambahostsallow" class="password">
-        <button id="changehostsallow_button" class="btn btn-default" type="button" onclick="changeHostsAllow();">Set!</button>
-        <span style="float: left; font-size: 13px;">leave empty to allow all SMB/CIFS access from everywhere.</span>
+        <div class="row">
+            <div class="col-sm-10">
+                <input type="text" name="sambainvalids" id="sambainvalids" value="$sambainvalids" class="password">
+                <span style="float: left; font-size: 13px;">these users do not have access to "shared" and have no home-dir.</span>
+            </div>
+            <div class="col-sm-2">
+                <button id="changeinvalids_button" class="btn btn-default" type="button" onclick="changeInvalids();">Set!</button>
+            </div>
+        </div>
+        <small>Hosts to allow (e.g. "192.168.0. 195.41.32.80"):</small><br />
+        <div class="row">
+            <div class="col-sm-10">
+                <input type="text" name="sambahostsallow" id="sambahostsallow" value="$sambahostsallow" class="password">
+                <span style="float: left; font-size: 13px;">leave empty to allow all SMB/CIFS access from everywhere (allowed by your Stabile connection).</span>
+            </div>
+            <div class="col-sm-2">
+                <button id="changehostsallow_button" class="btn btn-default" type="button" onclick="changeHostsAllow();">Set!</button>
+            </div>
+        </div>
     </form>
     <div style="width:422px; clear:both;">
-        <button class="btn btn-default" id="restartsamba_button" style="margin-top:10px;" type="submit" onclick="restartSamba();">Restart Samba</button>
+        <button class="btn btn-info" id="restartSamba_button" style="margin-top:10px;" type="submit" onclick="restartSamba();">Restart Samba</button>
     </div>
 </div>
 END
@@ -114,32 +133,8 @@ END
 
     } elsif ($action eq 'js') {
 # Generate and return javascript the UI for this tab needs
-        my $elfinderlink;
-        my $suuid;
-        my $sservers_ref = list_simplestack_networks();
-        my @sservers = @$sservers_ref;
-        foreach my $sserv (@sservers) {
-            my $sip = $sserv->{internalip};
-            my $uuid = $sserv->{uuid};
-            if ($sip eq $internalip) {
-                $suuid = $uuid;
-                $elfinderlink .= qq|openElfinder("$sip", "$uuid")|;
-                last;
-            }
-        }
-
         my $js = <<END
-    function openElfinder(sip, uuid, nfsname) {
-        var url = "/stabile/pipe/http://" + uuid + ":10000/stabile/index.cgi?tab=samba&action=elfinder&storageid=" + sip;
-        if (nfsname) url += "&nfsname=" + nfsname;
-        window.open(url, sip);
-        return false;
-    }
     \$(document).ready(function () {
-        \$('#go_ul').append(
-            \$('<li>').append(
-                \$('<a>').attr('href','https://$externalip/origo/elfinder/index.cgi').attr('target','_blank').append("to file browser")
-        ));
         \$('#go_ul').append(
             \$('<li>').append(
                 \$('<a>').attr('href','smb://administrator\@$externalip').append("to SMB file service")
@@ -151,10 +146,10 @@ END
         return false;
     };
     function restartSamba() {
-        \$("#restartsamba_button").prop("disabled", true ).html('Restart Samba <i class="fa fa-cog fa-spin"></i>');
+        \$("#restartSamba_button").prop("disabled", true ).html('Restart Samba <i class="fa fa-cog fa-spin"></i>');
         \$.get( "index.cgi?action=restart\&tab=samba")
         .done(function( data ) {
-            \$("#restartsamba_button").html('Restart Samba').prop( "disabled", false );
+            \$("#restartSamba_button").html('Restart Samba').prop( "disabled", false );
         })
     }
     function changeWritelist() {
@@ -190,7 +185,7 @@ END
         return $js;
 
     } elsif ($action eq 'restart') {
-        my $res = `/etc/init.d/samba4 restart`;
+        my $res = restartSamba();
         $res = uri_encode($res),
         return <<END
 Content-type: application/json; charset=utf-8
@@ -205,12 +200,12 @@ END
 # This is called from index.cgi (the UI)
     } elsif ($action eq 'upgrade') {
         my $res;
-        my $srcloc = "/opt/samba4";
+        my $srcloc = "/var/lib/samba";
         my $dumploc = $in{targetdir};
 
         if (-d $dumploc) {
             # Stop Samba server
-            `/etc/init.d/samba4 stop`;
+            `systemctl stop samba-ad-dc`;
             unless (-e "$srcloc/var/run/samba.pid") {
                 # Copy Samba configuration
                 `rm -r "$dumploc/samba4.tgz"`;
@@ -230,19 +225,19 @@ END
         }
         return $res;
 
-# This is called from origo-ubuntu.pl when rebooting and with status "upgrading"
+# This is called from stabile-ubuntu.pl when rebooting and with status "upgrading"
     } elsif ($action eq 'restore') {
         my $srcloc = $in{sourcedir};
         my $res;
-        my $dumploc  = "/opt/samba4/";
-        `bash -c "service samba4 stop"`;
+        my $dumploc  = "/var/lib/samba/";
+        `pkill samba`;
         if ($srcloc && -d $srcloc && -d $dumploc && !(-e "$srcloc/var/run/samba.pid")) {
             $res = "OK: ";
 
             my $srcfile = "samba4.tgz";
             $res .= qq|restoring $srcloc/$srcfile -> $dumploc, |;
-            $res .= `bash -c "tar -zcf /tmp/samba4.bak.tgz /opt/samba4"`;
-            $res .= `bash -c "mv --backup /tmp/samba4.bak.tgz /opt/samba4.bak.tgz"`;
+            $res .= `bash -c "tar -zcf /tmp/samba4.bak.tgz /var/lib/samba"`;
+            $res .= `bash -c "mv --backup /tmp/samba4.bak.tgz /var/lib/samba.bak.tgz"`;
             $res .= `bash -c "(cd /opt; tar -zxf $srcloc/$srcfile)"`;
 
             my $srcdir = "etc-samba/*";
@@ -254,7 +249,7 @@ END
         }
 
         if ($res) {
-            `service samba4 start`;
+            `samba`;
         } else {
             $res = "Not copying $srcloc -> $dumploc";
         }
@@ -283,7 +278,7 @@ END
             my @vals;
             foreach my $host (@ahosts) {
                 $host = $1 if ($host =~ /"(.+)"/);
-                if ($host =~ /([\d\.]+)(\/\d+)/) { # Samba does not support 192.68.2.0/24 syntax, only e.g. 192.168.2.
+                if ($host =~ /([\d\.]+)(\/\d+)/) { # Samba does not support 192.168.2.0/24 syntax, only e.g. 192.168.2.
                     $host = $1;
                     $host =~ s/(\.0)+$/\./; # Replace e.g. 10.225.0.0 with 10.225.
                 }
@@ -294,7 +289,7 @@ END
         }
         `perl -ni -e 'print unless (/hosts allow/)' /etc/samba/smb.conf`;
         `perl -pi -e 's/\\[global\\]/[global]\n   hosts allow = $hostsallow/;' /etc/samba/smb.conf` if ($hostsallow);
-        my $res = `/etc/init.d/samba4 restart`;
+        my $res = `pkill samba; samba`;
         $res = uri_encode($res),
         return <<END
 Content-type: application/json; charset=utf-8
@@ -329,7 +324,7 @@ END
         `perl -ni -e 'print unless (/read only/)' /etc/samba/smb.conf`;
         `perl -ni -e 'print unless (/write list/)' /etc/samba/smb.conf`;
         `perl -pi -e 's/\\[shared\\]/[shared]$writelist/;' /etc/samba/smb.conf`;
-        my $res = `/etc/init.d/samba4 restart`;
+        my $res = restartSamba();
         $res = uri_encode($res),
         return <<END
 Content-type: application/json; charset=utf-8
@@ -363,7 +358,7 @@ END
         `perl -ni -e 'print unless (/invalid users/)' /etc/samba/smb.conf`; # remove current invalids, if any
         `perl -pi -e 's/\\[shared\\]/[shared]$invalids/;' /etc/samba/smb.conf`;
         `perl -pi -e 's/\\[home\\]/[home]$invalids/;' /etc/samba/smb.conf`;
-        my $res = `/etc/init.d/samba4 restart`;
+        my $res = restartSamba();
         $res = uri_encode($res),
         return <<END
 Content-type: application/json; charset=utf-8
@@ -374,15 +369,18 @@ END
 
     } elsif ($action eq 'changesambadomain' && defined $in{sambadomain}) {
         my $message;
+        my $newhost = lc $in{sambahost};
+        $newhost =~ s/ /_/;
         my $newdomain = $in{sambadomain};
         $newdomain =~ s/ /_/;
-        my $newhost = $in{sambahost};
-        $newhost =~ s/ /_/;
         my $newpwd = $in{sambapwd};
         if ($newpwd && $newdomain && ($newdomain =~ /(\S+)\.\S+\.\S+/ || $newdomain =~ /(\S+)\.\S+/)) {
-            `hostname $newhost` if ($newhost && (lc $newhost) ne (lc $sambahost));
+            my $newdom = $1;
+            `hostname $newhost` if ($newhost && ($newhost) ne (lc $sambahost));
             $newhost = $newhost || `hostname`;
             chomp $newhost;
+            `echo "$newhost" > /etc/hostname`;
+            `perl -pi -e 's/($intip.*)/$intip $newhost/;' /etc/hosts`;
             my $writelist = '';
             my $ret_writelist = '';
             if (defined $in{sambawritelist}) { # Limit write access to shared
@@ -405,15 +403,14 @@ END
 ;
             }
 
-            my $ndom = $1;
             `mv /etc/samba/smb.conf /etc/samba/smb.conf.bak`;
-            my $cmd = qq[samba-tool domain provision --realm=$newdomain --domain=$ndom --adminpass="$newpwd" --dnspass="$newpwd" --server-role=dc --dns-backend=SAMBA_INTERNAL --use-rfc2307 --use-xattrs=yes];
+            my $cmd = qq[samba-tool domain provision --realm=$newdomain --domain=$newdom --adminpass="$newpwd" --dnspass="$newpwd" --server-role=dc --dns-backend=SAMBA_INTERNAL --use-rfc2307];
             my $res =  `$cmd 2>\&1`;
             if ($res =~ /ready to use/) {
                 `perl -ni -e 'print unless (/dns forwarder/)' /etc/samba/smb.conf`;
                 `perl -pi -e 's/\\[netlogon\\]/[netlogon]\n    browseable = No/;' /etc/samba/smb.conf`;
                 `perl -pi -e 's/\\[sysvol\\]/[sysvol]\n    browseable = No/;' /etc/samba/smb.conf`;
-                `perl -pi -e 's/\\[global\\]/[global]\n   root preexec = \\/bin\\/mkdir -p \\/mnt\\/data\\/users\\/\\%U\n   dns forwarder = $gw\n   log level = 2\n   log file = \\/var\\/log\\/samba\\/samba.log.\%m\n   max log size = 50\n   debug timestamp = yes/' /etc/samba/smb.conf`;
+                `perl -pi -e 's/\\[global\\]/[global]\n   ldap server require strong auth =no\n   root preexec = \\/bin\\/mkdir -p \\/mnt\\/data\\/users\\/\\%U\n   log level = 2\n   log file = \\/var\\/log\\/samba\\/samba.log.\%m\n   max log size = 50\n   debug timestamp = yes\n   dns forwarder = 1.1.1.1\n   idmap_ldb:use rfc2307 = yes\n   server services = -nbt\n   veto files = \\/.groupaccess_*\\/.tmb\\/.quarantine\\//' /etc/samba/smb.conf`;
                 $cmd = <<END
 
 [home]
@@ -443,7 +440,7 @@ END
 ;
                 `echo "$cmd" >> /etc/samba/smb.conf`;
                 `perl -pi -e 's/\\[shared\\]/[shared]$writelist/;' /etc/samba/smb.conf`;
-                `service samba4 restart`;
+                restartSamba();
                 $message .=  "<div class=\"message\">The Samba domain was provisioned!</div>";
             } else {
                 $message .= "<div class=\"message\">An error occurred! ($res)</div>";
@@ -453,45 +450,6 @@ END
         }
         return $message;
 
-    } elsif ($action eq 'elfinder') {
-        my $url = 'php/connector.cgi';
-        my $title = "Shared files on $in{storageid}";
-        if ($in{nfsname}) {
-            $url .= "?nfs=$in{storageid}";
-            $title = "Browse files on $in{nfsname} ($in{storageid})";
-        }
-        my $elfinder = <<END
-Content-type: text/html
-
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <title>$title</title>
-        <link rel="stylesheet" type="text/css" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/themes/smoothness/jquery-ui.css">
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
-        <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/jquery-ui.min.js"></script>
-        <link rel="stylesheet" type="text/css" href="css/elfinder.full.css">
-        <link rel="stylesheet" type="text/css" href="css/theme.css">
-        <script src="js/elfinder.full.js"></script>
-        <script type="text/javascript" charset="utf-8">
-            // Documentation for client options:
-            // https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
-            \$(document).ready(function() {
-                \$('#elfinder').elfinder({
-                    url : "$url",  // connector URL (REQUIRED)
-                    height: '600'
-                });
-            });
-        </script>
-    </head>
-    <body>
-        <div id="elfinder"></div>
-    </body>
-</html>
-END
-;
-        return $elfinder;
     } elsif ($action eq 'smbmount') {
         my $hostname = $in{hostname};
         my $cookie = $ENV{HTTP_COOKIE};
@@ -512,6 +470,13 @@ END
 ;
         return $res;
     }
+}
+
+sub restartSamba {
+    my $res = `pkill samba`;
+    sleep 1 while (`pgrep samba`);
+    $res .= `samba 2>&1`;
+    return $res;
 }
 
 sub getSambaDropdown {

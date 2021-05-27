@@ -2457,6 +2457,8 @@ END
             $args .= " -p $port" if ($port && $port>10 && $port<65535);
         } elsif ($servicename eq 'ldap'){
             $args .= " --port $port" if ($port && $port>10 && $port<65535);
+            $args .= " --basedn \"$request\"" if ($request);
+            $args .= " --attribute \"$okstring\"" if ($okstring);
         } elsif ($servicename eq 'telnet'){
             $args .= " -l \"$okstring\"" if ($okstring);
             $args .= " -p $port" if ($port && $port>10 && $port<65535);
@@ -2675,6 +2677,7 @@ sub getSystemsListing {
     $useralertemail = $userreg{$username}->{'alertemail'};
 
     unless ( tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {$postreply = "Unable to access image register"; return;};
+    unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {return "Unable to access networks register"};
 
     # Collect systems from domains and include domains as children
     if ($action ne 'flatlist') { # Dont include children in select
@@ -2809,6 +2812,7 @@ sub getSystemsListing {
         tied(%register)->commit;
     }
     untie %imagereg;
+    untie %networkreg;
 
     my @regvalues = values %register;
     # Go through systems register, add empty systems and update statuses
@@ -2826,11 +2830,14 @@ sub getSystemsListing {
             } else {
             # Update status
                 my $status = 'running';
+                my $externalips = 0;
                 foreach my $child (@{$curreg{$val{'uuid'}}-> {'children'}}) {
                     $status = $child->{'status'} unless ($child->{'status'} eq $status);
+                    $externalips += $child->{'externalips'} unless ($child->{'externalips'} eq '');
                 }
                 $status = 'degraded' unless ($status eq 'running' || $status eq 'shutoff');
                 $curreg{$val{'uuid'}}->{'status'} = $status;
+                $curreg{$val{'uuid'}}->{'externalips'} = $externalips;
             }
         }
     }

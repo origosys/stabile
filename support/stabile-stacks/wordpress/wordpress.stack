@@ -1,5 +1,6 @@
-VERSION=1.4
-BASEIMAGE=ubuntu-bionic.1.0a.master.qcow2
+APPID=1930
+VERSION=1.4a
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
 REBASE=0
 BASESUITE=
 SIZE=
@@ -11,7 +12,7 @@ TAR=
 TARTARGET=
 GIT=
 GITTARGET=
-DEBS=wordpress mysql-server-5.7 tinymce
+DEBS=wordpress mysql-server-5.7 tinymce software-properties-common
 PREEXEC=
 POSTEXEC=/tmp/files/postexec.sh
 SERVICE=
@@ -32,4 +33,4 @@ DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site WordPress server.
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 	</ul>\
 	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
-	<div><a href="https://github.com/origosys/stabile-stacks/tree/master/wordpress">Stack source code</a></div>
+	<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterwordpress">Stack source code</a></div>

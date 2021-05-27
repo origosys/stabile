@@ -157,7 +157,7 @@ public class StabileAuthenticationProvider extends SimpleAuthenticationProvider 
             }
             close();
         } catch (Exception e) {
-            logger.info("Failure connecting to DB:" + e.toString());
+            logger.info("Failure connecting to DB jdbc:mysql://localhost/steamregister" + e.toString());
             throw new GuacamoleException(e);
         } finally {
             close();

@@ -11,7 +11,7 @@ Description: Please enter the public domain name this Engine should be availabe 
 Template: stabile/initial_user
 Type: string
 Default: stabile
-Description: Please enter desired user name for the initial user. This user will have administrator privileges.
+Description: Please enter desired user name for the initial user. This user will have administrator privileges. Preferably use the username you have registered with at stabile.io - this will make it easier to link this engine to the registry.
 
 Template: stabile/initial_password
 Type: password

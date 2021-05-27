@@ -26,7 +26,8 @@ spec:
       serviceAccountName: nfs-client-provisioner
       containers:
         - name: nfs-client-provisioner
-          image: docker.io/timmiles/nfs-subdir-external-provisioner:latest
+          image: gitlab.origo.io:1443/origosys/docker-registry/timmiles/nfs-subdir-external-provisioner:latest
+#          image: docker.io/timmiles/nfs-subdir-external-provisioner:latest
           resources:
             limits:
               memory: 0.5Gi

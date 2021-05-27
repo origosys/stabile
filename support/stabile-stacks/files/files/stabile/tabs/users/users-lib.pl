@@ -12,7 +12,7 @@ sub users {
 
     unless ($action eq 'restore' || $sambadomain) {
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     }
@@ -39,7 +39,7 @@ END
         }
         my $form = <<END
 <div class="tab-pane container" id="users">
-    <div style="width:100%; height:310px; overflow-y:scroll;">
+    <div style="width:100%; height:100%; overflow-y:scroll;">
       <table class="table table-condensed table-striped small" id="users_table" style="width: 100%; border:none;">
         <thead>
           <tr>
@@ -270,9 +270,11 @@ END
         my $isnew;
         if ($in{edituser_dn} eq 'new') {
             $isnew = 1;
-            if ($userbase && $in{edituser_cn} && $in{edituser_pwd}) {
+            if (!($in{edituser_cn} =~ /^\w+$/)) {
+                $cmdalert .= "invalid username";
+            } elsif ($userbase && $in{edituser_cn} && $in{edituser_pwd}) {
                 $in{edituser_dn} = "CN=$in{edituser_cn},$userbase";
-                $cmd = qq[samba-tool user add "$in{edituser_cn}" "$in{edituser_pwd}"];
+                $cmd = qq[samba-tool user create "$in{edituser_cn}" "$in{edituser_pwd}"];
 #                $cmd .= qq[ --mail-address "$in{edituser_mail}"] if ($in{edituser_mail});
 #                $cmd .= qq[ --telephone-number "$in{edituser_telephoneNumber}"] if ($in{edituser_telephoneNumber});
 #                $cmd .= qq[ --given-name "$in{edituser_givenName}"] if ($in{edituser_givenName});
@@ -307,7 +309,7 @@ dn: $in{edituser_dn}
 $laction
 END
 ;
-            $cmd = qq[echo "$ldif"| ldbmodify -H /opt/samba4/private/sam.ldb --] if ($changes);
+            $cmd = qq[echo "$ldif"| ldbmodify -H /var/lib/samba/private/sam.ldb --] if ($changes);
             $cmdres .= `$cmd 2>\&1` if ($cmd);
 
             if ($in{edituser_pwd} && !$isnew) {
@@ -344,7 +346,7 @@ END
 
     } elsif ($action eq 'upgrade') {
 
-# This is called from origo-ubuntu.pl when rebooting and with status "upgrading"
+# This is called from stabile-ubuntu.pl when rebooting and with status "upgrading"
     } elsif ($action eq 'restore') {
 
     }
@@ -354,7 +356,7 @@ END
 sub getUsers {
     unless ($sambadomain) {
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     }
@@ -365,7 +367,7 @@ sub getUsers {
 
     my %users;
     my $fields = join(" ", @userprops) . ' sAMAccountName';
-    my $users_text = `ldbsearch -H /opt/samba4/private/sam.ldb -b "$userbase" objectClass=user cn $fields`;
+    my $users_text = `ldbsearch -H /var/lib/samba/private/sam.ldb -b "$userbase" objectClass=user cn $fields`;
     my $cn;
     foreach my $line (split /\n/, $users_text) {
         $cn = $1 if ($line =~ /dn: CN=(.+),CN=Users/);

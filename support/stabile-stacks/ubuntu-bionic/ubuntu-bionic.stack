@@ -1,4 +1,5 @@
-VERSION=1.0a
+APPID=3663
+VERSION=1.0b
 MAINTAINER=Christian Orellana <christian@origo.io>
 BASEIMAGE=ubuntu-bionic-base.18.04.master.qcow2
 REBASE=1
@@ -7,6 +8,8 @@ SIZE=20G
 MEMORY=
 NAME=ubuntu-bionic
 APPNAME=Ubuntu Bionic
+LOGO=https://www.origo.io/irigo/images/apps/logo-ubuntu-orange-300x249.png
+THUMBNAIL=https://www.origo.io/irigo/images/apps/logo-ubuntu-orange-150x124.png
 DIR=files
 DIRTARGET=/tmp
 TAR=
@@ -53,9 +56,9 @@ TERMINALLINK=/stabile/pipe/http://{uuid}:4200
 MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
 DATAIMAGE=20G
 SUMMARY=This is a lean install of the Ubuntu Server 18.04 with Stabile API integration.
-DESCRIPTION=<div class="app-description">
+DESCRIPTION=<div class="app-description">\
     <div>\
-        This Stack is a lean install of Ubuntu Server 18.04 with light-weight Origo Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.\
+        This Stack is a lean install of Ubuntu Server 18.04 with light-weight Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.\
     </div>\
     <ul>\
         <li>Install your very own Ubuntu Linux Server on SSD with one click.</li>\
@@ -66,4 +69,4 @@ DESCRIPTION=<div class="app-description">
         <li>Size the server (after installation) as you like.</li>\
     </ul>\
 </div>\
-<div><a href="https://github.com/origosys/stabile-stacks/tree/master/ubuntu-bionic">Stack source code</a></div>
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterubuntu-bionic">Stack source code</a></div>

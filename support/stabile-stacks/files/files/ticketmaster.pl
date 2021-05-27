@@ -28,7 +28,7 @@ if ($secret eq '--dir') {
 if ($u && $secret && $secret ne 'privileges') {
     my $at;
     if ($secret eq '--') {
-        $at = Apache::AuthTkt->new(conf => '/etc/apache2/conf.d/auth_tkt.conf');
+        $at = Apache::AuthTkt->new(conf => '/etc/apache2/conf-available/auth_tkt.conf');
     } else {
         $at = Apache::AuthTkt->new(
                 secret => $secret,
@@ -40,7 +40,7 @@ if ($u && $secret && $secret ne 'privileges') {
     my $tkt = $at->ticket(uid => $u, data => $user_data, ip_addr => $ip_addr, tokens => '', debug => 0);
     print "$tkt\n";
 } elsif ($u) {
-    my $at = Apache::AuthTkt->new(conf => '/etc/apache2/conf.d/auth_tkt.conf');
+    my $at = Apache::AuthTkt->new(conf => '/etc/apache2/conf-available/auth_tkt.conf');
     my $valid = $at->validate_ticket($u);
     if (time - $valid->{ts} > 2*60*60) { # Default auth_tkt timeout is 2 hours
         print "\n";

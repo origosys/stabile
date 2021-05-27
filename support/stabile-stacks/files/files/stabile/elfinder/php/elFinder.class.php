@@ -866,8 +866,8 @@ class elFinder {
 			$disp = 'attachment';
 			$mime = 'application/force-download';
 		} else {
-			$disp  = preg_match('/^(image|text)/i', $file['mime']) || $file['mime'] == 'application/x-shockwave-flash' 
-					? 'inline' 
+			$disp  = preg_match('/^(image|text)/i', $file['mime']) || $file['mime'] == 'application/x-shockwave-flash' || $file['mime'] == 'application/pdf' || $file['mime'] == 'video/mp4' || $file['mime'] == 'video/quicktime' || $file['mime'] == 'video/x-msvideo'
+					? 'inline'
 					: 'attachment';
 			$mime = $file['mime'];
 		}

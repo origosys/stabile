@@ -313,7 +313,8 @@ spec:
                 secretKeyRef:
                   name: memberlist
                   key: secretkey
-          image: metallb/speaker:v0.9.5
+#          image: metallb/speaker:v0.9.5
+          image: gitlab.origo.io:1443/origosys/docker-registry/metallb/speaker:v0.9.5
           imagePullPolicy: Always
           name: speaker
           ports:
@@ -369,7 +370,8 @@ spec:
         - args:
             - --port=7472
             - --config=config
-          image: metallb/controller:v0.9.5
+#          image: metallb/controller:v0.9.5
+          image: gitlab.origo.io:1443/origosys/docker-registry/metallb/controller:v0.9.5
           imagePullPolicy: Always
           name: controller
           ports:

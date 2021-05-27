@@ -47,12 +47,12 @@ Action cgi-node /cgi-bin/cgi-node.js
 </Directory>' >> /etc/apache2/conf-available/serve-cgi-bin.conf
 
 # Change logo
-perl -pi -e 's/images\/ubuntu-logo.png/tabs\/codiad\/logo-codiad.png/' /usr/share/webmin/stabile/index.cgi
+perl -pi -e 's/images\/ubuntu-logo.png/tabs\/codiad\/development-icon.png/' /usr/share/webmin/stabile/index.cgi
 
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
-# Remove "command" tab from Webmin UI
-rm -r /usr/share/webmin/stabile/tabs/servers
+# Remove tabs from Webmin UI
+# rm -r /usr/share/webmin/stabile/tabs/servers
 
 # Install cgi-node
 cd /usr/lib/cgi-bin
@@ -63,3 +63,16 @@ perl -pi -e 's/(\sSessionPath:).*/$1 "\/var\/nodejs\/sessions"/' /usr/lib/cgi-bi
 mkdir -p /var/nodejs/sessions
 chown www-data:www-data /var/nodejs/sessions
 
+# Prepare stuff for reference stack
+
+# Enable mod_proxy
+a2enmod proxy
+a2enmod proxy_http
+
+echo "*filter
+:INPUT ACCEPT [56:14705]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [56:6504]
+-A INPUT ! -s 10.0.0.0/8 -p udp -m udp --dport 12865 -j DROP
+-A INPUT ! -s 10.0.0.0/8 -p tcp -m tcp --dport 12865 -j DROP
+COMMIT" > /etc/iptables/rules.v4

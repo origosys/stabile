@@ -11,7 +11,7 @@ sub groups {
 
     unless ($action eq 'restore' || $sambadomain) {
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     }
@@ -23,8 +23,8 @@ sub groups {
     if ($action eq 'form') {
 # Generate and return the HTML form for this tab
         my $form = <<END
-<div class="tab-pane" id="groups">
-    <div style="width:100%; height:310px; overflow-y:scroll;">
+<div class="tab-pane container" id="groups">
+    <div style="width:100%; height:100%; overflow-y:scroll;">
       <table class="table table-condensed table-striped small" id="groups_table" style="width: 100%; border:none;">
         <thead>
           <tr>
@@ -58,7 +58,7 @@ sub groups {
                     <td width="200">Description:</td><td class="passwordform"><input type="text" name="editgroup_description" id="editgroup_description" /></td>
                 </tr>
                 <tr>
-                    <td width="200">Members (1 per line):</td><td class="passwordform"><textarea class="field" name="editgroup_member" id="editgroup_member"></textarea></td>
+                    <td width="200">Members<br>(1 per line):</td><td class="passwordform"><textarea class="field" name="editgroup_member" id="editgroup_member"></textarea></td>
                 </tr>
                 <tr>
                     <td width="200" valign="top">Write list (comma separated):</td><td class="passwordform">
@@ -311,7 +311,7 @@ END
                     `echo "$txt" > "/etc/samba/smb.conf.group.$groupname"`;
                     `perl -pi -e 's/\\[$groupname\\]/[$groupname]$writelist/;' "/etc/samba/smb.conf.group.$groupname"`;
                     `echo "include = /etc/samba/smb.conf.group.$groupname" >> /etc/samba/smb.conf.groups` unless (`grep "smb.conf.group.$groupname" /etc/samba/smb.conf.groups`);
-                    `service samba4 restart`;
+                    restartSamba();
                 } else {
                     $cmdalert .= "there was a problem: $cmdres";
                 }
@@ -374,7 +374,7 @@ dn: $in{editgroup_dn}
 $laction
 END
 ;
-            $cmd = qq[echo "$ldif"| ldbmodify -H /opt/samba4/private/sam.ldb --] if ($changes);
+            $cmd = qq[echo "$ldif"| ldbmodify -H /var/lib/samba/private/sam.ldb --] if ($changes);
             $cmdres .= `$cmd 2>\&1` if ($cmd);
 
             if (defined $in{editgroup_writelist} && !$sysgroups{lc $groupname}) { # Limit write access to shared
@@ -411,7 +411,7 @@ END
 
     } elsif ($action eq 'upgrade') {
 
-# This is called from origo-ubuntu.pl when rebooting and with status "upgrading"
+# This is called from stabile-ubuntu.pl when rebooting and with status "upgrading"
     } elsif ($action eq 'restore') {
 
     }
@@ -421,7 +421,7 @@ END
 sub getGroups {
     unless ($sambadomain) {
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     }
@@ -432,7 +432,7 @@ sub getGroups {
 
     my %groups;
     my $fields = join(" ", @groupprops) . '';
-    my $groups_text = `ldbsearch -H /opt/samba4/private/sam.ldb -b "$userbase" objectClass=group cn $fields`;
+    my $groups_text = `ldbsearch -H /var/lib/samba/private/sam.ldb -b "$userbase" objectClass=group cn $fields`;
     my $cn;
     my $oldkey;
     foreach my $line (split /\n/, $groups_text) {

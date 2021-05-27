@@ -111,7 +111,8 @@ if ($macip && $macip ne '' && $serveruuid) {
                 my $totalg = int(1000 * ($avail+$used) / 1024 / 1024 + 0.5)/1000;
 
                 #if (!($dev =~ /sdc/) && !($dev =~ /sdb/)) { # Exclude cdroms
-                    if (100*$avail/($used + $avail) < $minavailp && ($parts eq 'all' || $parts =~ /$part/)) {
+#                if (100*$avail/($used + $avail) < $minavailp && ($parts eq 'all' || $parts =~ /$part/)) {
+                    if (100*$avail/$size < $minavailp && ($parts eq 'all' || $parts =~ /$part/)) {
                         push (@failures, sprintf ("[*$part] %s: %1.2fGB free (%1.0f\%), total %1.2fGB",
                         $dev, $availg, 100-$usepercent, $totalg));
                     } else {

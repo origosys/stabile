@@ -11,7 +11,7 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt); # Allow combining short options
 our %options=();
 # Getopt::Std::getopts("rapdfsu", \%options);
-GetOptions(\%options, 'rebuild|r', 'activate|a', 'publish|p', 'debug|d', 'force|f', 'release|s', 'unrelease|u');
+GetOptions(\%options, 'rebuild|r', 'activate|a', 'publish|p', 'debug|d', 'force|f', 'release|s', 'unrelease|u', 'freshen|h');
 
 my $ofile = $ARGV[(scalar @ARGV)-1] if @ARGV;
 my $rebuild = 1 if ($options{rebuild});
@@ -20,6 +20,7 @@ my $publish = 1 if ($options{publish});
 my $release = 1 if ($options{release});
 my $debug = 1 if ($options{debug});
 my $force = 1 if ($options{force});
+my $freshen = 1 if ($options{freshen});
 my $unrelease = 1 if ($options{unrelease});
 $release = 1 if ($unrelease);
 
@@ -43,7 +44,7 @@ Usage: stackbuilder [-a] [-p] [-r] [-d] [-f] 'stackfile'
 -d, --debug
 -f, --force
 -u, --unrelease
-
+-h, --freshen
 end
 ;
         print "To force rebuild, activate and publish in one go use -frap\n";
@@ -93,6 +94,7 @@ my $memory = $config->get("MEMORY") || '';
 my $logo = $config->get("LOGO") || '';
 my $price = $config->get("PRICE") || '';
 my $thumbnail = $config->get("THUMBNAIL") || '';
+my $ports = $config->get("PORTS") || '';
 my $summary = $config->get("SUMMARY") || '';
 my $description = $config->get("DESCRIPTION") || '';
 my $appid = $config->get("APPID") || '';
@@ -125,7 +127,7 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     print "Found $cwd/$dname.master.qcow2, not building (specify -r to force rebuild)\n";
 } elsif (!$rebuild && $imageuuid) {
     print "$dname.master.qcow2 is already activated on engine by user $imageuser, not building (specify -r to force rebuild)\n";
-} else {
+} elsif (!$freshen) {
     # Load nbd
     print `rmmod nbd`;
     print `modprobe nbd max_part=63`;
@@ -411,6 +413,7 @@ if ($fuelpath) {
     $terminallink = uri_escape($terminallink);
     $logo = uri_escape($logo);
     $thumbnail = uri_escape($thumbnail);
+    $ports = uri_escape($ports);
     $summary = uri_escape($summary);
     $description = uri_escape($description);
     $price = uri_escape($price);
@@ -452,13 +455,26 @@ if ($fuelpath) {
             if ($imageuuid) {
                 print "Uploading image with uuid $imageuuid to the registry\n";
                 print "Hang on - this may take a while...\n";
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force"`;
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force"`;
                 print "$res";
             } else {
                 print "Something went wrong, did not get valid uuid $imageuuid - left it in your shared storage.\n";
             }
         } else {
             print "Not publishing - you are not in a VM, or the engine you are running on is not linked with the Registry.\n" if ($publish);
+        }
+    }
+    if ($freshen) {
+        if ($enginelinked) {
+            print "Trying to freshen stack $dname\n";
+            if ($imageuuid) {
+                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force&freshen=$freshen"`;
+                print "$res";
+            } else {
+                print "Something went wrong, did not freshen the stack.\n";
+            }
+        } else {
+            print "Not freshening - you are not in a VM, or the engine you are running on is not linked with the Registry.\n" if ($publish);
         }
     }
     if ($release) {

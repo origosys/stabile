@@ -1295,7 +1295,7 @@ sub Configurecgroups {
     if ($help) {
         return <<END
 GET::
-Parse Stabile config nodeconfig.cfg and configure /etc/cgconfig.conf for all known node roots.
+Parse Stabile config nodeconfig.cfg and configure /etc/stabile/cgconfig.conf for all known node roots.
 END
     }
 
@@ -1325,7 +1325,7 @@ END
         my $piston_iopsreadlimit = $nodecfg->param('PISTON_IOPS_READ_LIMIT'); # e.g. 1000 IOPS
         my $piston_iopswritelimit = $nodecfg->param('PISTON_IOPS_WRITE_LIMIT');
 
-        my $file = "$noderoot/etc/cgconfig.conf";
+        my $file = "$noderoot/etc/stabile/cgconfig.conf";
         unless (open(FILE, "< $file")) {
             $postreply .= "Status=Error problem opening $file\n";
             return $postreply;

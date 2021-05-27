@@ -50,8 +50,8 @@ my $cgset; # Have cgroup values been set?
 my $initdisk = $cfg->param('INITIALIZE_LOCAL_DISK');
 $identity = $identity || $cfg->param('IDENTITY');
 
-my $adminnic = $cfg->param('ADMIN_NIC'); # This is the interface used for nfs-roots and for communcating with admin node on 10.0.0.1
-my $datanic = $cfg->param('DATA_NIC'); # This is the interface used for VM vlans
+my $adminnic = $cfg->param('ADMIN_NIC'); # This is the internal interface used for nfs-roots and for communcating with admin node on 10.0.0.1
+my $datanic = $cfg->param('DATA_NIC'); # This is the external interface used for VM vlans
 $adminnic = $datanic if (!$adminnic && $datanic);
 $datanic = $adminnic if (!$datanic && $adminnic);
 
@@ -183,7 +183,7 @@ my $command;
 # Load IPMI modules
 `modprobe ipmi_devintf`;
 my $ipmiip;
-if (`modprobe ipmi_si 2>/dev/null`) {
+unless (system("modprobe ipmi_si")) {
     my $ipmiinfo = `/usr/bin/ipmitool lan print 1`;
     if ($ipmiinfo =~ m/IP Address     .+: (.+)\n/i) {
         $ipmiip = $1;
@@ -191,6 +191,10 @@ if (`modprobe ipmi_si 2>/dev/null`) {
 } else {
     print "IPMI is not available on this node\n";
 }
+
+# Disable offloading to NIC - at least for our mini-ITX boards this prevents crashes
+print `ethtool -K $adminnic gso off gro off tso off`;
+print `ethtool -K $datanic gso off gro off tso off` if ($adminnic ne $datanic);
 
 # Prevent VM's using Libvirt's default network to reach each other + infrastructure
 `modprobe br_netfilter` unless (`lsmod | grep br_netfilter`);
@@ -465,6 +469,12 @@ sub updatePistonInfo {
     # Bring up local interfaces if it has been lost because of S3 sleep
     updateInterfaces();
 
+    # piston.cgi gets the ip from the http request
+    #my $ipline = `ip -br addr show $adminnic`;
+    #chomp $ipline;
+    #my $ip;
+    #$ip = $1 if ($ipline =~ /\d+\.\d+\.\d+\.\d+\/24/);
+
     #	my $virshlist = `virsh -c $virshemu:///system list`;
 	logit('info', "Initializing libvirt connection: $virshemu:///system") if ($debug);
 	my $vmm = Sys::Virt->new(address => "$virshemu:///system");# unless $vmm;
@@ -476,6 +486,7 @@ sub updatePistonInfo {
     # Put node info into $dinfo
     $dinfo->{'status'} = $status;
     $dinfo->{'mac'} = $mac;
+    #$dinfo->{'ip'} = $ip;
     $dinfo->{'memtotal'} = $memtotal;
     $dinfo->{'memfree'} = $memfree;
     $dinfo->{'identity'} = $identity;
@@ -1774,21 +1785,35 @@ sub updateInterfaces {
 # Enumerate and return network interfaces
 sub getNics {
     my $droute = `ip route show default`;
-    my $externalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/);
-    my $internalnic = $externalnic;
+    my $internalnic = $1 if ($droute =~ /default via .+ dev (.+) proto/); # On the node, default route is on the internal network
+    # First get all nics and activate link on ethers - for some reason Ubuntu puts them down if they are not configured with an IP
+    my $niclist = `ifconfig -a | grep flags= | sed -n -e 's/: .*//p'`;
+    foreach my $line (split("\n", $niclist)) {
+        my $nic = $1 if ($line =~ /(\S+)/);
+        if ($nic=~/^en/) {
+            `ifconfig $nic up`;
+        }
+    }
+    sleep 1;
+    # Then list those that are up i.e. have link
     my $niclist = `ifconfig | grep flags= | sed -n -e 's/: .*//p'`;
     # my $niclist = `netstat -in`;
     my @nics = ();
-    push @nics, $externalnic if ($externalnic);
+    push @nics, $internalnic if ($internalnic);
     foreach my $line (split("\n", $niclist)) {
         my $nic = $1 if ($line =~ /(\S+)/);
-        if ($nic ne 'lo' && $nic ne $externalnic && !($nic=~/^virbr/) && !($nic=~/^docker/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
+        if ($nic ne 'lo' && $nic ne $internalnic && !($nic=~/^virbr/) && !($nic=~/^docker/) && !($nic=~/^br/) && !($nic=~/^vnet/) && !($nic=~/^Name/) && !($nic=~/^Kernel/) && !($nic=~/^Iface/) && !($nic=~/(\.|\:)/)) {
             push @nics, $1;
         }
     }
-    $externalnic = $nics[0] unless ($externalnic);
-    $internalnic = $nics[1] if (scalar @nics > 1);
-    return ($internalnic, $externalnic);
+    $internalnic = $nics[0] unless ($internalnic);
+    my $externalnic = $internalnic;
+    $externalnic = $nics[1] if (scalar @nics > 1);
+    if ($identity eq 'local_kvm') { # local_kvm uses external NIC for vlans and internal NIC for 10.0.0.1
+        return ($externalnic, $internalnic);
+    } else {
+        return ($internalnic, $externalnic);
+    }
 }
 
 sub TERMINATE {

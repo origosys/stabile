@@ -95,6 +95,14 @@ chown -R www-data:www-data /usr/share/javascript/prototype/
 chown -R www-data:www-data /usr/share/php
 chown -R www-data:www-data /usr/share/tinymce
 
+# Install php 7.4
+# Install auth_tkt repo
+echo "\n" | add-apt-repository "ppa:ondrej/php"
+apt-get update
+apt-get -q -y install php7.4 php7.4-cli php7.4-common php7.4-curl php7.4-intl php7.4-json php7.4-mysql php7.4-opcache php7.4-readline php7.4-xml
+a2enmod php7.4
+a2dismod php7.2
+
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
 

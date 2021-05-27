@@ -113,12 +113,27 @@ if ($action eq 'mountpools') {
     exit 0;
 }
 
+print "Configuring ports for shellinabox...\n";
+# Disallow shellinabox access from outside
+my $gw = $internalip;
+$gw = "$1.1" if ($gw =~ /(\d+\.\d+\.\d+)\.\d+/);
+print `iptables -D INPUT -p tcp --dport 4200 -s $gw -j ACCEPT 2>/dev/null`;
+print `iptables -D INPUT -p tcp --dport 4200 -j DROP 2>/dev/null`;
+print `iptables -A INPUT -p tcp --dport 4200 -s $gw -j ACCEPT`;
+print `iptables -A INPUT -p tcp --dport 4200 -j DROP`;
+
 if (-e '/etc/webmin/') {
     while (!$registered && $i<20) {
+        if (system("systemctl is-active webmin")) {
+            print "Waiting for Webmin to become active\n";
+            sleep 5;
+            next;
+        }
         $internalip = $internalip || get_internalip();
+        print "Registering webmin server at $internalip\n";
         my $res = `curl http://$internalip:10000/stabile/index.cgi?action=registerwebminserver`;
-        $registered = ($res =~ /Registered at .*(\d+)\.serv/);
-        chomp $registered;
+        $registered = ($res =~ /Registered at (\S+)"/);
+        chomp $1; print "$1\n";
         if ($registered) {
             `echo "$internalip: $res" >> /tmp/stabile-registered`;
         } else {
@@ -135,13 +150,20 @@ $externalip = `cat /tmp/externalip` if (-e '/tmp/externalip');
 $externalip = `cat /etc/stabile/externalip` if (-e '/etc/stabile/externalip');
 chomp $externalip;
 
+
+my $dnsdomain_json = `curl -k https://$gw/stabile/networks?action=getdnsdomain`;
+my $dom_obj = from_json ($dnsdomain_json);
+my $dnsdomain =  $dom_obj->{'domain'};
+my $dnssubdomain = $dom_obj->{'subdomain'};
+$dnsdomain = '' unless ($dnsdomain =~  /\S+\.\S+$/ || $dnsdomain =~  /\S+\.\S+\.\S+$/);
+my $dom = ($dnsdomain && $dnssubdomain)?"$externalip.$dnssubdomain.$dnsdomain":$externalip;
+my $esc_dnsdomain = $dom;
+$esc_dnsdomain =~ s/\./\\./g;
+
 my $appinfo = `curl -ks "https://$gw/stabile/servers?action=getappinfo"`;
 my $info_ref = from_json($appinfo);
 my $status = $info_ref->{status};
 my $uuid = $info_ref->{uuid};
-my $dnsdomain = $info_ref->{dnsdomain};
-my $esc_dnsdomain = $dnsdomain;
-$esc_dnsdomain =~ s/\./\\./g;
 my $name = $info_ref->{name};
 $name =~ s/ /-/g;
 
@@ -212,72 +234,75 @@ if ($status eq 'upgrading') {
     print `curl -ks "https://$gw/stabile/servers?action=setrunning"`;
 
 } else {
-    print "Server is $status. Looking for shellinabox...\n";
-    if (-e '$webminhome/stabile/shellinabox/shellinaboxd') {
+    print "Server is $status\n";
+    if (-e "$webminhome/stabile/shellinabox/shellinaboxd") {
 #        unless (`pgrep shellinaboxd`) {
-        print "Opening ports for shellinabox...\n";
-        # Disallow shellinabox access from outside
-        my $gw = $internalip;
-        $gw = "$1.1" if ($gw =~ /(\d+\.\d+\.\d+)\.\d+/);
-        print `iptables -D INPUT -p tcp --dport 4200 -s $gw -j ACCEPT`;
-        print `iptables -D INPUT -p tcp --dport 4200 -j DROP`;
-        print `iptables -A INPUT -p tcp --dport 4200 -s $gw -j ACCEPT`;
-        print `iptables -A INPUT -p tcp --dport 4200 -j DROP`;
-
         my $title = $externalip || $internalip;
         if (-e '$webminhome/stabile/shellinabox/ShellInABox.js') {
-            print "Updating terminal title to $title\n";
+            print "Updating ShellInABox terminal title to $title\n";
             `perl -pi -e 's/^document.title = ".*";/document.title = "Term:$title";/' $webminhome/stabile/shellinabox/ShellInABox.js`;
         }
     }
     get_internalip();
-    # Add hostname to hosts
-    my $hostname = $name;
-    `hostname "$hostname"`;
-    `echo "$hostname" > /etc/hostname`;
-    unless (`grep $hostname /etc/hosts`) {
-        `perl -pi -e 's/(127.+localhost.*)/\$1 $hostname/;' /etc/hosts`
+    # Add hostname to hosts unless current hostname is already in /etc/hosts in which case we assume all is fine
+    my $curhostname = `hostname`; chomp $curhostname;
+    unless ((`grep "$curhostname " /etc/hosts`) || (`grep "$curhostname\$" /etc/hosts`)) {
+        my $hostname = lc $name;
+        unless (`hostname "$hostname"`) { #Don't put in /etc/hostname if there is an error
+            `echo "$hostname" > /etc/hostname`;
+            if (`grep "$internalip " /etc/hosts`) {
+                `perl -pi -e 's/($internalip.*)/\$1 $hostname/;' /etc/hosts`
+            } else {
+                `echo "$internalip $hostname" >> /etc/hosts`;
+            }
+        }
     }
     # Run getssl
     if ($externalip) {
         my $res = `ping -c1 -w2 1.1.1.1`;
+        my $reloadapache;
+        my $msg;
         if ($res =~ /100\% packet loss/) {
-            print "No Internet connectivity - not running letsencrypt\n";
+            $msg = "No Internet connectivity - not running letsencrypt";
         } elsif ($externalip =~ /^192\.168\./){
-            print "External IP is RFC 1819 - not running GetSSL\n";
+            $msg = "External IP is RFC 1819 - not running GetSSL\n";
         } elsif ($dnsdomain) {
-            print "Running GetSSL\n";
-            if (-e "/root/.getssl/$externalip.$dnsdomain") {
-                print `getssl -a`;
+            if (system("nslookup $dom")) {
+                $msg = "Cannot lookup up $dom in DNS - not running GetSSL\n";
             } else {
-                print `mkdir -p /root/.getssl/$externalip.$dnsdomain`;
-                my $getsslcfg = <<END
+                print "Running GetSSL\n";
+                if (-e "/root/.getssl/$dom" && -e "/etc/ssl/private/stabile.crt") {
+                    print `getssl -a -u -d -w /root/.getssl 2>&1 | tee -a /tmp/stabile-registered`;
+                } else {
+                    print `mkdir -p /root/.getssl/$dom`;
+                    my $getsslcfg = <<END
 CA="https://acme-v02.api.letsencrypt.org"
 PRIVATE_KEY_ALG="rsa"
-ACL=("/var/www/.well-known/acme-challenge")
-DOMAIN_CERT_LOCATION="/etc/ssl/certs/stabile.crt"
-DOMAIN_KEY_LOCATION="/etc/ssl/certs/stabile.key"
-CA_CERT_LOCATION="/etc/ssl/certs/stabile.chain"
+ACL=("/var/www/html/.well-known/acme-challenge")
+DOMAIN_CERT_LOCATION="/etc/ssl/private/stabile.crt"
+DOMAIN_KEY_LOCATION="/etc/ssl/private/stabile.key"
+CA_CERT_LOCATION="/etc/ssl/private/stabile.chain"
 RELOAD_CMD="systemctl reload $apache"
 END
-;
-                print `echo '$getsslcfg' > /root/.getssl/$externalip.$dnsdomain/getssl.cfg`;
-                `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
-                `echo "$internalip $externalip.$dnsdomain" >> /etc/hosts` unless (`grep '$externalip.$dnsdomain' /etc/hosts`); # necessary to allow getssl do its own checks
-                print `getssl -a`;
-#                print `letsencrypt -d $externalip.$dnsdomain --email=cert\@$dnsdomain --agree-tos --no-redirect --noninteractive --apache`;
-            }
-            if (-e "/etc/ssl/certs/stabile.crt") {
-                my $reloadapache;
-                if (!(`grep stabile /etc/$apache/sites-available/webmin-ssl.conf`)) {
-                    `perl -pi -e 's/SSLCertificateFile.+/SSLCertificateFile \/etc\/ssl\/certs\/stabile.crt/' /etc/$apache/sites-available/*ssl.conf`;
-                    `perl -pi -e 's/SSLCertificateKeyFile.+/SSLCertificateKeyFile \/etc\/ssl\/certs\/stabile.key/' /etc/$apache/sites-available/*ssl.conf`;
-                    `perl -pi -e 's/#SSLCertificateChainFile.+/SSLCertificateChainFile \/etc\/ssl\/certs\/stabile.chain/' /etc/$apache/sites-available/*ssl.conf`;
+                    ;
+                    print `echo '$getsslcfg' > /root/.getssl/$dom/getssl.cfg`;
+                    `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
+                    `echo "$internalip $dom" >> /etc/hosts` unless (`grep '$dom' /etc/hosts`); # necessary to allow getssl do its own checks
+                    print `getssl -a -u -d  -w /root/.getssl 2>&1 | tee -a /tmp/stabile-registered`;
                     $reloadapache = 1;
+                    #                print `letsencrypt -d $dom --email=cert\@$dnsdomain --agree-tos --no-redirect --noninteractive --apache`;
                 }
-            #    `systemctl reload $apache` if ($reloadapache);
+                if (-e "/etc/ssl/private/stabile.crt") {
+                    `perl -pi -e 's/SSLCertificateFile.+/SSLCertificateFile \\/etc\\/ssl\\/private\\/stabile.crt/' /etc/$apache/sites-available/*ssl.conf`;
+                    `perl -pi -e 's/SSLCertificateKeyFile.+/SSLCertificateKeyFile \\/etc\\/ssl\\/private\\/stabile.key/' /etc/$apache/sites-available/*ssl.conf`;
+                    `perl -pi -e 's/#SSLCertificateChainFile.+/SSLCertificateChainFile \\/etc\\/ssl\\/private\\/stabile.chain/' /etc/$apache/sites-available/*ssl.conf`;
+                    `systemctl reload $apache` if ($reloadapache);
+                }
             }
-            #`systemctl reload apache2` if ($reloadapache);
+        }
+        if ($msg) {
+            print "$msg\n";
+            `echo "$msg" >> /tmp/stabile-registered`;
         }
     }
 }

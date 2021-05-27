@@ -1,32 +1,34 @@
 #!/bin/bash
 
-# The version of the app we are building
-version="1.4"
-#dname=`basename "$PWD"`
-dname="origo-samba"
-me=`basename $0`
-
-# Change working directory to script's directory
-cd ${0%/*}
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
+mv /tmp/files/stabile/elfinder /usr/share/webmin/stabile/
 # Remove "command" tab from Webmin UI
 rm -r /usr/share/webmin/stabile/tabs/commands
-echo files > /etc/hostname
-
-# Add Samba4 repo
-add-apt-repository "deb http://ppa.launchpad.net/kernevil/samba-4.0/ubuntu precise main"
-apt-get update
-apt-get -q -y --force-yes install samba4
+rm -r /usr/share/webmin/stabile/tabs/servers
+#echo files > /etc/hostname
+# Add 'files' to /etc/hosts
+#perl -pi -e 's/(127.+localhost.*)/$1 files/;' /etc/hosts
 
 # Install auth_tkt repo
-add-apt-repository "ppa:wiktel/ppa"
+echo "\n" | add-apt-repository "ppa:wiktel/ppa"
 apt-get update
-apt-get -q -y --force-yes install libapache2-mod-auth-tkt-prefork
+apt-get -q -y install libapache2-mod-auth-tkt
+# apt-get -q -y install libpam-winbind libpam-krb5
+
+# Redirect http to https
+perl -pi -e 's/(DocumentRoot \/var\/www\/html)/$1\n\tRewriteEngine on\n\tRewriteCond \%{REQUEST_URI} !^\/public\/\n\tRewriteCond \%{REQUEST_URI} !^\/.well-known\/\n\tRewriteRule (.*) https:\/\/\%{HTTP_HOST}%{REQUEST_URI}/' /etc/apache2/sites-available/000-default.conf
 
 bash -c 'echo "TKTAuthSecret \"AjyxgfFJ69234u\"
 TKTAuthDigestType SHA512
-SetEnv MOD_AUTH_TKT_CONF \"/etc/apache2/conf.d/auth_tkt.conf\"
+SetEnv MOD_AUTH_TKT_CONF \"/etc/apache2/conf-available/auth_tkt.conf\"
+Alias /auth /var/www/auth
+<Location "/">
+	RewriteEngine on
+	RewriteCond "%{SERVER_PORT}" "^443$"
+	RewriteCond %{REQUEST_URI} ^/\$
+	RewriteRule (.*) /stabile/elfinder/index.cgi [R=301]
+</Location>
 <Directory /var/www/auth>
   Order deny,allow
   Allow from all
@@ -45,7 +47,7 @@ SetEnv MOD_AUTH_TKT_CONF \"/etc/apache2/conf.d/auth_tkt.conf\"
     order deny,allow
     AuthName Services
     AuthType None
-    TKTAuthLoginURL /auth/login.cgi
+    TKTAuthLoginURL auth/login.cgi
     TKTAuthIgnoreIP on
     deny from all
     require valid-user
@@ -57,15 +59,19 @@ SetEnv MOD_AUTH_TKT_CONF \"/etc/apache2/conf.d/auth_tkt.conf\"
      Header set Expires \"Wed, 11 Jan 1984 05:00:00 GMT\"
   </ifModule>
 </LocationMatch>
-<Location /origo/elfinder/>
-    ProxyPass http://127.0.0.1:10000/origo/elfinder/
-    ProxyPassReverse http://127.0.0.1:10000/origo/elfinder/
+<Location /stabile/elfinder/>
+    ProxyPass http://127.0.0.1:10000/stabile/elfinder/
+    ProxyPassReverse http://127.0.0.1:10000/stabile/elfinder/
+</Location>
+<Location /stabile/elfinder/elfinder/>
+    ProxyPass http://127.0.0.1:10000/stabile/elfinder/
+    ProxyPassReverse http://127.0.0.1:10000/stabile/elfinder/
 </Location>
 <LocationMatch \"(^/users/|^/shared/|^/groups/)\">
     order deny,allow
     Satisfy all
     AuthType None
-    TKTAuthLoginURL /auth/login.cgi
+    TKTAuthLoginURL auth/login.cgi
     TKTAuthIgnoreIP on
     require valid-user
     RewriteEngine On
@@ -94,15 +100,30 @@ SetEnv MOD_AUTH_TKT_CONF \"/etc/apache2/conf.d/auth_tkt.conf\"
 </Location>
 <Location \"/public/\">
    Options Indexes
+   Require all granted
 </Location>
-" > /etc/apache2/conf.d/auth_tkt.conf'
+" > /etc/apache2/conf-available/auth_tkt.conf'
+ln -s /etc/apache2/conf-available/auth_tkt.conf /etc/apache2/conf-enabled/auth_tkt.conf
 
 # Configure Samba
-samba-tool domain provision --realm=origo.lan --domain=origo --host-name=$dname --dnspass="Passw0rd" --adminpass="Passw0rd" --server-role=dc --dns-backend=SAMBA_INTERNAL --use-rfc2307 --use-xattrs=yes
+mv /etc/samba/smb.conf /etc/samba/smb.conf.orig
+mv /etc/krb5.conf /etc/krb5.conf.orig
+#samba-tool domain provision --realm=stabile.lan --domain=stabile --host-name=$dname --dnspass="Passw0rd" --adminpass="Passw0rd" --server-role=dc --dns-backend=SAMBA_INTERNAL --use-rfc2307 --use-xattrs=yes
+samba-tool domain provision --realm=stabile.lan --domain=stabile --host-name=files --dnspass="Passw0rd" --adminpass="Passw0rd" --server-role=dc --dns-backend=SAMBA_INTERNAL --use-rfc2307
+cp /var/lib/samba/private/krb5.conf /etc
 # Prevent passwords from expiring
 samba-tool domain passwordsettings set --max-pwd-age=0
+# Disable systemd resolver
+systemctl disable systemd-resolved
+echo "nameserver 127.0.0.1
+search stabile.lan" > /etc/resolv.conf
+# Configure startup
+systemctl mask smbd nmbd winbind
+systemctl disable smbd nmbd winbind
+systemctl unmask samba-ad-dc
+systemctl enable samba-ad-dc
 
-perl -pi -e 's/(\[global\])/$1\n   root preexec = \/bin\/mkdir \/mnt\/data\/users\/%U\n   dns forwarder = 10.0.0.1\n   log level = 2\n   log file = \/var\/log\/samba\/samba.log.%m\n   max log size = 50\n   debug timestamp = yes\n   idmap_ldb:use rfc2307 = yes\n   server services = -nbt\n   veto files = \/.groupaccess_*\/.tmb\/.quarantine\//' /etc/samba/smb.conf
+perl -pi -e 's/(\[global\])/$1\n   ldap server require strong auth =no\n   root preexec = \/bin\/mkdir \/mnt\/data\/users\/%U\n   log level = 2\n   log file = \/var\/log\/samba\/samba.log.%m\n   max log size = 50\n   debug timestamp = yes\n   idmap_ldb:use rfc2307 = yes\n   server services = -nbt\n   veto files = \/.groupaccess_*\/.tmb\/.quarantine\//' /etc/samba/smb.conf
 perl -pi -e 's/(\[netlogon\])/$1\n   browseable = no/' /etc/samba/smb.conf
 perl -pi -e 's/(\[sysvol\])/$1\n   browseable = no/' /etc/samba/smb.conf
 bash -c 'echo "
@@ -131,60 +152,68 @@ bash -c 'echo "
 include = /etc/samba/smb.conf.groups
 
 " >> /etc/samba/smb.conf'
-touch $1/etc/samba/smb.conf.groups
+touch /etc/samba/smb.conf.groups
 
 # Make everything related to elfinder available through elfinder dir
-ln -s /usr/share/webmin/origo/bootstrap /usr/share/webmin/origo/elfinder/bootstrap
-ln -s /usr/share/webmin/origo/strength /usr/share/webmin/origo/elfinder/strength
-ln -s /usr/share/webmin/origo/css/flat-ui.css /usr/share/webmin/origo/elfinder/css/flat-ui.css
-ln -s /usr/share/webmin/origo/images/origo-gray.png /usr/share/webmin/origo/elfinder/img/origo-gray.png
+ln -s /usr/share/webmin/stabile/bootstrap /usr/share/webmin/stabile/elfinder/bootstrap
+ln -s /usr/share/webmin/stabile/strength /usr/share/webmin/stabile/elfinder/strength
+ln -s /usr/share/webmin/stabile/css/flat-ui.css /usr/share/webmin/stabile/elfinder/css/flat-ui.css
 
 # Finish configuring Apache
-cp ticketmaster.pl $1/usr/local/bin
-chmod 755 $1/usr/local/bin/ticketmaster.pl
-mkdir $1/etc/perl/Apache
-cp Apache/AuthTkt.pm $1/etc/perl/Apache
+cp /tmp/files/ticketmaster.pl /usr/local/bin
+chmod 755 /usr/local/bin/ticketmaster.pl
+mkdir /etc/perl/Apache
+cp /tmp/files/Apache/AuthTkt.pm $1/etc/perl/Apache
 
-mkdir $1/var/www/auth
-gunzip $1/usr/share/doc/libapache2-mod-auth-tkt-prefork/cgi/login.cgi.gz
-gunzip $1/usr/share/doc/libapache2-mod-auth-tkt-prefork/cgi/Apache/AuthTkt.pm.gz
-cp -a $1/usr/share/doc/libapache2-mod-auth-tkt-prefork/cgi/* $1/var/www/auth
-cp auth-login.cgi $1/var/www/auth/login.cgi
+mkdir /var/www/auth
+gunzip /usr/share/doc/libapache2-mod-auth-tkt/examples/cgi/login.cgi.gz
+gunzip /usr/share/doc/libapache2-mod-auth-tkt/examples/cgi/Apache/AuthTkt.pm.gz
+cp -a /usr/share/doc/libapache2-mod-auth-tkt/examples/cgi/* /var/www/auth
+cp /tmp/files/auth-login.cgi /var/www/auth/login.cgi
 chmod 755 $1/var/www/auth/*
-cp AuthTktConfig.pm $1/var/www/auth/
+cp /tmp/files/AuthTktConfig.pm /var/www/auth/
 
-gcc -o suid-smbpasswd suid-smbpasswd.c
-cp suid-smbpasswd $1/usr/bin
-chmod 6755 $1/usr/bin/suid-smbpasswd
+gcc -o /tmp/files/suid-smbpasswd /tmp/files/suid-smbpasswd.c
+cp /tmp/files/suid-smbpasswd /usr/bin
+chmod 6755 /usr/bin/suid-smbpasswd
 
 ln -s /var/www/auth/login.cgi /var/www/auth/changepwd.cgi
 
 /usr/sbin/a2enmod rewrite
 /usr/sbin/a2enmod headers
+/usr/sbin/a2enmod cgi
 
-#    mkdir /mnt/data/users
-#    mkdir /mnt/data/users/administrator
-#    mkdir /mnt/data/shared
-#    mkdir /mnt/data/groups
-rm -r /usr/share/webmin/origo/files
 
-ln -s /mnt/data/shared /var/www/shared
-ln -s /mnt/data/users /var/www/users
-ln -s /mnt/data/groups /var/www/groups
+chmod 777 /mnt/data/shared /mnt/data/users /mnt/data/groups
+ln -s /mnt/data/shared /var/www/html/shared
+ln -s /mnt/data/users /var/www/html/users
+ln -s /mnt/data/groups /var/www/html/groups
 
-ln -sf /opt/samba4/private/krb5.conf /etc/krb5.conf
+ln -sf /var/lib/samba/private/krb5.conf /etc/krb5.conf
 
 /usr/sbin/adduser www-data users
 
 # Set up btsync
-bash -c 'echo "start on started networking
-expect fork
-respawn
-exec /usr/share/webmin/origo/tabs/samba/bittorrent_sync_x64/btsync --nodaemon --config /usr/share/webmin/origo/tabs/samba/bittorrent_sync_x64/btconfig.json &" > /etc/init/origo-btsync.conf'
+bash -c 'echo "[Unit]
+DefaultDependencies=no
+Description=Utility script for BTsync (Resilio Sync)
+Wants=network-online.target
+After=stabile-networking.service
+After=network.target network-online.target
+
+[Service]
+ExecStart=/usr/share/webmin/stabile/tabs/samba/bittorrent_sync_x64/btsync --nodaemon --config /usr/share/webmin/stabile/tabs/samba/bittorrent_sync_x64/btconfig.json
+TimeoutSec=60
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target" > /etc/systemd/system/stabile-btsync.service'
+chmod 664 /etc/systemd/system/stabile-btsync.service
+systemctl enable stabile-btsync
 
 # Utility script for setting up Samba to work with this stack
 cp /tmp/files/stabile-files.sh /usr/local/bin
-chmod 755 $1/usr/local/bin/stabile-files.sh
+chmod 755 /usr/local/bin/stabile-files.sh
 
 bash -c 'echo "[Unit]
 DefaultDependencies=no
@@ -202,4 +231,17 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/stabile-files.service'
 chmod 664 /etc/systemd/system/stabile-files.service
+systemctl enable stabile-files
+
+# Change logo
+perl -pi -e 's/images\/ubuntu-logo.png/tabs\/files\/logo-files.png/' /usr/share/webmin/stabile/index.cgi
+# Make elFinder display PDF's inline
+# perl -pi -e "s/x-shockwave-flash'/pdf'/" /usr/share/webmin/stabile/elfinder/php/elFinder.class.php
+
+# Make all files available to ElFinder when used through admin UI
+ln -s /mnt/data /usr/share/webmin/stabile/files
+
+# For debugging - remove before release
+#echo "stabile:stabile" | chpasswd
+#echo "Passw0rd" | /usr/bin/kinit Administrator 2>&1
 

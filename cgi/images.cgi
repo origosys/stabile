@@ -1612,6 +1612,10 @@ END
     }
     $path = $imagereg{$path}->{'path'} if ($imagereg{$path}); # Check if we were passed a uuid
     $path = $curimg if (!$path && $register{$curimg});
+    if (!$curimg && $path && !($path =~ /^\//)) {
+        $curimg = $path;
+        $path = '';
+    }
     if (!$path && $curimg && !($curimg =~ /\//) ) { # Allow passing only image name if we are deleting an app master
         my $dspool = $stackspool;
         $dspool = $spools[0]->{'path'} unless ($engineid eq $valve001id);
@@ -2189,6 +2193,7 @@ sub Move {
     my $newpath;
     my $newdirpath;
     my $oldpath = $path;
+    my $olddirpath = $path;
     my $newuser = $reguser;
     my $newstoragepool = $regstoragepool;
     my $haschildren;
@@ -2331,6 +2336,7 @@ sub Move {
                     $newstoragepool = $istoragepool;
             # Check if image already exists in target dir
                     $alreadyexists = `ssh -l irigo -i /var/www/.ssh/id_rsa_www -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no $macip "perl -e 'print 1 if -e q{/mnt/stabile/node/$reguser/$restpath}'"`;
+
                 } else {
                     $postreply .= "Status=ERROR Unable to move $name (not enough space)\n";
                 }
@@ -2401,23 +2407,23 @@ sub Move {
         }
         $register{$newdirpath}->{'user'} = $newuser;
         tied(%register)->commit;
-        if ($status eq "used" || $status eq "paused") {
-            my $domuuid = $register{$path}->{'domains'};
+        my $domuuid = $register{$path}->{'domains'};
+        if ($status eq "used" || $status eq "paused" || $status eq "moving") {
             my $dom = $domreg{$domuuid};
-            if ($dom->{'image'} eq $oldpath) {
+            if ($dom->{'image'} eq $olddirpath) {
                 $dom->{'image'} = $newdirpath;
-            } elsif ($dom->{'image2'} eq $oldpath) {
+            } elsif ($dom->{'image2'} eq $olddirpath) {
                 $dom->{'image2'} = $newdirpath;
-            } elsif ($dom->{'image3'} eq $oldpath) {
+            } elsif ($dom->{'image3'} eq $olddirpath) {
                 $dom->{'image3'} = $newdirpath;
-            } elsif ($dom->{'image4'} eq $oldpath) {
+            } elsif ($dom->{'image4'} eq $olddirpath) {
                 $dom->{'image4'} = $newdirpath;
             }
             $dom->{'mac'} = $mac if ($newstoragepool == -1);
             if ($dom->{'system'} && $dom->{'system'} ne '--') {
                 unless (tie(%sysreg,'Tie::DBI', Hash::Merge::merge({table=>'systems'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access systems register"}|; return $res;};
                 my $sys = $sysreg{$dom->{'system'}};
-                $sys->{'image'} = $newdirpath;
+                $sys->{'image'} = $newdirpath if ($sys->{'image'} eq $olddirpath);
                 untie %sysreg;
             }
         }
@@ -2460,6 +2466,7 @@ sub locateNode {
                 && ($snode->{'status'} eq 'running' || $snode->{'status'} eq 'asleep' || $snode->{'status'} eq 'waking')
                 && ($snode->{'index'} > 0)
             ) {
+                next if (!($mem) && $snode->{'identity'} eq 'local_kvm'); # Ugly hack - prevent moving images from default storage to local_kvm node
                 $node = $snode;
                 last;
             }
@@ -3746,6 +3753,7 @@ END
     my $res;
     $uuid = $parms->{'uuid'} if ($uuid =~ /^\// || !$uuid);
     my $force = $parms->{'force'};
+    my $freshen = $parms->{'freshen'};
 
     if ($isreadonly) {
         $res .= "Status=ERROR Your account does not have the necessary privilege.s\n";
@@ -3784,6 +3792,7 @@ END
                 $res .= "Status=OK Adding registry: $1\n";
             }
         }
+        $parms->{'appstore'} = 1 if ($freshen);
 
         my %imgref = %{$imagereg{$uuid}};
         $parms = Hash::Merge::merge($parms, \%imgref);
@@ -3793,7 +3802,9 @@ END
         my $appid;
         $appid = $1 if ($postres =~ /appid: (\d+)/);
         my $path = $imagereg{$uuid}->{'path'};
-        if ($appid) {
+        if ($freshen && $appid) {
+            $res .= "Status=OK Freshened the stack description\n";
+        } elsif ($appid) {
             $register{$path}->{'appid'} = $appid if ($register{$path});
             $res .= "Status=OK Received appid $appid for $path, uploading image to registry, hang on...\n";
             my $upres .= $main::uploadToOrigo->($engineid, $path, $force);
@@ -3967,7 +3978,7 @@ EOT
                 unlink("$dir/$username/.htaccess");
                 `/bin/echo "$txt1" | sudo -u www-data tee $dir/$username/.htaccess`;
                 if ($tenderlist[$p->{'id'}] eq 'local') {
-                    unless (-e "$dir/$username/fuel") {
+                    if (!(-e "$dir/$username/fuel") && -e "$dir/$username") {
                         `mkdir "$dir/$username/fuel"`;
                         `chmod 777 "$dir/$username/fuel"`;
                     }
@@ -5217,7 +5228,7 @@ END
             1;
         } or do {$postreply .= "Status=ERROR $@\n";}
     } else {
-    # Moving images because of owner change or storagepool change
+        # Moving images because of owner change or storagepool change
         if ($obj->{user} ne $obj->{reguser} || $obj->{storagepool} ne $obj->{regstoragepool}) {
             $uipath = Move($path, $obj->{user}, $obj->{storagepool}, $obj->{mac});
     # Resize a qcow2 image

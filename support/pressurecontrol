@@ -94,6 +94,11 @@ print `/sbin/iptables -D INPUT -p udp --destination-port 10000 -s 10.0.0.0/255.0
 print `/sbin/iptables -A INPUT -p udp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP`;
 print `/sbin/iptables -D INPUT -p tcp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP 2>/dev/null`;
 print `/sbin/iptables -A INPUT -p tcp --destination-port 10000 -s 10.0.0.0/255.0.0.0 -j DROP`;
+# Make netserver (netperf) inaccessible outside of 10.0.0.0
+print `/sbin/iptables -D INPUT -p udp --destination-port 12865 ! -s 10.0.0.0/255.0.0.0 -j DROP 2>/dev/null`;
+print `/sbin/iptables -A INPUT -p udp --destination-port 12865 ! -s 10.0.0.0/255.0.0.0 -j DROP`;
+print `/sbin/iptables -D INPUT -p tcp --destination-port 12865 ! -s 10.0.0.0/255.0.0.0 -j DROP 2>/dev/null`;
+print `/sbin/iptables -A INPUT -p tcp --destination-port 12865 ! -s 10.0.0.0/255.0.0.0 -j DROP`;
 # Make ugly exception for virtual instances running in Stabile
 if (-e "/tmp/internalip") {
     my $internalip = `cat /tmp/internalip`; chomp $internalip;
@@ -129,13 +134,13 @@ mountPaths();
 
 print "Checking quotas\n";
 foreach my $sp (@spoolpaths) {
-    `quotacheck -c "$sp"`;
+    `quotacheck -c "$sp"` if (-e "$sp");
 }
 
 if (-d "/sys/fs/cgroup") {
     print "Setting cgroups limits\n";
     my @files = ("/etc/stabile/cgconfig.conf");
-    push @files, "/etc/cgconfig.conf" if (-e "/etc/cgconfig.conf");
+    push @files, "/etc/cgconfig.conf" if (-s "/etc/cgconfig.conf");
     foreach my $file (@files) {
         open (FILE, "< $file") || die "problem opening $file\n";
         my @lines = <FILE>;
@@ -263,7 +268,7 @@ if ($linked) {
             if ($enginekeys{$k}) {
                 my @vals = $cfg->param($k); my $val = join(", ", @vals);
                 if ($val ne $v) {
-                    if ($pullconfigs || $k eq 'ENGINEUSER') {
+                    if (($pullconfigs || $k eq 'ENGINEUSER') && $k ne 'ENGINEID' && $k ne 'ENGINE_LINKED') {
                         print "Received modified config: $line\n";
                         $cfg->param($k, $v);
                     }
@@ -545,7 +550,7 @@ if ($pid) {
                         $response->push_header( 'X-Via' => "1.1 $origuri" );
                         $response->push_header( 'X-BaseUri' => "1.1 $baseuri" );
                         $response->remove_header( 'Content-Security-Policy');
-                        $response->push_header( 'Content-Security-Policy' => "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ajax.googleapis.com https://code.jquery.com https://ajax.microsoft.com; style-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://ajax.googleapis.com https://code.jquery.com" );
+                        $response->push_header( 'Content-Security-Policy' => "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ajax.googleapis.com https://code.jquery.com https://ajax.microsoft.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://ajax.googleapis.com https://code.jquery.com" );
                         $c->send_response( $response );
                         print "Got: $geturi\n";
                     } else {
@@ -869,7 +874,11 @@ sub downloadMasters {
             } else {
                 if (!$current) {
                     $msg = "Image $fname is not latest version, not downloading. ";
-                } elsif (!lookupProcess($fname)) { # Check if image is already being downloaded
+                } elsif (lookupProcess($fname)) { # Check if image is already being downloaded
+                    $msg = "Image $fname is already being downloaded. ";
+                } elsif (-s $f) { # Check if image exists
+                    $msg = "Image $fname already exists but with a different size than in registry - please remove or correct. ";
+                } else {
                     $f = "$spoolpaths[0]/$stackuser/$fname";
                     print `echo "status=downloading" > "$f.meta"`;
                     $msg = "Image $fname not found. Downloading $fsize bytes to $f ($stack->{url})... ";
@@ -877,11 +886,9 @@ sub downloadMasters {
                     my $uimsg = qq|Now downloading $name ($msize) MB)|;
                     push @downloadalerts, {tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg, download=>$f, name=>$name, size=>$frealsize};
                     push @dlmasters, $name;
-#                    $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
+                    #                    $main::updateUI->({tab=>"nodes", user=>'irigo', type=>"message", message=>$uimsg}); # notify user
                     $cmd = qq|wget --no-check-certificate --no-verbose --tries=4 -a /mnt/stabile/images/stacks-xfer.log -O "$f" $imgurl|;
                     $cmd .= qq|; rm "$f.meta"; steamExec updateimagestatus "$f" installable $vsize; steamExec updatebackingfile "$f"|;
-                } else {
-                    $msg = "Image $fname is already being downloaded. ";
                 }
             }
 
@@ -909,7 +916,7 @@ sub downloadMasters {
                     }
                 }
             }
-            if ($f =~ /\.master\.qcow2$/) {
+            if ($imagereg{$f} && $f =~ /\.master\.qcow2$/) {
                 $imagereg{$f}->{'installable'} = 'true';
                 # Check for old versions and remove installable flag in order to not confuse matters
                 if ($appid) {
@@ -982,7 +989,7 @@ sub downloadMasters {
                 }
             }
             # Update data image information
-            $imagereg{$f}->{'image2'} = $f2;
+            $imagereg{$f}->{'image2'} = $f2 if ($imagereg{$f});
             tied(%imagereg)->commit;
             push @cmds, $cmd if ($cmd);
             push @cmds, $cmd2 if ($cmd2);

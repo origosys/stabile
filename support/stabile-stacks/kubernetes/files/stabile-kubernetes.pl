@@ -20,10 +20,13 @@ if ($intip && $mip) {
             ;
         } else {
             my $kinit = `kubeadm init --pod-network-cidr=10.244.0.0/16 | tee /root/initout.log 2>\&1`;
-            if ($kinit =~ /(kubeadm join .+ --discovery-token-ca-cert-hash sha256:.+)/s) {
+            if ($kinit =~ /(kubeadm join .+--discovery-token-ca-cert-hash sha256:.+)/s) {
                 my $joincmd = $1;
+                $joincmd =~ s/\n//;
+                $joincmd =~ s/\\//;
+                $joincmd =~ s/\s+/ /g;
 
-            # Install CNI
+                # Install CNI
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml >> /root/initout.log`;
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml >> /root/initout.log`;
 #                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> /root/initout.log 2>\&1`;
@@ -130,9 +133,9 @@ if ($intip && $mip) {
         } else {
             for (my $i=0; $i<20; $i++) {
                 `echo "Getting joincmd from $mip" >> /root/initout.log`;
-                my $head = `curl -I http://$mip\:10000/stabile/tabs/kubernetes/joincmd.sh`;
+                my $head = `curl -I http://$mip:10000/stabile/tabs/kubernetes/joincmd.sh`;
                 if ($head =~ /HTTP\/1\.0 200 Document/) {
-                    my $joincmd = `curl http://$mip\:10000/stabile/tabs/kubernetes/joincmd.sh`;
+                    my $joincmd = `curl http://$mip:10000/stabile/tabs/kubernetes/joincmd.sh`;
                     chomp $joincmd;
                     chomp $joincmd;
                     `echo '$joincmd' > /root/joincmd.sh`;

@@ -516,7 +516,7 @@ END
                         `echo '$getsslcfg' > "/root/.getssl/$externalip.$dnssubdomain.$dnsdomain/getssl.cfg"`;
                         `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
                         my $hsans = $sans;
-                        $hsans =~ s/,/ /;
+                        $hsans =~ s/,/ /g;
                         `echo "$internalip $externalip.$dnssubdomain.$dnsdomain $hsans" >> /etc/hosts`; # necessary to allow getssl do its own checks
                         my $sslres = `getssl -f  -U $externalip.$dnssubdomain.$dnsdomain | tee /tmp/getssl.out \&2>1`;
                         unless ($sslres =~ /error/i) {

@@ -364,6 +364,7 @@ define([
 
         on_change_master: function(path) {
             console.log("master changed", path, home.install_sytem);
+            $("#wizard_ports").val('');
             if (home.install_system) { // Don't fire onchange if we are loading a system from the app store
                 console.log("installing app from app store", home.install_system);
                 stores.masterimages.fetch( {query: {appid: home.install_system, installable: "true"}, onComplete:
@@ -601,7 +602,7 @@ define([
                 document.getElementById("wizardTitle").innerHTML = "";
             }
             if (sys_tpl && sys_tpl.appid) {
-                document.getElementById("wizardTitle").innerHTML += " <a class=\"dimlink\" target=\"_blank\" href=\"https://www.stabile.io/registry#app-" + sys_tpl.appid + "\">(view in Stabile Registry)</a>";
+                document.getElementById("wizardTitle").innerHTML += " <span class=\"dimlink\">(version: " + sys_tpl.version + ", <a class=\"dimlink\" target=\"_blank\" href=\"https://www.stabile.io/registry#app-" + sys_tpl.appid + "\">view in Stabile Registry)</a></span>";
             }
             if (sys_tpl && sys_tpl.managementlink && sys_tpl.managementlink!='' && sys_tpl.upgradelink && sys_tpl.upgradelink!='') {
                 dijit.byId('wizard_managementlink').set("value", sys_tpl.managementlink);
@@ -619,7 +620,7 @@ define([
                 if (sys_tpl.thumbnail) {
                     var thumb = sys_tpl.thumbnail;
                     if (thumb.indexOf("http") != 0) thumb = "https://www.origo.io" + thumb;
-                    desc += '<div style="text-align:center; margin-bottom:20px;"><img style="max-height:80px;" src="' + thumb + '"></div>';
+                    desc += '<div style="text-align:center; margin-bottom:20px;"><img style="max-height:120px;" src="' + thumb + '"></div>';
                 }
                 desc += sys_tpl.description || 'This stack is waiting for a nice description from its owner...';
                 document.getElementById("wizardHelp").innerHTML = desc;
@@ -748,8 +749,11 @@ define([
                 url: link,
                 failOK: true,
                 timeout: 30000,
-                load: function(response) {
-                    dojo.byId("manageSystemIframe").src = link;
+                load: function(response) { // even after first request succeeds, subsequent may fail, so we wait a little
+                    if (i>0)
+                        setTimeout(function() {dojo.byId("manageSystemIframe").src = link}, 8000);
+                    else
+                        dojo.byId("manageSystemIframe").src = link;
                 },
                 error: function(response) {
                     console.log("got an error loading iframe", i);
@@ -803,7 +807,7 @@ define([
 
                 var postData = '{"items":[{' +
                         '"action": "buildsystem", '+
-                        '"name": "' + name + '",' +
+                        '"name": "' + encodeURIComponent(name) + '",' +
                         '"master": "' + master + '",' +
                         '"memory": ' + memory + ',' +
                         '"vcpu": ' + vcpu + ',' +

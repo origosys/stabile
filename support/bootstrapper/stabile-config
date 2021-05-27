@@ -61,7 +61,7 @@ for (my $i==0; $i<scalar @qs; $i++) {
         } else {
             $ip = `dig +short $hostname`; chomp $ip;
             unless ($ip) {
-                $ip = $1 if (`getent hosts $hostname` =~ /(\d+\.\d+\.\d+\.\d+)/);
+                $ip = $1 if (`getent ahostsv4 $hostname` =~ /(\d+\.\d+\.\d+\.\d+)/);
             }
         }
         $ip = $1 if ($ip =~ /(\d+\.\d+\.\d+\.\d+)/s);
@@ -94,6 +94,9 @@ for (my $i==0; $i<scalar @qs; $i++) {
                     $req++;
                 }
             }
+            open(my $base, '>', '/etc/stabile/baseurl');
+            print $base "https://$hostname/stabile";
+            close($base);
         }
     } elsif ($q eq "stabile/initial_password") {
         $MAXLEN = 20;

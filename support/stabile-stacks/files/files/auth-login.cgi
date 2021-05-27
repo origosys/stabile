@@ -1,3 +1,5 @@
+#!/usr/bin/perl -Uw
+#
 #!/usr/bin/perl -UTw
 #
 # mod_auth_tkt sample login script - runs as a vanilla CGI, under 
@@ -299,17 +301,17 @@ PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
     //]]></script>
     <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="/origo/elfinder/bootstrap/css/bootstrap.css" rel="stylesheet">
-    <link href="/origo/elfinder/css/flat-ui.css" rel="stylesheet">
-    <link rel="shortcut icon" href="/origo/elfinder/images/icons/favicon.ico">
-    <link rel="stylesheet" href="/origo/elfinder/strength/strength.css">
+    <link href="/stabile/elfinder/bootstrap/css/bootstrap.css" rel="stylesheet">
+    <link href="/stabile/elfinder/css/flat-ui.css" rel="stylesheet">
+    <link rel="shortcut icon" href="/stabile/elfinder/images/icons/favicon.ico">
+    <link rel="stylesheet" href="/stabile/elfinder/strength/strength.css">
     <link href='https://fonts.googleapis.com/css?family=Lato:400,700' rel='stylesheet' type='text/css'>
 </head>
 <body onload="getFocus()">
     <div style="width:600px; margin: 10px auto 0 auto; padding:6px;" class="panel panel-default">
         <nav role="navigation" class="navbar navbar-default">
             <h4 style="display:inline-block; vertical-align:middle;">
-                <img width="38" height="43" style="margin:0 6px 6px 12px;" src="/origo/elfinder/img/origo-gray.png">File Browser
+                <img width="38" height="43" style="margin:0 6px 6px 12px;" src="/stabile/elfinder/img/files-sync.png">File Browser
             </h4>
             <div class="label label-warning pull-right" style="white-space:normal;">$error_msg</div>
         </nav>
@@ -337,31 +339,33 @@ sub changeSambaPassword {
     my ($username, $newpassword) = @_;
     my $error;
     my $smbpasswd="/usr/bin/suid-smbpasswd";
-
-    if (!$error ) { #&& $samba_user_check->expect(30, '-re', "$username:*")) {
-        my $samba_passwd=Expect->spawn("$smbpasswd $username");
-        $samba_passwd->slave->stty(qw(-echo));
-        $samba_passwd->log_stdout(0);
-        if ($samba_passwd) {
-            unless($samba_passwd->expect(30, "New SMB password:")) { $error =  "Unable to change password!"; }
-            print $samba_passwd "$newpassword\n";
-
-            unless($samba_passwd->expect(30, "Retype new SMB password:")) { $error = "Unable to change password."; }
-            print $samba_passwd "$newpassword\n";
-
-            if ($samba_passwd->expect(30, '-re', "Failed to modify account")) { $error =  "ERROR: ". $samba_passwd->after(); }
-            chomp $error if ($error);
-
-            #Must soft close this file handle otherwise on some system
-            #command may fail to complete.
-            $samba_passwd->soft_close();
-            `/etc/init.d/samba4 restart` unless ($error);
-        } else {
-            $error =  "Unable to start smbpasswd!";
-        }
-
-    }
+    $error = `echo "$newpassword\n$newpassword" | $smbpasswd -s $username &2>1`;
     return $error;
+
+    # if (!$error ) { #&& $samba_user_check->expect(30, '-re', "$username:*")) {
+    #     my $samba_passwd=Expect->spawn("$smbpasswd $username");
+    #     $samba_passwd->slave->stty(qw(-echo));
+    #     $samba_passwd->log_stdout(0);
+    #     if ($samba_passwd) {
+    #         unless($samba_passwd->expect(30, "New SMB password:")) { $error =  "Unable to change password!"; }
+    #         print $samba_passwd "$newpassword\n";
+    #
+    #         unless($samba_passwd->expect(30, "Retype new SMB password:")) { $error = "Unable to change password."; }
+    #         print $samba_passwd "$newpassword\n";
+    #
+    #         if ($samba_passwd->expect(30, '-re', "Failed to modify account")) { $error =  "ERROR: ". $samba_passwd->after(); }
+    #         chomp $error if ($error);
+    #
+    #         #Must soft close this file handle otherwise on some system
+    #         #command may fail to complete.
+    #         $samba_passwd->soft_close();
+    #         `systemctl reload samba-ad-dc` unless ($error);
+    #     } else {
+    #         $error =  "Unable to start smbpasswd!";
+    #     }
+    #
+    # }
+    # return $error;
 }
 
 

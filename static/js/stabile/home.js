@@ -117,10 +117,14 @@ define([
         updateEngine : function(action) {
             var irigouser;
             var irigopwd;
-            var engineid = IRIGO.user.engineid || dojo.byId('engineid').value;
+            var engineid = IRIGO.user.engineid;
             var enginename = dijit.byId('info_enginename_field').value || IRIGO.user.enginename;
             var engineurl = document.location.href.substring(0,document.location.href.lastIndexOf("/"));
             var data;
+            if (!engineid) {
+                console.log("No engine ID");
+                return;
+            }
             if (!action) action = (user.enginelinked?"unlinkengine":"linkengine");
 
             if (action == 'restoreengine') {
@@ -1729,8 +1733,15 @@ define([
                 grid.hideRow("requestlabel");
                 grid.hideRow("okstringlabel");
                 grid.showRow("serveriplabel");
-            } else if (service == "imap" || service == "imaps" || service == "ldap") {
-                grid.hideRow("portlabel");
+            } else if (service == "imap" || service == "imaps") {
+                grid.showRow("portlabel");
+                grid.hideRow("requestlabel");
+                grid.hideRow("okstringlabel");
+                grid.showRow("serveriplabel");
+            } else if (service == "ldap") {
+                document.getElementById("requestlabel").innerHTML = "Base DN";
+                document.getElementById("okstringlabel").innerHTML = '<a href="https://www.origo.io/info/stabiledocs/web/dashboard/monitoring-tab/ldap/" rel="help" target="_blank" class="irigo-tooltip">help</a>' + "Attribute to look for";
+                grid.showRow("portlabel");
                 grid.showRow("requestlabel");
                 grid.showRow("okstringlabel");
                 grid.showRow("serveriplabel");

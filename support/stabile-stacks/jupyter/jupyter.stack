@@ -23,4 +23,4 @@ LOGO=https://www.stabile.io/images/apps/logo-jupyter.png
 THUMBNAIL=https://www.stabile.io/images/apps/logo-jupyter.png
 SUMMARY=The Jupyter Notebook is the leading Open Source scientific application for creating and sharing live code, equations, visualizations and text.
 DESCRIPTION=Project Jupyter is an open source project was born out of the IPython Project in 2014 as it evolved to support interactive data science and scientific computing across all programming languages. Jupyter will always be 100% open source software, free for all to use and released under the liberal terms of the modified BSD license.\
-<div><a href="https://github.com/origosys/stabile-stacks/tree/master/jupyter">Stack source code</a></div>
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterjupyter">Stack source code</a></div>

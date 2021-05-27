@@ -19,7 +19,7 @@ our $TITLE = 'File Browser';
 our $FIXED_BACK_LOCATION = '';
 
 # Default back location, if none set via back cookie or back arg
-our $DEFAULT_BACK_LOCATION = '/origo/elfinder/index.cgi';
+our $DEFAULT_BACK_LOCATION = '/stabile/elfinder/index.cgi';
 
 # Boolean flag, whether to fallback to HTTP_REFERER for back location
 our $BACK_REFERER = 0;
@@ -43,8 +43,8 @@ sub validate
 {
     my ($username, $password) = @_;
     my $internalip = `cat /tmp/internalip`;
-    $internalip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
-    my $dominfo = `samba-tool domain info \`cat $internalip\``;
+    $internalip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
+    my $dominfo = `samba-tool domain info $internalip`;
     my $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
     my @domparts = split(/\./, $sambadomain);
     my $userbase = "CN=users,DC=" . join(",DC=", @domparts);

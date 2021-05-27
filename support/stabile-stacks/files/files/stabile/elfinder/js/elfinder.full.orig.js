@@ -213,8 +213,8 @@ window.elFinder = function(node, opts) {
 		 * @type Number
 		 * @default 400
 		 **/
-        //height = 400,
-
+		height = 400,
+				
 		beeper = $(document.createElement('audio')).hide().appendTo('body')[0],
 			
 		syncInterval,
@@ -279,27 +279,20 @@ window.elFinder = function(node, opts) {
 				ctrlKey = !!(e.ctrlKey || e.metaKey);
 
 			if (enabled) {
-                if (                    // Allow copying out of text fields
-                    e.metaKey && e.key=='c'
-                && (e.target.id=='publink' || e.target.id=='btsync_ro' || e.target.id=='btsync_rw')
-                    ) {
-                    console.log("got a copy", e.target.id);
-                } else {
-                    $.each(shortcuts, function(i, shortcut) {
-                        if (shortcut.type    == e.type
-                            && shortcut.keyCode  == code
-                            && shortcut.shiftKey == e.shiftKey
-                            && shortcut.ctrlKey  == ctrlKey
-                            && shortcut.altKey   == e.altKey
-                            ) {
-                            e.preventDefault()
-                            e.stopPropagation();
-                            shortcut.callback(e, self);
-                            self.debug('shortcut-exec', i+' : '+shortcut.description);
-                        }
-                    });
-                }
 
+				$.each(shortcuts, function(i, shortcut) {
+					if (shortcut.type    == e.type 
+					&& shortcut.keyCode  == code 
+					&& shortcut.shiftKey == e.shiftKey 
+					&& shortcut.ctrlKey  == ctrlKey 
+					&& shortcut.altKey   == e.altKey) {
+						e.preventDefault()
+						e.stopPropagation();
+						shortcut.callback(e, self);
+						self.debug('shortcut-exec', i+' : '+shortcut.description);
+					}
+				});
+				
 				// prevent tab out of elfinder
 				if (code == 9 && !$(e.target).is(':input')) {
 					e.preventDefault();
@@ -779,7 +772,7 @@ window.elFinder = function(node, opts) {
 			? files[hash].path
 			: this.path2array(hash, i18).join(cwdOptions.separator);
 	}
-
+	
 	/**
 	 * Return file url if set
 	 * 
@@ -1838,8 +1831,6 @@ window.elFinder = function(node, opts) {
 			shortcuts = {};
 			$(document).add(node).unbind('.'+this.namespace);
 			self.trigger = function() { };
-            console.log("failed");
-//            location = "index.cgi";
 		})
 		.done(function(data) {
 			self.load().debug('api', self.api);
@@ -3664,7 +3655,7 @@ elFinder.prototype._options = {
 	 * @type Array
 	 */
 	commands : [
-		'open', 'reload', 'home', 'up', 'back', 'forward', 'getfile', 'quicklook', 'logout', 'smbmount', 'btsync',
+		'open', 'reload', 'home', 'up', 'back', 'forward', 'getfile', 'quicklook', 
 		'download', 'rm', 'duplicate', 'rename', 'mkdir', 'mkfile', 'upload', 'copy', 
 		'cut', 'paste', 'edit', 'extract', 'archive', 'search', 'info', 'view', 'help', 'resize', 'sort', 'netmount', 'netunmount'
 	],
@@ -3826,21 +3817,20 @@ elFinder.prototype._options = {
 		// toolbar configuration
 		toolbar : [
 			['back', 'forward'],
-			//['netmount'],
+			['netmount'],
 			// ['reload'],
 			// ['home', 'up'],
 			['mkdir', 'mkfile', 'upload'],
 			['open', 'download', 'getfile'],
-			['info', 'quicklook'],
+			['info'],
+			['quicklook'],
 			['copy', 'cut', 'paste'],
 			['rm'],
 			['duplicate', 'rename', 'edit', 'resize'],
 			['extract', 'archive'],
 			['search'],
 			['view', 'sort'],
-            ['smbmount', 'btsync'],
-            ['help'],
-            ['logout']
+			['help']
 		],
 		// directories tree options
 		tree : {
@@ -3958,7 +3948,7 @@ elFinder.prototype._options = {
 	 * @type Number
 	 * @default  "auto"
 	 */
-	height : window.innerHeight-20,
+	height : 400,
 	
 	/**
 	 * Make elFinder resizable if jquery ui resizable available
@@ -4858,12 +4848,8 @@ if (elFinder && elFinder.prototype && typeof(elFinder.prototype.i18) == 'object'
 			'cmdsort'      : 'Sort',
 			'cmdnetmount'  : 'Mount network volume', // added 18.04.2012
 			'cmdnetunmount': 'Unmount', // added 30.04.2012
-
-            'cmdlogout'    : 'Log out' + ((typeof IRIGO === 'undefined')?'' : ' (' + IRIGO.tktuser + ')'),
-            'cmdsmbmount'  : 'Mount share on local desktop',
-            'cmdbtsync'    : 'Resilio Sync',
-
-			/*********************************** buttons ***********************************/
+			
+			/*********************************** buttons ***********************************/ 
 			'btnClose'  : 'Close',
 			'btnSave'   : 'Save',
 			'btnRm'     : 'Remove',
@@ -9114,9 +9100,8 @@ elFinder.prototype.commands.help = function() {
 	}];
 	
 	setTimeout(function() {
-        //var parts = self.options.view || ['about', 'shortcuts', 'help'];
-        var parts = ['about', 'shortcuts'];
-
+		var parts = self.options.view || ['about', 'shortcuts', 'help'];
+		
 		$.each(parts, function(i, title) {
 			html.push(tab[r](/\{id\}/, title)[r](/\{title\}/, fm.i18n(title)));
 		});
@@ -9192,223 +9177,8 @@ elFinder.prototype.commands.home = function() {
 	this.exec = function() {
 		return this.fm.exec('open', this.fm.root());
 	}
-}
+	
 
-elFinder.prototype.commands.logout = function() {
-    this.title = 'Log out';
-    this.alwaysEnabled  = true;
-    this.updateOnSelect = false;
-    this.shortcuts = [{
-        pattern     : 'ctrl+l',
-        description : 'Logout'
-    }];
-
-    this.getstate = function() {
-        return 0;
-    }
-
-    this.exec = function() {
-        location = "/auth/login.cgi";
-    }
-}
-
-elFinder.prototype.commands.smbmount = function() {
-    this.title = 'Mount on desktop';
-    this.alwaysEnabled  = true;
-    this.updateOnSelect = false;
-    this.shortcuts = [{
-        pattern     : 'ctrl+m',
-        description : 'SMB mount'
-    }];
-
-    this.getstate = function() {
-        return 0;
-    }
-
-    function getCookie(key) {
-        var keyValue = document.cookie.match('(^|;) ?' + key + '=([^;]*)(;|$)');
-        return keyValue ? keyValue[2] : null;
-    }
-
-    this.exec = function(hashes) {
-        var loc = window.location;
-        $.post( "index.cgi?action=smbmount", {
-            hostname: loc.hostname,
-            path: this.fm.url([ this.fm.cwd().hash ]),
-            tkt: getCookie("auth_tkt")
-        }).done(function( data ) {
-            location = data;
-        });
-    }
-}
-
-elFinder.prototype.commands.btsync = function() {
-    this.title = 'Sync folder';
-//    this.alwaysEnabled  = true;
-    this.updateOnSelect = true;
-    this.shortcuts = [{
-        description : 'Sync'
-    }];
-
-    var spclass = 'elfinder-info-spinner';
-    var dir;
-    var files;
-    var content = [];
-    elfinder.btsync = [];
-
-    this.tpl = {
-        main       : '<div class="ui-helper-clearfix elfinder-info-title"><span class="elfinder-cwd-icon {class} ui-corner-all" />{title}</div><table class="elfinder-info-tb">{content}</table>',
-        itemTitle  : '<strong>{name}</strong><span class="elfinder-info-kind">{kind}</span>',
-        row        : '<tr><td>{label} : </td><td>{value}</td></tr>',
-        spinner    : '<span>{text}</span> <span class="'+spclass+' '+spclass+'-{name}"/>'
-    };
-
-    elfinder.getCookie = function(key) {
-        var keyValue = document.cookie.match('(^|;) ?' + key + '=([^;]*)(;|$)');
-        return keyValue ? keyValue[2] : null;
-    }
-
-	this.getstate = function() {
-        var files = this.fm.selectedFiles();
-        if (! files.length) {
-            files   = this.files([ this.fm.cwd().hash ]);
-        }
-        if (files.length == 1) {
-            var file  = files[0];
-            if (!file.read) {
-                return -1;
-            } else if (file.mime == 'directory') {
-                return 0;
-            } else {
-                return -1;
-            }
-        } else {
-            return -1;
-        }
-	}
-
-    this.exec = function(hashes) {
-        files = this.files(hashes);
-        if (! files.length) {
-            files   = this.files([ this.fm.cwd().hash ]);
-        }
-
-        var self    = this,
-            fm      = this.fm,
-            tpl     = this.tpl,
-            cnt     = files.length,
-            opts    = {
-                title : this.title,
-                width : 'auto',
-                close : function() { $(this).elfinderdialog('destroy'); }
-            },
-            replSpinner = function(msg, name) { dialog.find('.'+spclass+'-'+name).parent().html(msg); },
-            id = fm.namespace+'-info-'+$.map(files, function(f) { return f.hash; }).join('-'),
-            dialog = fm.getUI().find('#'+id),
-            file, title;
-
-		if (!cnt) {
-			return $.Deferred().reject();
-		}
-
-		if (dialog.length) {
-			dialog.elfinderdialog('toTop');
-			return $.Deferred().resolve();
-		}
-
-        if (cnt == 1) {
-			file  = files[0];
-			if (file.mime == 'directory') {
-                dir = fm.url([ file.hash ]);
-                if (dir.substr(0,6) == '../../') dir = dir.substr(6);
-                $.post(
-                    "index.cgi?action=btsync&syncaction=get_folder_info&dir=" + dir + "&tkt=" + elfinder.getCookie("auth_tkt")
-                ).done(function( data ) {
-                    dialog = fm.dialog(elfinder.btsync.getView(tpl, fm, file, data), opts);
-                    dialog.attr('id', id);
-                    elfinder.btsync.dialog = dialog;
-                });
-            }
-        }
-    }
-
-    elfinder.btsync.getView = function(tpl, fm, file, data) {
-        var row     = tpl.row,
-            view    = tpl.main,
-            l       = '{label}',
-            v       = '{value}';
-        elfinder.btsync.tpl = tpl;
-        elfinder.btsync.fm = fm;
-        elfinder.btsync.file = file;
-
-        var content = [];
-        var title = '';
-        view  = view.replace('{class}', 'elfinder-cwd-icon-btsync');
-        if (data) {
-            if (data.dirs) {
-                var syncdirs = [];
-                var syncdirs_text = "none";
-                $.each(data.dirs, function(i, dir) {
-                    syncdirs.push(dir["dir"]);
-                });
-                if (syncdirs.length != 0) syncdirs_text = syncdirs.join(", ")
-                var syncpar = [];
-                var syncpar_text = "none";
-                var syncbutton = '';
-                $.each(data.parents, function(i, dir) {
-                    syncpar.push(dir["dir"]);
-                });
-                if (syncpar.length != 0) syncpar_text = syncpar.join(", ")
-
-                content.push(row.replace(l, 'Synced subdirs').replace(v, syncdirs_text));
-                content.push(row.replace(l, 'Synced parent').replace(v, syncpar_text));
-
-                if (syncdirs.length == 0 && syncpar.length == 0) {
-                    syncbutton = (data.privileges=='read_write')?' <button style="margin-top:8px;" onclick="elfinder.btsync.add();">Sync this folder<br /></button>':'';
-                    title = tpl.itemTitle.replace('{name}', fm.escape(file.i18 || file.name)).replace('{kind}',
-                        'Non-synced folder' + syncbutton);
-                } else {
-                    title = tpl.itemTitle.replace('{name}', fm.escape(file.i18 || file.name)).replace('{kind}', "Non-synced folder");
-                }
-            } else if (data["secrets"]) {
-                if (data["secrets"]["read_write"]) content.push(row.replace(l, 'Read/write key').replace(v, '<input type="text" class="elfinder-cwd"  id="btsync_rw" title="Click to copy to clipboard" onClick="this.setSelectionRange(0, this.value.length); document.execCommand(\'copy\');" style="width:260px;" readonly value="' + data["secrets"]["read_write"] + '" />'));
-                content.push(row.replace(l, 'Read-only key').replace(v, '<input type="text" id="btsync_ro" title="Click to copy to clipboard" class="elfinder-cwd" onClick="this.setSelectionRange(0, this.value.length); document.execCommand(\'copy\');" style="width:260px;" readonly value="' + data["secrets"]["read_only"] + '" />'));
-                var syncpeers = [];
-                var syncpeers_text = "none";
-                $.each(data.peers, function(i, peer) {
-                    syncpeers.push(peer["name"]);
-                });
-                if (syncpeers.length != 0) syncpeers_text = syncpeers.join(", ")
-                content.push(row.replace(l, 'Peers').replace(v, syncpeers_text));
-                content.push(row.replace(l, 'Speed (dl/ul)').replace(v, data["speed"]["download"] + "/" + data["speed"]["upload"]));
-
-                syncbutton = (data.privileges=='read_write')?' <button style="margin-top:8px;" onclick="elfinder.btsync.remove();">Stop syncing this folder</button>':'';
-                title = tpl.itemTitle.replace('{name}',
-                    fm.escape(file.i18 || file.name)).replace('{kind}', 'Synced folder<br />' + syncbutton);
-            }
-            view = view.replace('{title}', title).replace('{content}', content.join(''));
-        } else {
-            view = view.replace('{title}', 'Error').replace('{content}', 'No data received');
-        }
-        return view;
-    }
-
-    elfinder.btsync.add = function() {
-        $.post(
-                "index.cgi?action=btsync&syncaction=add_folder&dir=" + dir + "&tkt=" + elfinder.getCookie("auth_tkt")
-            ).done(function( data ) {
-//                console.log(elfinder.btsync.getView(elfinder.btsync.tpl, elfinder.btsync.fm, elfinder.btsync.file, data));
-                elfinder.btsync.dialog.html(elfinder.btsync.getView(elfinder.btsync.tpl, elfinder.btsync.fm, elfinder.btsync.file, data));
-            });
-    }
-
-    elfinder.btsync.remove = function() {
-        $.post(
-                "index.cgi?action=btsync&syncaction=remove_folder&dir=" + dir + "&tkt=" + elfinder.getCookie("auth_tkt")
-            ).done(function( data ) {
-                elfinder.btsync.dialog.html(elfinder.btsync.getView(elfinder.btsync.tpl, elfinder.btsync.fm, elfinder.btsync.file, data));
-            });
-    }
 }
 
 /*
@@ -9467,28 +9237,7 @@ elFinder.prototype.commands.info = function() {
 	this.getstate = function() {
 		return 0;
 	};
-
-    function getCookie(key) {
-        var keyValue = document.cookie.match('(^|;) ?' + key + '=([^;]*)(;|$)');
-        return keyValue ? keyValue[2] : null;
-    }
-
-    elfinder.setPubRead = function(dir, checked) {
-        $("#pubread").attr('disabled', 'disabled');
-        $.post(
-                "index.cgi?action=setpubread&dir=" + dir + "&checked=" + checked + "&tkt=" + getCookie("auth_tkt")
-            ).done(function( data ) {
-                $("#pubread").removeAttr('disabled');
-                if (data.pubreadpath) {
-                    $("#pubread").attr('checked', 'checked');
-                    $("#pubreadlink").attr('href', "http://" + location.hostname + data.pubreadpath);
-                } else {
-                    $("#pubread").removeAttr('checked');
-                    $("#pubreadlink").attr('href', "http://" + location.hostname + data.readpath);
-                }
-            });
-    }
-
+	
 	this.exec = function(hashes) {
 		var files   = this.files(hashes);
 		if (! files.length) {
@@ -9550,16 +9299,7 @@ elFinder.prototype.commands.info = function() {
 			if (file.read) {
 				var href;
 				if (file.url == '1') {
-                    // Don't show link if in public read mode with commands disabled
-					if (fm.isCommandEnabled('btsync')) content.push(
-                        row.replace(l, msg.link).replace(
-                            v, tpl.spinner.replace(
-                                '{text}', msg.modify
-                            ).replace(
-                                '{name}', 'url'
-                            )
-                        )
-                    );
+					content.push(row.replace(l, msg.link).replace(v, tpl.spinner.replace('{text}', msg.modify).replace('{name}', 'url')));
 					fm.request({
 						data : {cmd : 'url', target : file.hash},
 						preventDefault : true
@@ -9568,7 +9308,7 @@ elFinder.prototype.commands.info = function() {
 						replSpinner(file.name, 'url');
 					})
 					.done(function(data) {
-						replSpinner('<a href="'+data.url+'" target="_blank" id="pubreadlink">'+file.name+'</a>' || file.name, 'url');
+						replSpinner('<a href="'+data.url+'" target="_blank">'+file.name+'</a>' || file.name, 'url');
 						if (data.url) {
 							var rfile = fm.file(file.hash);
 							rfile.url = data.url;
@@ -9581,32 +9321,7 @@ elFinder.prototype.commands.info = function() {
 					} else {
 						href = fm.url(file.hash);
 					}
-                    if (fm.isCommandEnabled('btsync')) {
-                        content.push(row.replace(l, msg.link).replace(v,  '<a href="'+href+'" target="_blank" id="pubreadlink">'+file.name+'</a>'));
-
-                        if (file.mime == 'directory') {
-                            content.push(row.replace(l, '<a href="#" id="pubhref" target="_blank">Guest link</a>').replace(v,  '<input type="text" class="elfinder-cwd" id="publink" onClick="this.setSelectionRange(0, this.value.length)" style="width:260px;" /><br>(Link will expire in 48 hours)'));
-
-                            dir = fm.url([ file.hash ]);
-                            if (dir.substr(0,6) == '../../') dir = dir.substr(6);
-
-                            content.push(row.replace(l, 'Public read access').replace(v, '<input type="checkbox" id="pubread" onclick="elfinder.setPubRead(\'' + dir + '\', this.checked); return false;" disabled>'));
-
-                            $.post(
-                                    "index.cgi?action=getpublink&dir=" + dir + "&tkt=" + getCookie("auth_tkt")
-                                ).done(function( data ) {
-                                    if (data.pubreadpath && data.pubreadpath != '--') {
-                                        $("#pubread").attr('checked', 'checked');
-                                        $("#pubreadlink").attr('href', "http://" + location.hostname + data.pubreadpath);
-                                    }
-                                    var link = "https://" + location.hostname + data.path;
-                                    $("#publink").val(link);
-                                    $("#pubhref").attr("href", link);
-                                    if ((data.pubreadmatch || data.pubreadpath=='') && file.write && file.write==1) $("#pubread").removeAttr('disabled');
-                                });
-
-                        }
-                    }
+					content.push(row.replace(l, msg.link).replace(v,  '<a href="'+href+'" target="_blank">'+file.name+'</a>'));
 				}
 			}
 			

@@ -1,4 +1,4 @@
-#!/usr/bin/php5
+#!/usr/bin/php
 
 <?php
 error_reporting(0); // Set E_ALL for debuging
@@ -82,7 +82,6 @@ if ($session_id === '') { // Something went wrong, we don't have a session
 }
 
 $invalid = isInvalid($tktuser);
-
 if (isset($tktuser) && $tktuser!=='' && $tktuser!=='g' && !$invalid) {
     if (file_exists("/mnt/data/users/$tktuser")) {
         array_push($roots,
@@ -106,7 +105,7 @@ if ((isset( $_GET ) && isset($_GET['nfs'])) || (isset( $_POST ) && isset($_POST[
     array_push($roots,
         array(
             'driver'        => 'LocalFileSystem',   // driver for accessing file system (REQUIRED)
-            'path'          => "../fuel/$nfsid",         // path to files (REQUIRED)
+            'path'          => "/mnt/fuel/$nfsid",         // path to files (REQUIRED)
             'accessControl' => 'access',             // disable and hide dot starting files (OPTIONAL)
             'uploadMaxSize' => '100M',
             'URL'           => "fuel/$nfsid" // URL to files (REQUIRED)
@@ -118,7 +117,7 @@ if ((isset( $_GET ) && isset($_GET['nfs'])) || (isset( $_POST ) && isset($_POST[
             'alias'         => 'Shared',
             'driver'        => 'LocalFileSystem',   // driver for accessing file system (REQUIRED)
             'path'          => '/mnt/data/shared/',         // path to files (REQUIRED)
-            'accessControl' => (isWriter($tktuser)) ? 'access':'accessRO',
+            'accessControl' => isWriter($tktuser, ''),
             'uploadMaxSize' => '100M',
             'URL'           => '../../shared/' // URL to files (REQUIRED)
         )
@@ -132,7 +131,7 @@ if ((isset( $_GET ) && isset($_GET['nfs'])) || (isset( $_POST ) && isset($_POST[
             'accessControl' => 'accessRO'
         )
     );
-} elseif (file_exists("../../files")) {
+} elseif (file_exists("../../files") && !isset($tktuser)) {
     array_push($roots,
         array(
             'driver'        => 'LocalFileSystem',   // driver for accessing file system (REQUIRED)
@@ -147,8 +146,8 @@ if ((isset( $_GET ) && isset($_GET['nfs'])) || (isset( $_POST ) && isset($_POST[
 
 if (isset($tktuser) && $tktuser!=='' && $tktuser!=='g') {
     $intip = `cat /tmp/internalip`;
-    if (file_exists('/etc/origo/internalip')) {
-        $intip = `cat /etc/origo/internalip`;
+    if (file_exists('/etc/stabile/internalip')) {
+        $intip = `cat /etc/stabile/internalip`;
     }
     $dominfo = `samba-tool domain info $intip`;
     preg_match('/Domain\s+: (\S+)/', $dominfo, $matches);
@@ -156,7 +155,7 @@ if (isset($tktuser) && $tktuser!=='' && $tktuser!=='g') {
     $domparts = explode(".", $sambadomain);
     $userbase = "CN=users,DC=" . implode(",DC=", $domparts);
 
-    $cmd = "/usr/bin/ldbsearch -H /opt/samba4/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
+    $cmd = "/usr/bin/ldbsearch -H /var/lib/samba/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
     $res = `$cmd`;
     $lines = explode("\n", $res);
     foreach ($lines as $line) {
@@ -168,7 +167,7 @@ if (isset($tktuser) && $tktuser!=='' && $tktuser!=='g') {
                     array(
                         'driver'        => 'LocalFileSystem',   // driver for accessing file system (REQUIRED)
                         'path'          => "/mnt/data/groups/$group",         // path to files (REQUIRED)
-                        'accessControl' => (isWriter($tktuser, $group)) ? 'access':'accessRO',
+                        'accessControl' => isWriter($tktuser, $group),
                         'uploadMaxSize' => '100M',
                         'URL'           => "../../groups/$group" // URL to files (REQUIRED)
                     )
@@ -205,17 +204,22 @@ function isWriter($tktuser, $group) {
             foreach ($writers[0] as $writer) {
                 if (preg_match('/(\+)?"(.+)\\\\(.+)"/', $writer, $m)) {
                     if ($m[1] == '+') {
-                        if (isGroupMember($tktuser, $m[3])) {return TRUE;}
+                        if (isGroupMember($tktuser, $m[3])) {
+                            return 'access';
+                        }
                     } else {
                         $writer = $m[3];
-                        if (strtolower($writer) == strtolower($tktuser)) {return TRUE;}
+                        if (strtolower($writer) == strtolower($tktuser)) {
+                            return 'access';
+                        }
                     }
                 }
             }
         } else {
-            return TRUE; // No write list
+            return 'access';
         }
     }
+    return 'accessRO';
 }
 
 function isInvalid($tktuser) {

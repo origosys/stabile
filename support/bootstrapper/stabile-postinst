@@ -244,6 +244,10 @@ if($ARGV[0] eq 'configure') {
 	die "No understandable instructions passed $ARGV[0]";
 }
 
+my $baseurl = `cat /etc/stabile/baseurl`; chomp $baseurl;
+print $out "You can now manage your Stabile engine at https://$g_hostname/stabile with the username and password you just configured.\n";
+print $out "A shortcut has also been placed in your application menu, if you are on a desktop system\n";
+
 exit 0;
 
 #####################
@@ -466,7 +470,7 @@ individual pistons using SSH without providing a password.
 
 		$ret = cp_conf('/usr/share/stabile/valve-cgrules.conf', "$piston_root/etc/cgrules.conf");
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
-		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', "$piston_root/etc/cgconfig.conf");
+		$ret = cp_conf('/usr/share/stabile/valve-cgconfig.conf', "$piston_root/etc/stabile/cgconfig.conf");
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
 		$ret = cp_conf('/usr/share/stabile/valve-cgrulesgend.service', "$piston_root/etc/systemd/system/cgrulesgend.service");
 		if(!$ret && !ask("Error: $!. Ignore error...")) {return 1;}
@@ -1172,11 +1176,6 @@ sub configure_apache {
 	my $cmd = qq|perl -pi -e 's/^127\.0\.1\.1.*\$/127.0.1.1 $hostname/' /etc/hosts|;
 	print $out `$cmd`;
 
-	# Baseurl required for updatescript
-	#open(my $baseurl, '>', '/etc/stabile/baseurl');
-	#print $baseurl "https://$hostname/stabile";
-	#close($baseurl);
-
 	my $sslcert = '/etc/apache2/ssl/stabile.crt';
 	my $sslkey = '/etc/apache2/ssl/stabile.key';
 	my $sslchain = '';
@@ -1391,6 +1390,9 @@ sub create_database {
 	require DBI;
 	require DBIx::Simple;
 	require SQL::Abstract;
+
+	# Fix for problem connecting with jdbc to mysql. See: https://www.programmersought.com/article/64995511893/
+	`perl -pi -e "s/\\[mysqld\\]/[mysqld]\nskip_ssl/" /etc/mysql/mysql.conf.d/mysqld.cnf` unless (`grep "skip_ssl" /etc/mysql/mysql.conf.d/mysqld.cnf`);
 
 	my $db_name = shift or die;
 	my $db_host = shift or die;
@@ -1814,6 +1816,9 @@ sub upgrade {
         }
         $cfg->save();
     }
+
+	# We use netperf to measure network performance. Outside access is disallowed in pressurecontrol
+	print `apt-get -q -y install netperf`; # included in dependencies instead
 
     # We need quotas for VM mountable NFS
 #    `perl -pi -e 's/(errors=remount-ro)/errors=remount-ro,usrjquota=aquota.user,jqfmt=vfsv0/' /etc/fstab` unless (`grep aquota /etc/fstab`);

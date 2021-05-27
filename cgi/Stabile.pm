@@ -110,11 +110,9 @@ $year += 1900;
 $month = substr("0" . ($mon+1), -2);
 $pretty_time = sprintf "%4d-%02d-%02d@%02d:%02d:%02d",$year,$mon+1,$mday,$hour,$min,$sec;
 
-if ($ENV{'HTTP_HOST'}) {
-    if ($ENV{'HTTP_HOST'} ne '10.0.0.1' && $ENV{'HTTP_HOST'} ne 'localhost' && !($ENV{'HTTP_HOST'} =~ /^127/)) {
-        $baseurl = "https://$ENV{'HTTP_HOST'}/stabile";
-        `echo "$baseurl" > /tmp/baseurl` if ((! -e "/tmp/baseurl") && $baseurl);
-    }
+if ($ENV{'HTTP_HOST'} && !($ENV{'HTTP_HOST'} =~ /^10\./) && $ENV{'HTTP_HOST'} ne 'localhost' && !($ENV{'HTTP_HOST'} =~ /^127/)) {
+    $baseurl = "https://$ENV{'HTTP_HOST'}/stabile";
+    `echo "$baseurl" > /tmp/baseurl` if ((! -e "/tmp/baseurl") && $baseurl);
 } else  {
     if (!$baseurl && (-e "/tmp/baseurl" || -e "/etc/stabile/baseurl")) {
         if (-e "/etc/stabile/baseurl") {
@@ -843,7 +841,7 @@ sub privileged_action_async {
     }
     my $regtarget = $register{$target};
     my $imgregtarget = $imagereg{$target};
-    my $uistatus = $regtarget->{status} || "$action".'ing';
+    $uistatus = $regtarget->{status} || "$action".'ing';
     $uistatus = 'cloning' if ($action eq 'clone');
     $uistatus = 'snapshotting' if ($action eq 'snapshot');
     $uistatus = 'unsnapping' if ($action eq 'unsnap');
@@ -860,7 +858,7 @@ sub privileged_action_async {
                 $obj->{status} = 'unused';
             }
             elsif ($obj->{regstoragepool} ne $obj->{storagepool}) {
-                $obj->{'status'} = 'moving';
+                $obj->{'status'} = $uistatus = 'moving';
             }
         }
         $postreply = to_json($obj, {pretty=>1});
@@ -1136,7 +1134,7 @@ sub process {
     # We may receive utf8 strings either from browser or command line - convert them to native Perl to avoid double encodings
     utf8::decode($target) if ( $target =~ /[^\x00-\x7f]/ );# true if string contains any non-ascii character
     my $uipath;
-    my $uistatus;
+#    my $uistatus;
 # Special handling
     if ($package eq 'images') {
         $target = $curimg || $params{'path'} || $params{'image'} || $target unless ($target =~ /^\/.+/);

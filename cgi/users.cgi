@@ -315,7 +315,7 @@ sub do_billing {
     if ($help) {
         return <<END
 GET:uuid,username,month,startmonth,endmonth,format:
-List usage data, optionally for specific server/system or user. May be called as usage, usagestatus or usageavgstatus.
+List usage data, optionally for specific server/system [uuid] or user [username]. May be called as usage, usagestatus or usageavgstatus.
 When called as "usage", format may be csv, in which case startmonth and endmonth may be specified.
 END
     }
@@ -579,14 +579,12 @@ END
 
     my $postreq = ();
     my %bill;
-    my %stats;
     my @regvalues = values %register; # Sort by id
     foreach my $valref (@regvalues) {
-        my $buser = $valref->{'username'};
-        %stats = collectBillingData( $uuid, $buser, $bmonth, $byear, $showcost );
-        $bill{"$buser-$byear-$bmonth"} = \%stats;
+        my $cuser = $valref->{'username'};
+        my %stats = collectBillingData( '', $cuser, $bmonth, $byear, $showcost );
+        $bill{"$cuser-$byear-$bmonth"} = \%stats;
     }
-
     $postreq->{'engineid'} = $engineid;
     $postreq->{'enginetkthash'} = $tkthash;
     $postreq->{'keywords'} = JSON::to_json(\%bill, {pretty=>1});
@@ -1352,11 +1350,11 @@ sub collectBillingData {
 
     # List pricing for all servers
     } else {
-    # Network billing
+        # Network billing
         unless ( tie(%bnetworksreg,'Tie::DBI', Hash::Merge::merge({table=>'billing_networks', key=>'useridtime'}, $Stabile::dbopts)) ) {return "Unable to access billing register"};
         unless ( tie(%networkreg,'Tie::DBI', Hash::Merge::merge({table=>'networks'}, $Stabile::dbopts)) ) {return "Unable to access networks register"};
 
-        # Build list of the users network id's
+        # Build list of the user's network id's
         my %usernetworks;
         my @nkeys = (tied %networkreg)->select_where("user = '$buser'");
         foreach $network (@nkeys) {
@@ -1484,7 +1482,6 @@ sub collectBillingData {
         $stats{'externalipavg'} = int(0.5 + 100*$externalipavg)/100;
         $stats{'totalcostavg'} = "$cur $totalpriceavg" if ($showcost);
     }
-
     return %stats;
 }
 
@@ -1645,7 +1642,8 @@ sub updateEngineUsers {
         if (!$register{$username} && $u->{'password'}) {
             $register{$username} = {
                 username => $username,
-                password => $u->{'password'}
+                password => $u->{'password'},
+                allowinternalapi => 1
             };
             $ures .= " *";
         }

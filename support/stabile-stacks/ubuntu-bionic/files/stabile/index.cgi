@@ -24,6 +24,7 @@ my $webminhome = '/usr/share/webmin';
 $internalip = get_internalip();
 $externalip = get_externalip();
 $appid = get_appid();
+@tabs;
 
 my $message;
 #my $postscript;
@@ -32,8 +33,7 @@ my $message;
 opendir(DIR,"tabs") or die "Cannot open tabs directory\n";
 my @dir = readdir(DIR);
 closedir(DIR);
-sort @dir;
-my @tabs;
+@dir = sort @dir;
 my %tabsh;
 push @tabs, 'security' if (-d "tabs/security");
 
@@ -143,7 +143,7 @@ if ($in{action} && $in{tab} && $tabsh{$in{tab}}) {
         }
     }
 
-    foreach my $tab (values %tabsh) {
+    foreach my $tab (@tabs) {
         if (defined &$tab) {
             $tabres = $tab->('upgrade', \%in);
             $ok = 'ERROR' unless (!$tabres || $tabres =~ /^OK:/);
@@ -199,13 +199,19 @@ if ($in{action} && $in{tab} && $tabsh{$in{tab}}) {
     if ($mip) {
         my $pass = `/usr/bin/openssl rand -base64 12`;
         chomp $pass;
-        `$webminhome/changepass.pl /etc/webmin admin "$pass"`;
-        $pass = uri_encode($pass);
-        my $res = `curl "http://$mip:10000/stabile/index.cgi?action=savewebminserver&pass=$pass"`;
-        print qq|[{"status": "OK: Registered at $mip"}, $res]|;
+        $pass =~ s/\+//g;
+        $pass = $1 if ($pass =~ /(\w+)/);
+        my $uri_pass = uri_encode($pass);
+        my $res = `curl "http://$mip:10000/stabile/index.cgi?action=savewebminserver&pass=$uri_pass"`;
+        if ($res =~ /OK/) {
+            print qq|[{"status": "OK: Registered at $mip"}, $res]|;
+        } else {
+            print qq|[{"status": "Error: Not registered at $mip"}]|;
+        }
+        `$webminhome/changepass.pl /etc/webmin admin "$pass"`; # Apparently this restarts Webmin, so we put it in the end
         # Jump through a few hoops to activate login
-        $res = `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"`;
-        `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"` unless ($res =~ /Set-Cookie: sid=/s);
+#        $res = `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"`;
+#        `curl -i -b testing=1 -d "user=admin&pass=$pass" -X POST "http://$internalip:10000/session_login.cgi"` unless ($res =~ /Set-Cookie: sid=/s);
     } else {
         print qq|{"status": "ERROR: Unable to locate admin server ip"}|;
     }
@@ -383,7 +389,7 @@ my $head = <<END
 $term_li
                     <li>
                         <a href="https://$externalip:10001/" target="_blank">
-                            to the Webmin console
+                            to Webmin
                         </a>
                     </li>
                 </ul>
@@ -444,7 +450,7 @@ $alert
 <!-- Load JS here for greater good =============================-->
 <!-- script src="js/jquery-1.10.2.min.js"></script -->
 <!-- script src="js/jquery-ui-1.10.3.custom.min.js"></script -->
-<script src="js/jquery-1.10.2.min.js"></script -->
+<script src="js/jquery-1.10.2.min.js"></script>
 <script src="js/jquery-ui-1.10.4.min.js"></script>
 <script src="js/jquery.ui.touch-punch.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
@@ -456,7 +462,7 @@ $alert
 <script src="js/jquery.placeholder.js"></script>
 <script type="text/javascript" charset="utf8" src="js/jquery.dataTables.min.js"></script>
 <script type="text/javascript" src="strength/strength.js"></script>
-<script src="js/Chart.js"></script>
+<!-- script src="js/Chart.js" --></script>
 <script src="js/clipboard.js"></script>
 
 <script type='text/javascript'>

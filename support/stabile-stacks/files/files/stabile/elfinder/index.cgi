@@ -50,7 +50,7 @@ END
         my $pubreadpath;
         my $readpath;
         my $pubreadmatch = "false";
-        my $prpaths = `cat /etc/apache2/sites-available/default | sed -rn 's/.*"\\/mnt\\/data\\/(.+)\\/"/\\1/p'`;
+        my $prpaths = `cat /etc/apache2/sites-available/000-default.conf | sed -rn 's/.*"\\/mnt\\/data\\/(.+)\\/"/\\1/p'`;
         my @pubreadpaths = split("\n", $prpaths);
         foreach my $prpath (@pubreadpaths) {
             if ($dir =~ /^$prpath/) {
@@ -68,27 +68,27 @@ END
             $escdir =~ s/\//\\\//g;
             if ($pubreadpath && $pubreadmatch eq 'true' && $checked eq 'false') {
         # Remove share
-                my $cmd = qq|perl -ni -e 'print unless (/\\/mnt\\/data\\/$escdir/)' /etc/apache2/sites-available/default|;
+                my $cmd = qq|perl -ni -e 'print unless (/\\/mnt\\/data\\/$escdir/)' /etc/apache2/sites-available/000-default.conf|;
                 `$cmd`;
                 $readpath = "/$dir";
                 $pubreadpath = '';
-                `/etc/init.d/apache2 reload`;
+                `systemctl reload apache2`;
             } elsif (!$pubreadpath && $checked eq 'true') {
         # Add share
                 $pubreadpath = $dir;
                 $pubreadpath = "/public/$2/"  if ($pubreadpath =~ /^(groups|users|shared)\/(.+)/);
                 $escpubreadpath = $pubreadpath;
                 $escpubreadpath =~ s/\//\\\//g;
-                my $cmd = qq|perl -pi -e 's/<\\/VirtualHost>/Alias "$escpubreadpath\\/" "\\/mnt\\/data\\/$escdir"\\n<\\/VirtualHost>/;' /etc/apache2/sites-available/default|;
+                my $cmd = qq|perl -pi -e 's/<\\/VirtualHost>/Alias "$escpubreadpath" "\\/mnt\\/data\\/$escdir"\\n<\\/VirtualHost>/;' /etc/apache2/sites-available/000-default.conf|;
                 `$cmd`;
-                `/etc/init.d/apache2 reload`;
+                `systemctl reload apache2`;
             }
         }
 
         my $res = <<END
 Content-type: application/json; charset=utf-8
 
-{"link": "https://$externalip/origo/elfinder/index.cgi?auth_tkt=$tkt", "path": "/origo/elfinder/index.cgi?auth_tkt=$tkt", "pubreadpath": "$pubreadpath", "pubreadmatch": $pubreadmatch, "readpath": "$readpath"}
+{"link": "https://$externalip/stabile/elfinder/index.cgi?auth_tkt=$tkt", "path": "/stabile/elfinder/index.cgi?auth_tkt=$tkt", "pubreadpath": "$pubreadpath", "pubreadmatch": $pubreadmatch, "readpath": "$readpath"}
 END
 ;
         print "$res\n$r" if ($tktuser && $tktuser ne 'g');
@@ -116,14 +116,14 @@ END
     # Get the users groups
         my %usergroups;
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         my $sambadomain;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
         if ($sambadomain) {
             my @domparts = split(/\./, $sambadomain);
             my $userbase = "CN=users,DC=" . join(",DC=", @domparts);
-            my $cmd = "/usr/bin/ldbsearch -H /opt/samba4/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
+            my $cmd = "/usr/bin/ldbsearch -H /var/lib/samba/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
             my $cmdres = `$cmd`;
             my @lines = split("\n", $cmdres);
             foreach my $line (@lines) {
@@ -195,7 +195,7 @@ END
     my $commands;
     my $url = qq|url : 'php/connector.cgi',|;
     if ($tktuser eq 'g') {
-        $commands = qq|commands: ['info', 'download', 'logout']|;
+        $commands = qq|commands: ['info', 'download', 'view', 'sort', 'logout']|;
         $url = qq|url : 'php/connector.cgi?auth_tkt=$tkt',|;
     }
 
@@ -227,6 +227,7 @@ Content-type: text/html; charset=utf-8
 
 		<!-- elFinder initialization (REQUIRED) -->
 		<script type="text/javascript" charset="utf-8">
+		    document.title = "Browse files on " + location.hostname;
 			// Documentation for client options:
 			// https://github.com/Studio-42/elFinder/wiki/Client-configuration-options
 			\$(document).ready(function() {
@@ -369,14 +370,14 @@ sub dirOK {
     # Get the users groups
         my %usergroups;
         my $intip = `cat /tmp/internalip`;
-        $intip = `cat /etc/origo/internalip` if (-e '/etc/origo/internalip');
+        $intip = `cat /etc/stabile/internalip` if (-e '/etc/stabile/internalip');
         my $dominfo = `samba-tool domain info $intip`;
         my $sambadomain;
         $sambadomain = $1 if ($dominfo =~ /Domain\s+: (\S+)/);
         if ($sambadomain) {
             my @domparts = split(/\./, $sambadomain);
             my $userbase = "CN=users,DC=" . join(",DC=", @domparts);
-            my $cmd = "/usr/bin/ldbsearch -H /opt/samba4/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
+            my $cmd = "/usr/bin/ldbsearch -H /var/lib/samba/private/sam.ldb -b \"CN=$tktuser,$userbase\" objectClass=user memberof";
             my $cmdres = `$cmd`;
             my @lines = split("\n", $cmdres);
             foreach my $line (@lines) {

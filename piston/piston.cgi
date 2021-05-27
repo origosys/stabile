@@ -163,11 +163,13 @@ ENDBOOT
 			close(TEMP2);
 		} else {throw Error::Simple("Status=Error no default node identity")};
 
-		$register{$mac} = {
+		my $macname = $mac;
+        $macname = $register{$mac}->{'name'} if ($register{$mac});
+        $register{$mac} = {
             identity=>$id,
             timestamp=>$current_time,
             ip=>$ENV{'REMOTE_ADDR'},
-            name=>$mac,
+            name=>$macname,
             cpucores=>$params{'cpucores'},
             cpucount=>$params{'cpucount'},
             cpuspeed=>$params{'cpuspeed'},

@@ -182,7 +182,7 @@ define([
                         home.engines_field.setStore(stores.engines);
                         q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();
                         message = "Engine is now unlinked";
-                        $("#checkfordownloads").hide();
+                        if (!IRIGO.user.downloadmasters) $("#checkfordownloads").hide()
                     } else if (response.indexOf("Engine updated")!=-1) {
                         user.enginename = enginename;
                         document.title = enginename;
@@ -622,11 +622,12 @@ define([
                 } else {
                     if (user.enginelinked) {
                         info_linkengine.innerHTML = home.unlinkenginemsg;
-                        if (IRIGO.user.downloadmasters) $("#checkfordownloads").show();
                     } else {
                         info_linkengine.innerHTML = home.linkenginemsg;
-                        $("#checkfordownloads").hide();
                     }
+                    if (!IRIGO.user.downloadmasters) $("#checkfordownloads").hide();
+                    else $("#checkfordownloads").show();
+
                     info_linkengine_tr.style.display = "table-row";
                     info_downloadmasters_tr.style.display = "table-row";
                     q = dojo.query('.irigo-tooltip'); q.irigoTooltip && q.irigoTooltip();

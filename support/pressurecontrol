@@ -386,9 +386,9 @@ if ($pid) {
                 $command = 'fullstats';
             }
 
-            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/nodes.cgi -a updateregister -f`;
-            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/servers.cgi -a updateregister -f`;
-            print &pretty_time.": ".`REMOTE_USER=irigo time $basedir/cgi/images.cgi -a updateregister -f`;
+            print &pretty_time.": ".`REMOTE_USER=irigo $basedir/cgi/nodes.cgi -a updateregister -f`;
+            print &pretty_time.": ".`REMOTE_USER=irigo $basedir/cgi/servers.cgi -a updateregister -f`;
+            print &pretty_time.": ".`REMOTE_USER=irigo $basedir/cgi/images.cgi -a updateregister -f`;
             unless ($amtdone) {
                 print "Updating AMT info\n";
                 print &pretty_time.": ".`REMOTE_USER=irigo $basedir/cgi/nodes.cgi -a updateamtinfo`;

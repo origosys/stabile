@@ -1039,7 +1039,7 @@ sub updateImageStatus {
 
     my $imageuser = $arg1;
     my $imagename;
-    if ($imagestatus eq 'uploading' && !$imagereg{$imagepath}) {
+    if (($imagestatus eq 'uploading' || $imagestatus eq 'downloading') && !$imagereg{$imagepath}) {
         # An image is being uploaded
         my $ug = new Data::UUID;
         my $newuuid = $ug->create_str();
@@ -1047,7 +1047,7 @@ sub updateImageStatus {
         if ($imagename =~ /.+\/(.+)\/(.+)\.(.+)/) {
             $imageuser = $1;
             $imagename = $2;
-            my $imagetype = $3;
+            my $imagetype = $3 || 'qcow2';
             $imagereg{$imagepath} = {
                 uuid => $newuuid,
                 path => $imagepath,
@@ -1079,6 +1079,7 @@ sub updateImageStatus {
             $arg1 = 'irigo';
             syslogit('info', "Downloaded $imagepath from registry");
         }
+        $imagereg{$imagepath}->{'status'} = $imagestatus;
         $imagereg{$imagepath}->{'status'} = $imagestatus;
         $imagereg{$imagepath}->{'virtualsize'} = $newvsize if ($newvsize);
     } else {

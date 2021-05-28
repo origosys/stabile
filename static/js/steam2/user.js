@@ -88,6 +88,7 @@ function(xhr, cookie){
                 user.appstoreurl = response.items[0].appstoreurl;
                 IRIGO.user = user;
                 if (!IRIGO.alerts) IRIGO.alerts = [];
+                if (user.downloadmasters) $("#checkfordownloads").show();
             },
             error : function(response) {
                 console && console.log('An error occurred.', response);

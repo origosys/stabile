@@ -882,7 +882,8 @@ sub do_gear_action {
     if ($register{$target}
         || $action =~ /all$|save|^monitors|^packages|^changemonitoremail|^buildsystem|^removesystem|^updateaccountinfo|^updateengineinfo|^removeusersystems|^removeuserimages/
         || $action =~ /^updateamtinfo|^updatedownloads|^releasepressure|linkmaster$|activate$|engine$|^syncusers|^deletesystem|^getserverbackups|^listserverbackups|^fullstats/
-        || $action =~ /^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices|^setstoragedevice|^updateui|configurecgroups|backup|sync_backup/
+        || $action =~ /^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices/
+        || $action =~ /^setstoragedevice|^updateui|configurecgroups|backup|sync_backup/
         || ($action eq 'remove' && $package eq 'images' && $target =~ /\.master\.qcow2$/) # We allow removing master images by name only
     ) {
         my $func = ucfirst $action;

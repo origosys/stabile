@@ -879,8 +879,10 @@ sub do_gear_action {
     $action = $1 if ($action =~ /gear_(.+)/);
     my $res;
     return "This only works with elevated privileges\n" if ($>);
-    if ($register{$target} || $action =~
-        /all$|save|^monitors|^packages|^changemonitoremail|^buildsystem|^removesystem|^updateaccountinfo|^updateengineinfo|^removeusersystems|^removeuserimages|^updateamtinfo|^updatedownloads|^releasepressure|linkmaster$|activate$|engine$|^syncusers|^deletesystem|^getserverbackups|^listserverbackups|^fullstats|^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices|^setstoragedevice|^updateui|configurecgroups|backup|sync_backup/
+    if ($register{$target}
+        || $action =~ /all$|save|^monitors|^packages|^changemonitoremail|^buildsystem|^removesystem|^updateaccountinfo|^updateengineinfo|^removeusersystems|^removeuserimages/
+        || $action =~ /^updateamtinfo|^updatedownloads|^releasepressure|linkmaster$|activate$|engine$|^syncusers|^deletesystem|^getserverbackups|^listserverbackups|^fullstats/
+        || $action =~ /^zbackup|^updateallbtimes|^initializestorage|^liststoragedevices|^getbackupdevice|^getimagesdevice|^listbackupdevices|^listimagesdevices|^setstoragedevice|^updateui|configurecgroups|backup|sync_backup/
         || ($action eq 'remove' && $package eq 'images' && $target =~ /\.master\.qcow2$/) # We allow removing master images by name only
     ) {
         my $func = ucfirst $action;

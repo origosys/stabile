@@ -285,7 +285,11 @@ sub getObj {
     $api = 1 if $h{"api"};
     my $obj;
     $action = $action || $h{'action'};
-    if ($action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|uploadtoregistry|^release|^download|^gear_publish|^gear_release|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice|backupfuel|sync_backup/) {
+    if (
+        $action =~ /^clone|^sync_clone|^removeuserimages|^gear_removeuserimages|^activate|^gear_activate|^publish|uploadtoregistry|^release|^download|^gear_publish/
+        || $action =~ /^gear_release|^zbackup|setimagesdevice|setbackupdevice|initializestorage|setstoragedevice|backupfuel|sync_backup/
+
+    ) {
         $obj = \%h;
         return $obj;
     }

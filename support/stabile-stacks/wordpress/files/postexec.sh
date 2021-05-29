@@ -56,7 +56,7 @@ define('WP_CONTENT_DIR', '/usr/share/wordpress/wp-content');
 define('WP_HOME','/home');
 define('WP_SITEURL','/home');
 define('WP_CACHE', true);
-define('WP_ CORE_UPDATE', true);
+define('WP_CORE_UPDATE', true);
 ?>" >> /etc/wordpress/config-default.php
 
 # Fix link to install.css

@@ -74,6 +74,10 @@ perl -pi -e 's/(.* action="\?step=1".*)/            echo "<form id=setup method=
 # Ask stabile to change the managementlink from Wordpress install page, so the above redirect is not needed on subsequent loads
 perl -pi -e 's/(if \( is_blog_installed\(\) \) \{)/$1\n    \`curl -k -X PUT --data-urlencode "PUTDATA={\\"uuid\\":\\"this\\",\\"managementlink\\":\\"\/stabile\/pipe\/http:\/\/{uuid}:10000\/wordpress\/\\"}" https:\/\/10.0.0.1\/stabile\/images\`;/;' /usr/share/wordpress/wp-admin/install.php
 
+# Bump up php limits
+perl -pi -e 's/.*post_max_size = .*/post_max_size = 64M/;' /etc/php/7.4/apache2/php.ini
+perl -pi -e 's/.*upload_max_filesize = .*/upload_max_filesize = 64M/;' /etc/php/7.4/apache2/php.ini
+
 # Make homepage redirect to blog
 cp /var/www/html/index.html /var/www/html/index.html.bak
 bash -c 'echo "<META HTTP-EQUIV=\"Refresh\" Content=\"0; URL=/home/\">" > /var/www/html/index.html'

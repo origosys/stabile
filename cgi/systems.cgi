@@ -2812,7 +2812,6 @@ sub getSystemsListing {
         tied(%register)->commit;
     }
     untie %imagereg;
-    untie %networkreg;
 
     my @regvalues = values %register;
     # Go through systems register, add empty systems and update statuses
@@ -2838,9 +2837,14 @@ sub getSystemsListing {
                 $status = 'degraded' unless ($status eq 'running' || $status eq 'shutoff');
                 $curreg{$val{'uuid'}}->{'status'} = $status;
                 $curreg{$val{'uuid'}}->{'externalips'} = $externalips;
+                # $networkreg{$domreg{$curdomuuid}->{'networkuuid1'}}->{'internalip'};
+                if ($curuuid && !$curreg{$val{'uuid'}}->{'internalip'}) { # Add calling server's own internalip if it's part of an ad-hoc assembled system
+                    $curreg{$val{'uuid'}}->{'internalip'} = $networkreg{$domreg{$curdomuuid}->{'networkuuid1'}}->{'internalip'};
+                }
             }
         }
     }
+    untie %networkreg;
 
     @curregvalues = values %curreg;
     my @sorted_systems = sort {$a->{'name'} cmp $b->{'name'}} @curregvalues;

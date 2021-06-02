@@ -670,10 +670,10 @@ define([
             var dialog;
             if(dijit.byId('createSystemDialog') !== undefined){
                 dialog = dijit.byId('createSystemDialog');
-                if (systemname) dialog.set("title", "Manage: " + systemname);
+                if (systemname) dialog.set("title", (systemname.indexOf(":")==-1)?"Manage: " + systemname:systemname);
             } else {
                 dialog = new dijit.Dialog({
-                    title: "Manage: " + systemname,
+                    title: ((systemname.indexOf(":")==-1)?"Manage: " + systemname:systemname),
                     id: 'createSystemDialog',
                     resizable: true,
                     style: "width: 90%; overflow: auto;"

@@ -304,6 +304,7 @@ END
             my $target = "config-$dom.php";
 
             $message .= `cp /etc/wordpress/config-default.php /etc/wordpress/$target`;
+            $message .= `perl -pi -e "s/php/php\\ndefine('UPLOADS', 'blogs.dir\\/$wpname\\/uploads');/;" /etc/wordpress/$target`;
             $message .= `perl -pi -e 's/wordpress_default/$db/;' /etc/wordpress/$target`;
             $message .= `perl -pi -e 's/wordpress\\\/wp-content/wordpress\\\/blogs.dir\\\/$wpname/;' /etc/wordpress/$target`;
         #    $message .= `perl -pi -e 's/home\\\/wp-content/home\\\/blogs.dir\\\/$wpname/;' /etc/wordpress/$target`;

@@ -241,6 +241,10 @@ perl -pi -e 's/images\/ubuntu-logo.png/tabs\/files\/logo-files.png/' /usr/share/
 # Make all files available to ElFinder when used through admin UI
 ln -s /mnt/data /usr/share/webmin/stabile/files
 
+# Bump up php limits
+perl -pi -e 's/.*post_max_size = .*/post_max_size = 64M/;' /etc/php/7.2/cli/php.ini
+perl -pi -e 's/.*upload_max_filesize = .*/upload_max_filesize = 64M/;' /etc/php/7.2/cli/php.ini
+
 # For debugging - remove before release
 #echo "stabile:stabile" | chpasswd
 #echo "Passw0rd" | /usr/bin/kinit Administrator 2>&1

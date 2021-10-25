@@ -33,4 +33,6 @@ DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site WordPress server.
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 	</ul>\
 	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
-	<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/wordpress">Stack source code</a></div>
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/wordpress">Stack source code</a></div>

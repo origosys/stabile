@@ -484,7 +484,7 @@ END
 
     my $res;
     $res .= header('text/plain') unless $console;
-    $res .= "Status=" . $main::dnsList->($engineid, $user);
+    $res .= $main::dnsList->($engineid, $user);
     return $res;
 }
 
@@ -1179,7 +1179,6 @@ END
                 tied(%sysreg)->commit;
                 untie(%sysreg);
             }
-
             $register{$uuid} = {
                 uuid=>$uuid,
                 user=>$username,
@@ -1193,7 +1192,8 @@ END
                 systemnames=>$systemnames,
                 action=>""
             };
-            tied(%register)->commit;
+            my $res = tied(%register)->commit;
+            my $obj = $register{$uuid};
             $postreply .= "Status=OK Network $register{$uuid}->{'name'} saved: $uuid\n";
             $postreply .= "Status=OK uuid: $uuid\n" if ($console && $status eq 'new');
             if ($status eq 'new') {
@@ -1481,8 +1481,12 @@ END
                 # We masquerade packets going to internalip from externalip to avoid confusion
                 #eval {`/sbin/iptables -A POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`; 1;}
                 #    or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                eval {`/sbin/iptables -A POSTROUTING -t nat --out-interface br$id -j MASQUERADE`; 1;}
-                    or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+
+                # Masquerade packets from internal ip's not going to our own subnet
+                # `/sbin/iptables -D POSTROUTING -t nat --out-interface br$id ! -d 10.$idleft.$idright.0/24 -j MASQUERADE`;
+                #eval {`/sbin/iptables -A POSTROUTING -t nat --out-interface br$id ! -d 10.$idleft.$idright.0/24 -j MASQUERADE`; 1;}
+                #    or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
+
                 # When receiving packet from client, if it's been routed, and outgoing interface is the external interface, SNAT.
                 unless ($Stabile::disablesnat) {
                     eval {`/sbin/iptables -A POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`; 1; }
@@ -1838,7 +1842,7 @@ END
                 $duprules = 0;
             #    eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat --out-interface br$id -s $externalip -j MASQUERADE`); 1;}
             #        or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
-                eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat --out-interface br$id -j MASQUERADE`); 1;}
+                eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat --out-interface br$id ! -d 10.$idleft.$idright.0/24 -j MASQUERADE`); 1;}
                     or do {$e=3; $postreply .= "Status=ERROR Problem setting up routing $@\n";};
 
                 eval {$duprules++ if (`/sbin/iptables -D POSTROUTING -t nat -s $internalip ! -d 10.$idleft.$idright.0/24 -j SNAT --to-source $externalip`); 1; }

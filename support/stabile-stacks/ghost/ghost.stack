@@ -1,0 +1,39 @@
+APPID=1723
+VERSION=1.0a
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=ghost
+APPNAME=Ghost
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=4096
+VCPU=2
+LOGO=https://www.stabile.io/images/apps/ghost-emblem.png
+THUMBNAIL=https://www.stabile.io/images/apps/ghost-emblem.png
+SUMMARY=An open source tool for independent journalists and writers across the world
+DESCRIPTION=<div class="app-description">\
+    <div>\
+        This Stack provides an installation of the Open Source blog software <a href="https://ghost.org" target="_blank">Ghost</a>.\
+        <ul>\
+        <li>Ghost is installed following these <a href="https://ghost.org/docs/install/ubuntu/" target="_blank">instructions</a>.</li>\
+        <li>Ghost is served using Apache as a reverse proxy.</li>\
+        <li>The ghost service may take a few minutes to start the first time it is started, so please be patient.</li>\
+        </ul>\
+        Ghost was founded in April 2013, after a very successful Kickstarter campaign to create a new platform focused solely on professional publishing. Our mission is to create the best open source tools for independent journalists and writers across the world, and have a real impact on the future of online media.\
+    </div>\
+</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/ghost" target="_blank">Stack source code</a></div>

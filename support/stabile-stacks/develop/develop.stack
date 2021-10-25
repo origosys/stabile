@@ -22,7 +22,7 @@ MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
 MEMORY=1024
 LOGO=https://www.stabile.io/images/apps/development-icon.png
 THUMBNAIL=https://www.stabile.io/images/apps/development-icon.png
-SUMMARY=Develop provides a web-based IDE framework with a small footprint and minimal requirements.
+SUMMARY=Our "Develop" stack provides a web-based IDE framework with a small footprint and minimal requirements.
 DESCRIPTION=<section>\
     <h2>Features</h2>\
     <p style="margin-bottom:20px;">Develop is a lean stack that installs two Ubuntu VM's with basic developement utilities for software development. Develop includes\
@@ -56,7 +56,9 @@ DESCRIPTION=<section>\
     <p style="text-align:center;"><a href="https://www.origo.io/images/apps/codiad_screenshot_12_27.png"><img src="https://www.origo.io/images/apps/codiad_screenshot_12_27.png" alt="Codiad Screenshot" class="responsive" style="width:400px"></a></p>\
     <br><br>\
     <h2>Getting Started</h2>\
-    <p>Codiad is installed and works out the box with Develop.</p>\
-    <p>For more information about Codiad, please <strong><a href="https://github.com/Codiad/Codiad/wiki/Installation">read the installation instructions</a></strong> on the Wiki.</p>\
+    <p>Codiad is installed and works out the box.</p>\
+    <p>For more information about Codiad, please <b><a target="_blank" href="https://github.com/Codiad/Codiad/wiki/Installation">read the installation instructions</a></b> on the Wiki.</p>\
     </section>\
-    <div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterdevelop">Stack source code</a></div>
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/develop" target="_blank">Stack source code</a></div>

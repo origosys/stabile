@@ -659,8 +659,8 @@ END
         $termlink =~ s/{uuid}/$register{$uuid}->{networkuuid1}/;
         my $burl = $baseurl;
         $burl = $1 if ($termlink =~ /\/stabile/ && $baseurl =~ /(.+)\/stabile/); # Unpretty, but works for now
-        $termlink = $1 if ($termlink =~ /\/(.+)/);
-        $termlink = "$burl/$termlink" unless ($termlink =~ /^http/ || !$termlink); # || $termlink =~ /^\//
+        # $termlink = $1 if ($termlink =~ /\/(.+)/);
+        # $termlink = "$burl/$termlink" unless ($termlink =~ /^http/ || !$termlink); # || $termlink =~ /^\//
         $appinfo{'terminallink'} = $termlink;
 
         $appinfo{'upgradelink'} = $imagereg{$register{$uuid}->{image}}->{upgradelink} || '';
@@ -698,6 +698,7 @@ END
     }
     $appinfo{'appstoreurl'} = $appstoreurl;
     $appinfo{'dnsdomain'} = ($enginelinked)?$dnsdomain:'';
+    $appinfo{'dnssubdomain'} = ($enginelinked)?substr($engineid, 0, 8):'';
     $appinfo{'uuid'} = $uuid;
     $appinfo{'user'} = $user;
     $appinfo{'remoteip'} = $remoteip;
@@ -2575,7 +2576,7 @@ END
                         }
                     }
                 }
-                # Then move network
+                # Then move network(s)
                 if ($imgdone) {
                     $Stabile::Networks::user = $user;
                     require "$Stabile::basedir/cgi/networks.cgi";
@@ -2623,13 +2624,12 @@ END
                             my $newid = Stabile::Networks::getNextId('', $domuser);
                             $networkreg{$net}->{'id'} = $newid;
                             $networkreg{$net}->{'user'} = $domuser;
-                            if ($regnet->{'type'} eq 'internalip'
-                                || $regnet->{'type'} eq 'ipmapping') {
+                        #    if ($regnet->{'type'} eq 'internalip' || $regnet->{'type'} eq 'ipmapping') {
                                 # Deactivate network and assign new internal ip
                                 Stabile::Networks::Deactivate($regnet->{'uuid'});
                                 $networkreg{$net}->{'internalip'} =
                                     Stabile::Networks::getNextInternalIP('',$regnet->{'uuid'}, $newid, $domuser);
-                            }
+                        #    }
                             $netdone = 1;
                             $main::updateUI->({tab=>"networks", user=>$user, message=>"Moved network $regnet->{'name'} to account: $domuser"});
                             $main::syslogit->($user, "info", "Moved network $regnet->{'name'} to account: $domuser");

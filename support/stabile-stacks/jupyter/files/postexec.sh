@@ -3,6 +3,10 @@
 # This script is executed in the image chroot
 echo "Performing post-install operations"
 
+apt-get update
+apt-get install -y nux-tools
+apt-get install -y ffmpeg dvipng
+
 #anaconda="Anaconda3-4.4.0-Linux-x86_64.sh"
 #anaconda="Anaconda2-4.4.0-Linux-x86_64.sh"
 anaconda="Anaconda3-5.3.1-Linux-x86_64.sh"
@@ -11,6 +15,7 @@ anaconda="Anaconda3-5.3.1-Linux-x86_64.sh"
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
 # Remove "command" tab from Webmin UI
 rm -r /usr/share/webmin/stabile/tabs/commands
+rm -r /usr/share/webmin/stabile/tabs/servers
 echo jupyter > /etc/hostname
 
 # libav-tools is no longer available, use ffmpeg
@@ -31,11 +36,16 @@ mkdir /home/stabile/notebooks
 chown stabile:stabile /home/stabile/notebooks
 cp /usr/share/webmin/stabile/tabs/jupyter/stabile-jupyter.pl /usr/local/bin/
 
-/home/stabile/anaconda/bin/conda install -c conda-forge --yes version_information
+/home/stabile/anaconda/bin/pip install version_information
+
+#https://github.com/conda/conda/issues/10618
+#/home/stabile/anaconda/bin/conda install --channel defaults conda python=3.6 --yes
+#/home/stabile/anaconda/bin/conda update --channel defaults --all --yes
+#/home/stabile/anaconda/bin/conda install -c conda-forge --yes version_information
 
 echo "[Unit]
 DefaultDependencies=no
-Description=stabile jupyter.1.0
+Description=stabile jupyter
 After=network-online.target stabile-ubuntu.service
 Wants=network-online.target
 
@@ -46,8 +56,8 @@ Restart=always
 RestartSec=1
 
 [Install]
-WantedBy=multi-user.target" > /etc/systemd/system/stabile-jupyter.1.0.service
-systemctl enable stabile-jupyter.1.0.service
+WantedBy=multi-user.target" > /etc/systemd/system/stabile-jupyter.service
+systemctl enable stabile-jupyter.service
 
 # Download a few notebooks
 cd /home/stabile/notebooks; git clone https://github.com/jrjohansson/scientific-python-lectures
@@ -56,3 +66,6 @@ cd /home/stabile/notebooks; git clone https://github.com/jrjohansson/scientific-
 chown -R stabile:stabile /home/stabile/notebooks
 
 echo "export PATH=/home/stabile/anaconda/bin:$PATH" >> /etc/bash.bashrc
+
+# Change logo
+perl -pi -e 's/images\/ubuntu-logo.png/tabs\/jupyter\/logo-jupyter.png/' /usr/share/webmin/stabile/index.cgi

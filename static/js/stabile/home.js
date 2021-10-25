@@ -2195,8 +2195,7 @@ define([
                                     home.updateUsage();
                                 }
                                 home.grid.updatePending = servers.grid.updatePending = images.grid.updatePending = networks.grid.updatePending = true;
-
-                                server.parseResponse(response);
+                                if (response) server.parseResponse(response);
                             },
                             error: function(error){
                                 console.error("grid::actionHandler", error);

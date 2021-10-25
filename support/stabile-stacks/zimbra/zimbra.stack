@@ -1,0 +1,34 @@
+APPID=1724
+VERSION=1.0a
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+DATAIMAGE=20G
+DATAMOUNT=/opt/zimbra
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=zimbra
+APPNAME=Zimbra
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=dnsutils net-tools htop telnet libcurl4-gnutls-dev libgnutls28-dev libgcrypt20-dev libattr1 libattr1-dev liblzma-dev libgpgme-dev libmariadbclient-dev libcurl4-gnutls-dev libssl-dev nghttp2 libnghttp2-dev idn2 libidn2-dev libidn2-0-dev librtmp-dev libpsl-dev nettle-dev libgnutls28-dev libldap2-dev libgssapi-krb5-2 libk5crypto3 libkrb5-dev libcomerr2 libldap2-dev virtualenv git socat vim unzip zip liburi-escape-xs-perl
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=8192
+VCPU=4
+LOGO=https://www.stabile.io/images/apps/zimbra-no-lettermark.png
+THUMBNAIL=https://www.stabile.io/images/apps/zimbra-no-lettermark.png
+SUMMARY=The leading email and collaboration software for small, medium & enterprise in-office and remote work teams.
+DESCRIPTION=<div>\
+    This Stack provides an installation of the leading Open Source email, calendar and directory software <a href="https://zimbra.com" target="_blank">Zimbra</a>.<br>\
+    Email, calendaring and directory services are the backbone of most businesses. Zimbra has been providing these services to thousands of businesses for more than a decade. Zimbra is a mature, polished, reliable and scalable product.<br>\
+</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/zimbra" target="_blank">Stack source code</a></div>

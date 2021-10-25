@@ -2139,8 +2139,9 @@ sub getOpstatus {
                 $service->{'servername'} = $domreg{$group}->{'name'};
                 $service->{'serveruuid'} = $domreg{$group}->{'uuid'};
                 $service->{'serverstatus'} = $domreg{$group}->{'status'};
-
-                $service->{'serverip'} = `cat /etc/mon/mon.cf |sed -n -e 's/^hostgroup $group //p'`;
+                my $serverip = `cat /etc/mon/mon.cf |sed -n -e 's/^hostgroup $group //p'`;
+                chomp $serverip;
+                $service->{'serverip'} = $serverip;
 
                 my $desc = $desc{$group}->{$service->{'service'}};
                 $desc = '' if ($desc eq '--');
@@ -3516,11 +3517,11 @@ sub remove {
         }
         $duuid = $domuuid;
     }
+    if ($register{$uuid}) {
+        delete $register{$uuid};
+        tied(%register)->commit;
+    }
     if (@domains) {
-        if ($register{$uuid}) {
-            delete $register{$uuid};
-            tied(%register)->commit;
-        }
         $main::updateUI->(
                         {tab=>'servers',
                         user=>$user,
@@ -3549,12 +3550,13 @@ sub remove {
                         }
                     );
     }
+
     if ($engineid && $enginelinked) {
         # Remove domain from origo.io
         my $json_text = qq|{"uuid": "$sysuuid" , "status": "delete"}|;
         $main::postAsyncToOrigo->($engineid, 'updateapps', "[$json_text]");
     }
-    return $postreply;
+    return $postreply || qq|Content-type: application/json\n\n|;
 }
 
 sub getPackages {

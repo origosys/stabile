@@ -69,4 +69,6 @@ DESCRIPTION=<div class="app-description">\
         <li>Size the server (after installation) as you like.</li>\
     </ul>\
 </div>\
-<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterubuntu-bionic">Stack source code</a></div>
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/ubuntu-bionic">Stack source code</a></div>

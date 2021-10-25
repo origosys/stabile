@@ -1,0 +1,39 @@
+APPID=1721
+VERSION=1.0b
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=rocketchat
+APPNAME=RocketChat
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=4096
+VCPU=2
+LOGO=https://www.stabile.io/images/apps/rocketchat-logo.svg
+THUMBNAIL=https://www.stabile.io/images/apps/rocketchat-logo.svg
+SUMMARY=Keep the workflow going by centralizing all your tools and touchpoints in one platform. Made for team collaboration and customer engagement.
+DESCRIPTION=<div class="app-description">\
+    <div>\
+        This Stack provides an installation of the Open Source chat software <a href="https://rocket.chat" target="_blank">Rocket.Chat</a>.<br><br>\
+        <ul>\
+        <li>Rocket.Chat is suitable for internal chat and messaging as a replacement for e.g. using Slack and/or FaceBook Messenger or whatever your organization is currently using.</li>\
+        <li>Rocket.Chat is installed following these <a href="https://docs.rocket.chat/installing-and-updating/manual-installation/ubuntu" target="_blank">instructions</a>.</li>\
+        <li>The chat is reachable at the default port 3000 without SSL and the stack also provides access using Apache as a reverse proxy.</li>\
+        <li>The rocketchat service may take a few minutes to start the first time it is started, so please be patient.</li>\
+        </ul>\
+    </div>\
+</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/rocketchat" target="_blank">Stack source code</a></div>

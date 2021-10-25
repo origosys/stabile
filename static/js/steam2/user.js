@@ -83,6 +83,16 @@ function(xhr, cookie){
                     user.vmiopsreadlimit = response.items[0].engine.vmiopsreadlimit;
                     user.vmiopswritelimit = response.items[0].engine.vmiopswritelimit;
                 }
+                if (response.items[0].favicon) {
+                    user.favicon = response.items[0].favicon;
+                    var link = document.querySelector("link[rel~='icon']");
+                    if (!link) {
+                        link = document.createElement('link');
+                        link.rel = 'icon';
+                        document.getElementsByTagName('head')[0].appendChild(link);
+                    }
+                    link.href = user.favicon;
+                }
                 user.showcost = response.items[0].showcost;
                 user.billto = response.items[0].billto;
                 user.appstoreurl = response.items[0].appstoreurl;

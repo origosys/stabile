@@ -4,6 +4,10 @@ use JSON;
 use Digest::SHA qw(sha1_base64 sha1_hex);
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
+my $dnsdomain =  $appinfo{dnsdomain};
+my $dnssubdomain = $appinfo{'dnssubdomain'};
+my $dom = ($dnsdomain && $dnssubdomain)?"$externalip.$dnssubdomain.$dnsdomain":"$externalip";
+
 sub jupyter {
     my $action = shift;
     my $in_ref = shift;
@@ -18,17 +22,23 @@ sub jupyter {
         }
 
         $form .= <<END
-    <div class="tab-pane" id="jupyter">
+    <div class="tab-pane container" id="jupyter">
         <div>
             Here you can manage basic security for your Jupyter Notebook.
         </div>
         <small>Set the password for your Jupyter notebook:</small>
-        <form class="passwordform" action="index.cgi?action=changejupyterpassword&tab=jupyter" method="post" onsubmit="passwordSpinner();" accept-charset="utf-8" id="jupyterform" autocomplete="off">
-            <input type="password" name="jupyterpassword" autocomplete="off" value="" class="password" onfocus="doStrength(this);">
-            <button class="btn btn-default" type="submit">Set!</button>
+        <form class="passwordform" action="index.cgi?action=jupyterpassword&tab=jupyter" method="post" onsubmit="jupyterSpinner(); \$('#jupyterpassword').val(''); return false;" accept-charset="utf-8" id="jupyterpassword_form" autocomplete="off">
+            <div class="row">
+                <div class="col-sm-10">
+                   <input type="password" name="jupyterpassword" id="jupyterpassword" autocomplete="off" value="" class="password"">
+                </div>
+                <div class="col-sm-2">
+                    <button class="btn btn-default" type="submit" id="jupyterpassword_button">Set!</button>
+                </div>
+            </div>
         </form>
         <small style="margin-top:10px;">
-            After setting the password, <a target="_blank" href="https://$externalip.$appinfo{dnsdomain}:8889">log in here</a> with your password.
+            After setting the password, <a target="_blank" href="https://$dom:8889">log in here</a> with your password.
         </small>
     </div>
 END
@@ -39,9 +49,24 @@ END
     } elsif ($action eq 'js') {
 # Generate and return javascript the UI for this tab needs
         my $js = <<END
-        \$("#currentwpadmin").attr("href", "https://$externalip.$appinfo{dnsdomain}:8889/");
-        \$("#currentwpadmin").text("to Jupyter Notebook");
-        \$("#currentwpadmin").parent().show()
+        \$("#currentwp").attr("href", "https://$dom:8889/");
+        \$("#currentwp").text("to Jupyter Notebook");
+        \$("#currentwp").parent().show()
+
+    function jupyterSpinner(target) {
+        if (!target) target = "jupyterpassword";
+        \$("#" + target + "_button").prop("disabled", true ).html('Set! <i class="fa fa-cog fa-spin"></i>');
+        var ser = \$('#' + target + '_form').serialize();
+        \$.post('index.cgi?action=' + target + '&tab=jupyter', ser, function(data) {}
+        ,'json'
+        ).done(function( data ) {
+            salert(data.message);
+            \$("#" + target + "_button").prop("disabled", false ).html('Set!');
+        }).fail(function() {
+            salert( "An error occurred :(" );
+            \$("#" + target + "_button").prop("disabled", false ).html('Set!');
+        });
+    }
 END
 ;
         return $js;
@@ -57,7 +82,7 @@ END
         my $res;
         return $res;
 
-    } elsif ($action eq 'changejupyterpassword' && defined $in{jupyterpassword}) {
+    } elsif ($action eq 'jupyterpassword' && defined $in{jupyterpassword}) {
         my $message;
         my $salt = `openssl rand -base64 5  | xargs echo -n`;
         my $pwd = $in{jupyterpassword};
@@ -65,9 +90,9 @@ END
             my $password = sha1_hex($pwd . $salt);
             $message .= `perl -pi -e "s/.*c\\.NotebookApp\\.password =.*/c.NotebookApp.password = 'sha1:$salt:$password'/" /home/stabile/.jupyter/jupyter_notebook_config.py`;
             $message .= `pkill -f jupyter`;
-            $message .= "<div class=\"message\">The Jupyter password was changed!</div>";
+            $message .= "The Jupyter password was changed!";
         }
-        return $message;
+        return qq|Content-type: application/json\n\n{"message": "$message"}|;
     }
 }
 

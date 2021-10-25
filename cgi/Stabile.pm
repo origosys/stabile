@@ -347,7 +347,9 @@ $main::dnsCreate = sub {
         my $checkval = $value;
         # Remove any trailing period
         $checkval = $1 if ($checkval =~ /(.+)\.$/);
-        if ($type eq 'A') {
+        if ($type eq 'TXT') {
+            $checkval = '';
+        } elsif ($type eq 'A') {
             $checkval = $value;
         } else {
             $checkval = $1 if ($checkval =~ /(\d+\.\d+\.\d+\.\d+)\.$dnssubdomain\.$dnsdomain$/);
@@ -368,21 +370,21 @@ $main::dnsCreate = sub {
                 if ($register{$regkeys[0]}->{'user'} eq $username) {
                     ; # OK
                 } else {
-                    return "Status=ERROR Invalid value $checkval, not allowed\n";
+                    return "ERROR Invalid value $checkval, not allowed\n";
                 }
             } elsif (scalar @regkeys >1) {
-                return "Status=ERROR Invalid value $checkval\n";
+                return "ERROR Invalid value $checkval\n";
             }
             untie %networkreg;
             if ($type eq 'A') {
-                $name = "$checkval.$dnssubdomain";
+#                $name = "$checkval.$dnssubdomain"; # Only allow this type of A-records...?
             } else {
                 $value = "$checkval.$dnssubdomain";
             }
         }
     }
 
-    if (`host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/) {
+    if ($type ne 'MX' && $type ne 'TXT' && `host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/) {
         return "OK $name is already registered\n";
     };
 
@@ -399,12 +401,13 @@ $main::dnsCreate = sub {
 
         my $async = HTTP::Async->new;
         my $post = POST $posturl,
-            [   engineid => $engineid,
+            [ engineid        => $engineid,
                 enginetkthash => $tkthash,
-                name => $name,
-                domain => $dnsdomain,
-                value => $value,
-                type => $type
+                name          => $name,
+                domain        => $dnsdomain,
+                value         => $value,
+                type          => $type,
+                username      => $username || $user
             ];
         # We fire this asynchronously and hope for the best. Waiting for an answer is just too erratic for now
         $async->add( $post );
@@ -436,9 +439,11 @@ $main::dnsDelete = sub {
     # When username is not supplied, we assume checking has been done
     my $checkval;
     if ($username) {
-        if ($name =~ /\d+\.\d+\.\d+\.\d+/) {
-            $checkval = $name;
+        if ($name =~ /(\d+\.\d+\.\d+\.\d+)/) {
+            $checkval = 'OK'; # We now per default allow user to delete his own records
+    #        $checkval = $1;
         } else {
+            $checkval = 'OK'; # We now per default allow user to delete his own records
             my $checkname = $name;
             # Remove trailing period
             $checkname = $1 if ($checkname =~ /(.+)\.$/);
@@ -447,24 +452,34 @@ $main::dnsDelete = sub {
                 $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
             } else {
                 $checkname = "$checkname.$dnsdomain";
-                $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+                if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/) {
+                    $checkval = $1;
+                } elsif (`nslookup $checkname authns1.cabocomm.dk` =~ /text = /) {
+                    $checkval = "OK"; # We need to be able to delete DMARC TXT records...
+                }
             }
-            return "Status=ERROR Invalid value $checkname\n" unless ($checkval);
+            return "ERROR Invalid name $checkname\n" unless ($checkval);
         }
 
-        unless (tie %networkreg,'Tie::DBI', {
-            db=>'mysql:steamregister',
-            table=>'networks',
-            key=>'uuid',
-            autocommit=>0,
-            CLOBBER=>0,
-            user=>$dbiuser,
-            password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
-        my @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
-        if ($isadmin || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username)) {
+        my @regkeys;
+        if ($checkval && $checkval ne 'OK') {
+            unless (tie %networkreg,'Tie::DBI', {
+                db=>'mysql:steamregister',
+                table=>'networks',
+                key=>'uuid',
+                autocommit=>0,
+                CLOBBER=>0,
+                user=>$dbiuser,
+                password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
+            @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
+        }
+
+        if ($isadmin || $checkval eq "OK"
+        #    || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username) # we now allow a user to delete all his own records
+        ) {
             ; # OK
         } else {
-            return "ERROR Invalid user for $checkval, not allowed\n";
+            return "ERROR Invalid user ($username) for $name, $checkval, not allowed\n";
         }
         untie %networkreg;
     }
@@ -484,7 +499,8 @@ $main::dnsDelete = sub {
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
         $postreq->{'name'} = $name;
-        $postreq->{'domain'} = $dnsdomain;
+        $postreq->{'username'} = $username || $user;
+        $postreq->{'domain'} = "$dnsdomain";
         $content = $browser->post($posturl, $postreq)->content();
         $content =~ s/://g;
         return $content;
@@ -509,7 +525,7 @@ $main::dnsUpdate = sub {
             $checkname = $1 if ($checkname =~ /(.+)\.$/);
             $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
             $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
-            return "Status=ERROR Invalid value $checkname\n" unless ($checkval);
+            return "ERROR Invalid value $checkname\n" unless ($checkval);
         }
 
         unless (tie %networkreg,'Tie::DBI', {
@@ -544,6 +560,7 @@ $main::dnsUpdate = sub {
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
         $postreq->{'name'} = $name;
+        $postreq->{'username'} = $username || $user;
         $postreq->{'domain'} = $dnsdomain;
         $content = $browser->post($posturl, $postreq)->content();
         $content =~ s/://g;
@@ -569,6 +586,7 @@ $main::dnsList = sub {
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
         $postreq->{'domain'} = $dnsdomain;
+        $postreq->{'username'} = $username || $user;
         $content = $browser->post($posturl, $postreq)->content();
         $content =~ s/://g;
         return $content;
@@ -681,7 +699,6 @@ $main::updateUI = sub {
     my $newtasks;
     my $tab;
     my $duser;
-
     foreach my $pars (@parslist) {
         my $type = $pars->{type};
         my $duuid = $pars->{uuid};
@@ -1180,7 +1197,7 @@ sub process {
     # Perform the action
         $postreply = &{"do_$action"}($target, $action, $obj);
         if (!$postreply) { # We expect some kind of reply
-            $postreply .= header('text/plain', '500 Internal Server Error') unless ($console);
+            $postreply .= header('text/plain', '500 Internal Server Error because no reply') unless ($console);
             $main::syslogit->($user, 'info', "Could not $action $target ($package)") unless ($action eq 'uuidlookup');
         } elsif (! ($postreply =~ /^(Content-type|Status|Location):/i) ) {
             if ($postreply =~ /Content-type:/) {

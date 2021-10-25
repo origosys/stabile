@@ -1,5 +1,6 @@
-VERSION=1.0
-BASEIMAGE=ubuntu-bionic.1.0a.master.qcow2
+APPID=1169
+VERSION=1.0a
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
 REBASE=0
 BASESUITE=
 SIZE=
@@ -11,7 +12,7 @@ TAR=
 TARTARGET=
 GIT=
 GITTARGET=
-DEBS=texlive texlive-latex-extra ffmpeg dvipng texlive-fonts-recommended nux-tools
+DEBS=texlive texlive-latex-extra texlive-fonts-recommended python3-hamcrest gfortran cython x264 winff python3-svgwrite
 PREEXEC=/tmp/files/preexec.sh
 POSTEXEC=/tmp/files/postexec.sh
 SERVICE=
@@ -21,6 +22,17 @@ MEMORY=4096
 VCPU=2
 LOGO=https://www.stabile.io/images/apps/logo-jupyter.png
 THUMBNAIL=https://www.stabile.io/images/apps/logo-jupyter.png
-SUMMARY=The Jupyter Notebook is the leading Open Source scientific application for creating and sharing live code, equations, visualizations and text.
-DESCRIPTION=Project Jupyter is an open source project was born out of the IPython Project in 2014 as it evolved to support interactive data science and scientific computing across all programming languages. Jupyter will always be 100% open source software, free for all to use and released under the liberal terms of the modified BSD license.\
-<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/masterjupyter">Stack source code</a></div>
+SUMMARY=Jupyter is the leading Open Source scientific application for creating and sharing live code, equations, visualizations and text.
+DESCRIPTION=<div class="app-description">\
+                <div>\
+                <a href="https://jupyter.org" target="_blank">Jupyter</a> is the leading Open Source scientific application for creating and sharing live code, equations, visualizations and text.<br>\
+                Project Jupyter is an open source project was born out of the IPython Project in 2014 as it evolved to support interactive data science and scientific computing across all programming languages.<br>\
+    Jupyter will always be 100% open source software, free for all to use and released under the liberal terms of the modified BSD license.\
+     </div>\
+     <div>\
+         With this stack we are inluding the excellent notebooks for J Robert Johansson's excellent <a href="https://jrjohansson.github.io/computing.html" target="_blank">lecture series</a> on scientific computing with Python, which are a great starting point for learning to use Jupyter.\
+     </div>\
+ </div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/jupyter" target="_blank">Stack source code</a></div>

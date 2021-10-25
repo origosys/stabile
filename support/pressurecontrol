@@ -284,9 +284,9 @@ if ($linked) {
                     # maintained manually
                         if (($k eq 'ADMIN_NIC' || $k eq 'DATA_NIC') && $cfgkey ne $defaultpath) {
                             print "Not changing NIC on non-default nodeidentity $cfgkey: $line\n";
-                        } else {
+                        } elsif ($pullconfigs) {
                             print "Received modified node config ($cfgkey): $line\n";
-                            $nodeconfigs{$cfgkey}->param($k, $v) if ($pullconfigs);
+                            $nodeconfigs{$cfgkey}->param($k, $v);
                             if ($k =~ /READ_LIMIT|WRITE_LIMIT/) {
                                 print `echo /nodes/reloadall | stash`;
                             }
@@ -469,7 +469,7 @@ if ($pid) {
     fork(); fork(); fork(); # 2^3 = 8 processes
 
     my $dbrowser = LWP::UserAgent->new;
-    $dbrowser->timeout(30);
+    $dbrowser->timeout(60);
     $dbrowser->agent('pressurecontrol/1.0b');
     $dbrowser->protocols_allowed( [ 'http','https'] );
 
@@ -483,7 +483,6 @@ if ($pid) {
                 my $networkuuid = $2;
                 my $uriport = $3;
                 my $uripath = $4;
-                my $baseuri = "$baseurl/pipe/$networkuuid$uriport/";
                 $prot = "$prot/" unless ($prot =~ /\/\//);
                 my $geturi = $prot . "$networkuuid$uriport$uripath";
                 $host = $2 if ($uripath =~ /(\?|\&)host=(.+)\&/ || $uripath =~ /(\?|\&)host=(.+)/);
@@ -508,6 +507,9 @@ if ($pid) {
                 }
                 $user = validateUser($user, $networkuser); # Set $user to $networkuser if validated
                 if ($user) {
+                    my $baseuri = "$baseurl/pipe/$networkuuid$uriport/";
+                    my $steamhost = $request->header('STEAM_HOST');
+                    $baseuri = "https://$steamhost/stabile/pipe/$networkuuid$uriport/" if ($steamhost);
                     my $extip = $networks{$networkuuid}->{'externalip'};
                     my $intip = $networks{$networkuuid}->{'internalip'};
                     my $ip = $intip;
@@ -522,15 +524,15 @@ if ($pid) {
                         if ($uri =~ /:4200\/\?$/) { # shellinaboxd
                             $dbrowser->timeout(120);
                             $response = $dbrowser->simple_request( $request );
-                            $dbrowser->timeout(30);
+                            $dbrowser->timeout(60);
                         } else {
                             $response = $dbrowser->simple_request( $request );
                         }
 
                     # Do a lot of proxy text translations in order to fix things up a bit in the browser
-                        my $link = $response->header('Link');
-                        $link =~ s/<\/(\w)/<$baseuri$1/gi;
-                        $response->header('Link', $link);
+                        #my $link = $response->header('Link');
+                        #$link =~ s/<\/(\w)/<$baseuri$1/gi;
+                        #$response->header('Link', $link);
 
                         my $loc = $response->header('Location');
                         if ($loc && $loc =~ /^https?:\/\/.+\/(.+)\//) {
@@ -539,15 +541,18 @@ if ($pid) {
                         ${$response->content_ref} =~ s/\{internalip\}/$ip/gi;
                         ${$response->content_ref} =~ s/\{externalip\}/$extip/gi;
                         # \w is included to avoid matching url's starting with //, which should be left alone
-                        ${$response->content_ref} =~ s/(href|src|action|value)=('|")\/(\w)/$1=$2$baseuri$3/gi;
+                        # ${$response->content_ref} =~ s/(href|src|action|value)=('|")\/(\w)/$1=$2$baseuri$3/gi;
                         # This is purely to fixup javascript in Wordpress install.php
                         ${$response->content_ref} =~ s/\\\/home/../;
+                        # This is to fix css links in Wordpress install
+                        ${$response->content_ref} =~ s/\/home\/wp-includes/$baseuri\/home\/wp-includes/g;
+                        ${$response->content_ref} =~ s/\/home\/wp-admin/$baseuri\/home\/wp-admin/g;
                         # This is purely to fixup image path in Thirdlane PBX UI
 #                        ${$response->content_ref} =~ s/\.\.\/\.\.\/\.\.\//..\/..\//;
 
 
                         ${$response->content_ref} =~ s/(load\()('|")\//$1$2$baseuri/gi;
-                        $response->push_header( 'X-Via' => "1.1 $origuri" );
+                        $response->push_header( 'X-Via' => "1.1 $baseuri" );
                         $response->push_header( 'X-BaseUri' => "1.1 $baseuri" );
                         $response->remove_header( 'Content-Security-Policy');
                         $response->push_header( 'Content-Security-Policy' => "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ajax.googleapis.com https://code.jquery.com https://ajax.microsoft.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://ajax.googleapis.com https://code.jquery.com" );

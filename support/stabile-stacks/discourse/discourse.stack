@@ -1,0 +1,40 @@
+VERSION=1.0a
+APPID=1911
+REBASE=0
+MAINTAINER=Christian Orellana <christian@origo.io>
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+BASESUITE=
+NAME=discourse
+APPNAME=Discourse
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=https://github.com/discourse/discourse.git
+GITTARGET=/var/discourse
+PREEXEC=/tmp/files/preexec.sh
+DEBS=postgresql-10 libgdbm-dev libncurses5-dev automake libtool bison libffi-dev gawk g++ libssl-dev make zlib1g-dev libyaml-dev libsqlite3-dev sqlite3 libgmp-dev pkg-config libgmp-dev libreadline6-dev libpq-dev redis-server ruby-rmagick imagemagick optipng jhead jpegoptim gifsicle postfix software-properties-common ruby-sidekiq-cron ruby ruby-dev brotli libapache2-mod-passenger pngquant
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+PRICE=-420
+VCPU=2
+MEMORY=4096
+LOGO=https://www.stabile.io/images/apps/logo-discourse.png
+THUMBNAIL=https://www.stabile.io/images/apps/discourse_icon.png
+SUMMARY=Discourse is a civilized discussion platform. Use it as a mailing list, forum, long-form chat room, and more!
+DESCRIPTION=<div class="app-description">\
+  Discourse is a from-scratch reboot, an attempt to reimagine what a modern Internet discussion platform should be today, in a world of ubiquitous smartphones, tablets, Facebook, and Twitter. \
+  <h2>We're civilized.</h2> \
+  Our trust system means that the community builds a natural immune system to defend itself from trolls, bad actors, and spammers - and the most engaged community members can assist in the governance of their community. We put a trash can on every street corner with a simple, low-friction flagging system. Positive behaviors are encouraged through likes and badges. We gently, constantly educate members in a just-in-time manner on the universal rules of civilized discourse.\
+  <h2>Uncompromisingly open source.</h2> \
+  There is only one version of Discourse - the awesome open source version. There's no super secret special paid commercial version with better or more complete features. Because Discourse is 100% open source, now and forever, it belongs to you as much as it belongs to us. That's how community works.<br> \
+  Everything that most communities would want is included out of the box; a giant collection of complex plugins should not be required to have a great experience. \
+  <h2>Simple. Modern. Fun.</h2> \
+  Discourse pares all the complexity away and puts just the essential stuff on screen - the conversations you care most about, based on your participation.<br> \
+  All the modern amenities you'd expect from a big social website like Twitter or Facebook are present in Discourse. Mention someone by @name. Paste in a link or an image, and we make it awesome on your behalf. Simple quoting and linking of replies and topics. Reply wherever you are, online or via email.<br> \
+  And it "just works" on your phone and tablet.\
+</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/discourse" target="_blank">Stack source code</a></div>

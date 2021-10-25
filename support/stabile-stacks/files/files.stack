@@ -1,4 +1,5 @@
-VERSION=1.0b
+APPID=1237
+VERSION=1.0c
 BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
 REBASE=0
 BASESUITE=
@@ -11,7 +12,7 @@ TAR=
 TARTARGET=
 GIT=
 GITTARGET=
-DEBS=software-properties-common samba smbclient winbind libnss-winbind krb5-kdc ldb-tools build-essential libapache2-mod-perl2 libauthen-simple-ldap-perl libcgi-pm-perl libexpect-perl krb5-user
+DEBS=software-properties-common samba smbclient winbind libnss-winbind krb5-kdc ldb-tools build-essential libapache2-mod-perl2 libauthen-simple-ldap-perl libcgi-pm-perl libexpect-perl krb5-user php-gd
 PREEXEC=
 POSTEXEC=/tmp/files/postexec.sh
 SERVICE=
@@ -25,16 +26,24 @@ THUMBNAIL=https://www.stabile.io/images/apps/files-sync.png
 SUMMARY=Linux file server with a nice web UI and synchronization of files across devices. Using Samba Files can act as a Domain Controller.
 DESCRIPTION=<section>\
     <h2>Files</h2>\
-    <p style="margin-bottom:20px;">Files is a Linux file server with a nice web UI and synchronization of files across devices.\
-    We built the Files stack because we were a bit tired of sync'ing a large number of files across many devices, and actually missed an old-fashioned file server.<br>\
-    Files uses the excellent <a target="_blank" href="http://samba.org">Samba</a> software, to serve as a CIFS files server and an Active Directory Domain Controller.<br>\
-    To allow sync'ing we threw in Bittorent Sync, which is now called <a target="_blank" href="http://resilio.com">Resilio Sync</a>. Using this you can simply mark directories for sync'ing and then paste in the key in your Resilio client on your devices.<br>\
-    To allow browsing files on the file server we threw in the excellent <a target="_blank" href="https://github.com/Studio-42/elFinder">elFinder</a> software, and modified it a bit to support sync'ing and sharing access to directories via links.<br>\
-    The Files management UI gives you an easy interface to create users and groups in the AD domain and of course resize the data disk, which is used as storage area for the file server.<br>\
-    When you create a group in the management UI, an associated file share is automatically created, which members of the group have access to via CIFS/SMB or the via the Web UI.<br>\
-    A file share called "shared" is always created, and is available to all users as a shared space.<br>\
-    The management UI also allows you to browse all the file shares and configure storage.<br>\
-    If you select "Provision Domain" in the "samba" drop-down in the management interface, you can re-provision the AD domain, which allows you to basically initialize Samba from scratch. Users, groups, file shares etc. are reset, but the actual data in the file shares is not touched.\
-    The "Samba Configuration" from the "samba" drop-down allows you to limit who can actually write to the "shared" share, and you can specify users that should only have access to the shares associated with the grups they are members of. You can also limit which hosts should have SMB and CIFS access to the server. This is then put in the smb.conf configuration file. Bear in mind however, that this stack in its default configuration limits access to the SMB/CIFS ports using <a target="_blank" href="https://www.origo.io/info/stabiledocs/web/networks/ports/">Stabile connection functionality</a>. If you use this, it is redundant to also limit via smb.conf.\
+    <p style="margin-bottom:10px;">Files is a Linux file server with a nice web UI and synchronization of files across devices.\
+    We built the Files stack because we were a bit tired of sync'ing a large number of files across many devices, and actually missed an old-fashioned file server.</p>\
+    <ul>\
+    <li>Files uses the excellent <a target="_blank" href="http://samba.org">Samba</a> software, to serve as a CIFS files server and an Active Directory Domain Controller.</li>\
+    <li>To allow sync'ing we threw in Bittorent Sync, which is now called <a target="_blank" href="http://resilio.com">Resilio Sync</a>. Using this you can simply mark directories for sync'ing and then paste in the key in your Resilio client on your devices.</li>\
+    <li>To allow browsing files on the file server we threw in the excellent <a target="_blank" href="https://github.com/Studio-42/elFinder">elFinder</a> software, and modified it a bit to support sync'ing and sharing access to directories via links.</li>\
+    </ul>\
+    <p style="margin-bottom:10px;">The Files management UI gives you an easy interface to create users and groups in the AD domain and of course resize the data disk, which is used as storage area for the file server.</p>\
+    <ul>\
+    <li>When you create a group in the management UI, an associated file share is automatically created, which members of the group have access to via CIFS/SMB or the via the Web UI.</li>\
+    <li>A file share called "shared" is always created, and is available to all users as a shared space.</li>\
+    <li>The management UI also allows you to browse all the file shares and configure storage.</li>\
+    <li>If you select "Provision Domain" in the "samba" drop-down in the management interface, you can re-provision the AD domain, which allows you to basically initialize Samba from scratch. Users, groups, file shares etc. are reset, but the actual data in the file shares is not touched.</li>\
+    <li>The "Samba Configuration" from the "samba" drop-down allows you to limit who can actually write to the "shared" share, and you can specify users that should only have access to the shares associated with the grups they are members of.</li>\
+    <li>You can also limit which hosts should have SMB and CIFS access to the server. This is then put in the smb.conf configuration file.</li>\
+    </ul>\
+    <p style="margin-bottom:10px;">Please bear in mind, that this stack in its default configuration also limits access to the SMB/CIFS ports using <a target="_blank" href="https://www.origo.io/info/stabiledocs/web/networks/ports/">Stabile connection functionality</a>. If you use this, it is redundant to also limit via smb.conf.\
     </p>\
+    <hr>\
+    <div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
     <div><a target="_blank" href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/files">Stack source code</a></div>

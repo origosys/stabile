@@ -982,7 +982,10 @@ sub updatePistonInfo {
                     $logentry = "Cloning $image from $master ";
                     $image =~ /(.+)\/.*/;
                     my $dir = $1;
-                    `/bin/mkdir -p "$dir"` unless (-e $dir);
+                    unless (-e $dir) {
+                        `/bin/mkdir -p "$dir"`;
+                        `chmod 777 "$dir"`;
+                    }
                     my $cmd = qq|/usr/bin/qemu-img create -f qcow2 -b "$master" "$image"|;
                     $logentry .= `$cmd`;
                     $logentry =~ tr/\n/ /;

@@ -247,6 +247,9 @@ END
         $engine_h{"zfsavailable"} = $zbackupavailable;
         $engine_h{"downloadmasters"} = $downloadmasters;
     }
+    if (-e "/var/www/stabile/static/img/logo-icon-" . $ENV{HTTP_HOST} . ".png") {
+        $jsontext .= qq|"favicon": "/stabile/static/img/logo-icon-$ENV{HTTP_HOST}.png", |;
+    }
     $engine_h{"enginename"} = $enginename;
     $engine_h{"enginelinked"} = $enginelinked;
     $jsontext .= "\"showcost\": \"$showcost\", ";
@@ -802,15 +805,16 @@ sub do_updateclientui {
     my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET:username,message,tab:
+GET:username,message,tab,type:
 Update the UI for given user if logged into UI.
 END
     }
     my $username = $obj->{'username'} || $user;
     my $message = $obj->{'message'};
     my $tab = $obj->{'tab'} || 'home';
+    my $type= $obj->{'type'} || 'update';
     if ($isadmin || ($username eq $user) || ($user eq $engineuser)) {
-        $postreply = $main::updateUI->({ tab => $tab, user => $username, message =>$message, type=>'update'});
+        $postreply = $main::updateUI->({ tab => $tab, user => $username, message =>$message, type=>$type});
     } else {
         $postreply = "Status=ERROR Not allowed\n";
     }

@@ -357,7 +357,7 @@ END
     my $status = $obj->{'status'};
     my $mac = $obj->{'mac'};
     my $name = $obj->{'name'};
-    if ($status eq "running" && $register{$mac}->{'vms'}==0) {
+    if (($status eq "running" || $status eq "maintenance" ) && $register{$mac}->{'vms'}==0) {
         $uistatus = "rebooting";
         $uiuuid = $mac;
         my $tasks = $register{$mac}->{'tasks'};

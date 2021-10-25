@@ -14,8 +14,8 @@
     RewriteRule ^/stabile/auth/(login|logout|autologin)(/?)(.*) /stabile/auth/$1.cgi$2$3
     RewriteRule ^/stabile/(login|logout|autologin)(/?)(.*) /stabile/auth/$1.cgi$2$3
 
-# Uncomment to redirect all traffic to stabile
-#    RewriteRule ^/?$ /stabile/ [L,R=303]
+# Redirect all traffic to stabile
+    RewriteRule ^/?$ /stabile/ [L,R=303]
 
     SetEnv WEBMIN_CONFIG /etc/webmin
     SetEnv WEBMIN_VAR /var/webmin
@@ -36,6 +36,7 @@
         RewriteCond %{REMOTE_USER} !=""
         RewriteRule .* - [E=E_USER:%{REMOTE_USER}]
         RequestHeader set STEAM_USER %{E_USER}e
+        RequestHeader set STEAM_HOST %{HTTP_HOST}s
     </Location>
 
     <Location /stabile/download>

@@ -3796,7 +3796,7 @@ END
                 $res .= "Status=OK Adding registry: $1\n";
             }
         }
-        $parms->{'appstore'} = 1 if ($freshen);
+#        $parms->{'appstore'} = 1 if ($freshen);
 
         my %imgref = %{$imagereg{$uuid}};
         $parms = Hash::Merge::merge($parms, \%imgref);

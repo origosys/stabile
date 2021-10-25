@@ -25,10 +25,12 @@ my $unrelease = 1 if ($options{unrelease});
 $release = 1 if ($unrelease);
 
 my $cwd = cwd();
+my $gw = `route -n | awk '\$1 == "0.0.0.0" { print \$2 }'`;
+chomp $gw;
 
 unless ($ofile) {
     opendir(DIR, ".");
-    my @files = grep(/\.o/,readdir(DIR));
+    my @files = grep(/\.stack$/,readdir(DIR));
     closedir(DIR);
 
     if (@files) {
@@ -102,6 +104,7 @@ my $instances = $config->get("INSTANCES") || '';
 my $dataimage = $config->get("DATAIMAGE") || '';
 my $storagepool = $config->get("STORAGEPOOL") || '';
 my $storagepool2 = $config->get("STORAGEPOOL2") || '';
+my $datamount = $config->get("DATAMOUNT") || '/mnt/data';
 my $fuelpath = ''; # Is set below if we are in a VM
 my $enginelinked = '';
 my $imageuuid = '';
@@ -114,10 +117,10 @@ unless (-e "/mnt/stabile/images" || -e "/stabile-images/images") {
     $fuelpath = `cat /proc/mounts | grep '/mnt/fuel'`;
     die "Unable to mount shared storage" unless ($fuelpath =~ /(\/mnt\/fuel\/pool\d+)/);
     $fuelpath = $1;
-    my $json = `curl --silent -k "https://10.0.0.1/stabile/users?action=listids"`;
+    my $json = `curl --silent -k "https://$gw/stabile/users?action=listids"`;
     my $json_obj = from_json($json);
     $enginelinked = 1 if ($json_obj->{items}->[0]->{engine}->{enginelinked});
-    $json = `curl --silent -k "https://10.0.0.1/stabile/images?image=$dname.master.qcow2"`;
+    $json = `curl --silent -k "https://$gw/stabile/images?image=$dname.master.qcow2"`;
     $json_obj = from_json($json);
     $imageuuid = $json_obj->{uuid} if ($json_obj->{uuid} && $json_obj->{uuid} ne '--');
     $imageuser = $json_obj->{user} if ($json_obj->{user} && $json_obj->{user} ne '--');
@@ -129,6 +132,7 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     print "$dname.master.qcow2 is already activated on engine by user $imageuser, not building (specify -r to force rebuild)\n";
 } elsif (!$freshen) {
     # Load nbd
+    print `killall qemu-nbd`;
     print `rmmod nbd`;
     print `modprobe nbd max_part=63`;
 
@@ -138,8 +142,8 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
             my $basepath = "$cwd/$baseimage";
             if ($fuelpath) {
                 print ">> Asking engine to link or copy $baseimage\n";
-                print qq|>> curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"|;
-                my $json = `curl --silent -k "https://10.0.0.1/stabile/images/?action=linkmaster&image=$baseimage"`;
+                print qq|>> curl --silent -k "https://$gw/stabile/images/?action=linkmaster&image=$baseimage"|;
+                my $json = `curl --silent -k "https://$gw/stabile/images/?action=linkmaster&image=$baseimage"`;
                 print $json;
                 my $jobj = from_json($json);
                 my $linkpath = $jobj->{linkpath};
@@ -243,6 +247,22 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
 #        print `mount --bind /dev/pts "/tmp/$dname/dev/pts"`;
         # Make /dev/null available
         # print `mknod -m 666 "/tmp/$dname/dev/null" c 1 3`
+
+        # Create data image if specified
+        if ($dataimage && !(-e "$cwd/$dname-data.master.qcow2") && (-e "$cwd/$dname.master.qcow2")) {
+            print ">> Creating data image $dataimage in $cwd/$dname-data.master.qcow2...\n";
+            print `qemu-img create -f qcow2 "$cwd/$dname-data.master.qcow2" $dataimage`;
+        #    print `modprobe nbd max_part=63`;
+            print `qemu-nbd -c /dev/nbd1 "$cwd/$dname-data.master.qcow2"`;
+            print `sfdisk /dev/nbd1 << EOF\n;\nEOF`;
+            print `mkfs.ext4 /dev/nbd1p1`;
+            print ">> Mounting data image $dataimage on /tmp/$dname$datamount...\n";
+            print `mkdir -p "/tmp/$dname$datamount"`;
+            print `mount /dev/nbd1p1 "/tmp/$dname$datamount"`;
+
+        #    print `qemu-nbd -d /dev/nbd1`;
+        }
+
     } else {
         die "Unable to mount image $cwd/$dname.master.qcow2";
     }
@@ -259,8 +279,8 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     print `rm /tmp/$dname/etc/resolv.conf`;
     print `echo "nameserver 1.1.1.1" > /tmp/$dname/etc/resolv.conf`;
     # Add user stabile
-    print `chroot "/tmp/$dname" useradd stabile -b /home -s /bin/bash`;
-    print `chroot "/tmp/$dname" mkdir /home/stabile`;
+    print `chroot "/tmp/$dname" useradd stabile -b /home -s /bin/bash 2>/dev/null`;
+    print `chroot "/tmp/$dname" mkdir /home/stabile 2>/dev/null`;
     print `chroot "/tmp/$dname" chown stabile:stabile /home/stabile`;
 
 	# Run pre exec script
@@ -287,12 +307,14 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     # Install debs
     if ($debs) {
         print ">> Installing packages\n";
-    # Necessary for now to avoid corrupted apt caches
         system(qq|perl -pi -e "s/(deb http.+ bionic-updates universe)/# \\\$1/" /etc/apt/sources.list|);
         system(qq|perl -pi -e "s/(deb http.+ bionic-updates multiverse)/# \\\$1/" /etc/apt/sources.list|);
-    #    print `rm -r /var/lib/apt/lists/*`; # Start from a clean slate
-    #    print `chroot "/tmp/$dname" dpkg --clear-avail`;
-    #    print `chroot "/tmp/$dname" sync-available` if (-e "/tmp/$dname/usr/sbin/sync-available");
+
+        # Necessary for now to avoid corrupted apt caches
+#        print `rm -r /var/lib/apt/lists/*`; # Start from a clean slate
+#        print `chroot "/tmp/$dname" dpkg --clear-avail`;
+#        print `chroot "/tmp/$dname" sync-available` if (-e "/tmp/$dname/usr/sbin/sync-available");
+
         print `chroot "/tmp/$dname" apt-get update`;
         print `chroot "/tmp/$dname" /bin/bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -q -y --show-progress install $debs'`;
     }
@@ -338,13 +360,13 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
 [Unit]
 DefaultDependencies=no
 Description=Stabile $dname
-After=network-online.target stabile-ubuntu.service
-Wants=network-online.target
+After=network-online.target stabile-ubuntu.service webmin.service
+Wants=network-online.target stabile-ubuntu.service webmin.service
 
 [Service]
 Type=oneshot
 ExecStart=$service
-TimeoutSec=0
+TimeoutSec=600
 RemainAfterExit=yes
 
 [Install]
@@ -367,6 +389,11 @@ END
 	print `killall -9 miniserv.pl`;
     print `systemctl start webmin`;
 	sleep 2;
+    # Unmount data image
+    if ($dataimage) {
+        print `umount "/tmp/$dname$datamount"`;
+        print `qemu-nbd -d /dev/nbd1`;
+    }
 # Unmount base image and clean things up
     print `umount "/tmp/$dname/proc"`;
     print `umount "/tmp/$dname"`;
@@ -391,18 +418,9 @@ END
             $res = `qemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2" 2>\&1`;
             print qq|>> Rebasing failed - please rebase manually before activating:\nqemu-img rebase --force-share -f qcow2 -u -b "$masterpath" "$cwd/$dname.master.qcow2"\n| if ($res =~ /failed/i);
         }
+    } else {
+        print ">> No master, so not rebasing image...\n";
     }
-}
-
-# Create data image if specified
-if ($dataimage && !(-e "$cwd/$dname-data.master.qcow2") && (-e "$cwd/$dname.master.qcow2")) {
-    print ">> Creating data image $dataimage in $cwd/$dname-data.master.qcow2...\n";
-    print `qemu-img create -f qcow2 "$cwd/$dname-data.master.qcow2" $dataimage`;
-    print `modprobe nbd max_part=63`;
-    print `qemu-nbd -c /dev/nbd0 "$cwd/$dname-data.master.qcow2"`;
-    print `sfdisk /dev/nbd0 << EOF\n;\nEOF`;
-    print `mkfs.ext4 /dev/nbd0p1`;
-    print `qemu-nbd -d /dev/nbd0`;
 }
 
 if ($fuelpath) {
@@ -439,7 +457,7 @@ if ($fuelpath) {
         } elsif (!(-e $imgpath)) {
             print "Not activating - image not found. Specify -r if you want to force rebuild it.\n";
         } else {
-            my $cmd = qq|curl --silent -k "https://10.0.0.1/stabile/images?action=activate&image=$imgpath&version=$version&name=$appname&managementlink=$managementlink&upgradelink=$upgradelink&terminallink=$terminallink&image2=$image2&force=$force"|;
+            my $cmd = qq|curl --silent -k "https://$gw/stabile/images?action=activate&image=$imgpath&version=$version&name=$appname&managementlink=$managementlink&upgradelink=$upgradelink&terminallink=$terminallink&image2=$image2&force=$force"|;
             my $res = `$cmd`;
             print $res;
             $res =~ /(\S{8}-\S{4}-\S{4}-\S{4}-\S{12})$/;
@@ -455,7 +473,7 @@ if ($fuelpath) {
             if ($imageuuid) {
                 print "Uploading image with uuid $imageuuid to the registry\n";
                 print "Hang on - this may take a while...\n";
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force"`;
+                $res = `curl -k --silent "https://$gw/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force"`;
                 print "$res";
             } else {
                 print "Something went wrong, did not get valid uuid $imageuuid - left it in your shared storage.\n";
@@ -468,13 +486,13 @@ if ($fuelpath) {
         if ($enginelinked) {
             print "Trying to freshen stack $dname\n";
             if ($imageuuid) {
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force&freshen=$freshen"`;
+                $res = `curl -k --silent "https://$gw/stabile/images?action=publish&uuid=$imageuuid&appid=$appid&vcpu=$vcpu&memory=$memory&logo=$logo&thumbnail=$thumbnail&price=$price&ports=$ports&summary=$summary&description=$description&image2=$image2&instances=$instances&storagepool=$storagepool&storagepool2=$storagepool2&force=$force&freshen=$freshen"`;
                 print "$res";
             } else {
                 print "Something went wrong, did not freshen the stack.\n";
             }
         } else {
-            print "Not freshening - you are not in a VM, or the engine you are running on is not linked with the Registry.\n" if ($publish);
+            print "Not freshening - you are not in a VM, or the engine you are running on is not linked with the Registry.\n";
         }
     }
     if ($release) {
@@ -483,7 +501,7 @@ if ($fuelpath) {
             print "Trying to $action stack $dname\n";
             if ($imageuuid) {
                 print "Moving image with uuid $imageuuid\n";
-                $res = `curl -k --silent "https://10.0.0.1/stabile/images?action=release&uuid=$imageuuid&force=$force&unrelease=$unrelease"`;
+                $res = `curl -k --silent "https://$gw/stabile/images?action=release&uuid=$imageuuid&force=$force&unrelease=$unrelease"`;
                 print "$res";
             }
             else {

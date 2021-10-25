@@ -79,7 +79,7 @@ END
             strengthButtonTextToggle: 'Hide Password',
             id: item.id
         });
-        \$('item').val('');
+        \$(item).val('');
     };
 
     function passwordSpinner() {

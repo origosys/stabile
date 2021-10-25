@@ -82,6 +82,12 @@ my $unauth = $q->param('unauth');
 my $ip_addr = $at->ignore_ip ? '' : $ENV{REMOTE_ADDR};
 my $redirected = 0;
 
+my $logo = "/stabile/static/img/logo.png";
+my $logo_icon = "/stabile/static/img/logo-icon.png";
+# my $logo_icon_32 = "/stabile/static/img/logo-icon-32.png";
+$logo = "/stabile/static/img/logo-$AUTH_DOMAIN.png" if (-e "/var/www/stabile/static/img/logo-$AUTH_DOMAIN.png");
+$logo_icon = "/stabile/static/img/logo-icon-$AUTH_DOMAIN.png" if (-e "/var/www/stabile/static/img/logo-icon-$AUTH_DOMAIN.png");
+
 # Actual processing
 
 my $installsystem = $q->param('installsystem');
@@ -250,11 +256,11 @@ unless ($redirected) {
             meta({-http_equiv => 'Pragma', -content => "no-cache"}),
             $q->Link({
                -rel => 'SHORTCUT ICON',
-               -href =>'/stabile/static/img/logo-icon-32.png',
+               -href =>$logo_icon,
             })
           ],
         -meta=>{'viewport'=>'width=device-width, initial-scale=1'},
-        -link=>{'rel'=>'icon', 'href'=>'/stabile/static/img/logo-icon.png', 'sizes'=>'192x192'},
+        -link=>{'rel'=>'icon', 'href'=>$logo_icon, 'sizes'=>'192x192'},
         -title => $title,
         -class => 'login',
         -onLoad => "getFocus()",
@@ -308,7 +314,7 @@ EOD
       if @errors;
     print <<EOD;
 <div id="auth-header">
-    <a href="#"><img src="/stabile/static/img/logo.png" border="0" style="height:48px; vertical-align:middle; margin:20px;"/></a>
+    <a href="#"><img src="$logo" border="0" style="height:48px; vertical-align:middle; margin:20px;"/></a>
 </div>
 <form name="login" method="post" style="width:200px;" id="auth-form" accept-charset="utf-8">
 <input value="$username" type="text" name="username" class="form-control" placeholder="Username"/>

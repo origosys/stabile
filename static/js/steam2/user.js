@@ -86,12 +86,12 @@ function(xhr, cookie){
                 if (response.items[0].favicon) {
                     user.favicon = response.items[0].favicon;
                     var link = document.querySelector("link[rel~='icon']");
-                    if (!link) {
-                        link = document.createElement('link');
-                        link.rel = 'icon';
-                        document.getElementsByTagName('head')[0].appendChild(link);
-                    }
-                    link.href = user.favicon;
+                    if (link) document.head.removeChild(link);
+                    var newlink = document.createElement('link');
+                    newlink.rel = 'icon';
+                    newlink.href = user.favicon;
+                    newlink.id= 'icon';
+                    document.getElementsByTagName('head')[0].appendChild(newlink);
                 }
                 user.showcost = response.items[0].showcost;
                 user.billto = response.items[0].billto;

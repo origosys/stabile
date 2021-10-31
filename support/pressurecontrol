@@ -545,8 +545,8 @@ if ($pid) {
                         # This is purely to fixup javascript in Wordpress install.php
                         ${$response->content_ref} =~ s/\\\/home/../;
                         # This is to fix css links in Wordpress install
-                        ${$response->content_ref} =~ s/\/home\/wp-includes/$baseuri\/home\/wp-includes/g;
-                        ${$response->content_ref} =~ s/\/home\/wp-admin/$baseuri\/home\/wp-admin/g;
+                        ${$response->content_ref} =~ s/'\/home\/wp-includes/'$baseuri\/home\/wp-includes/g;
+                        ${$response->content_ref} =~ s/'\/home\/wp-admin/'$baseuri\/home\/wp-admin/g;
                         # This is purely to fixup image path in Thirdlane PBX UI
 #                        ${$response->content_ref} =~ s/\.\.\/\.\.\/\.\.\//..\/..\//;
 

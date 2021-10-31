@@ -1,5 +1,5 @@
 APPID=1237
-VERSION=1.0c
+VERSION=1.0d
 BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
 REBASE=0
 BASESUITE=

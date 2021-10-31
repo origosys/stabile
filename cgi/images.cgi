@@ -3202,24 +3202,29 @@ END
         } elsif ( $fs->{Type} eq 'zfs') {
             my $name = $fs->{Filesystem};
             if ($name =~ /(.+)\/(.+)/) { # only include zfs pools but look for use as backup and images
+                $name = $1;
                 if ($fs->{Mounted} eq $backupdir) {
                     if ($action eq 'listimagesdevices') {
-                        delete $filesystems{$1}; # not available for images - used for backup
+                        delete $filesystems{$name}; # not available for images - used for backup
                     } else {
-                        $filesystems{$1}->{isbackupdev} = 1;
+                        $filesystems{$name}->{isbackupdev} = 1;
+                        $fs->{isbackupdev} = 1;
                         $backupdev = $name;
                     }
-                    return $filesystems{$1}->{Name} if ($action eq 'getbackupdevice');
-                }
-                if ($fs->{Mounted} eq $tenderpathslist[0]) {
+                    return $name if ($action eq 'getbackupdevice');
+                } elsif ($fs->{Mounted} eq $tenderpathslist[0]) {
                     if ($action eq 'listbackupdevices') {
-                        delete $filesystems{$1}; # not available for backup - used for images
+                        delete $filesystems{$name}; # not available for backup - used for images
                     } else {
-                        $filesystems{$1}->{isimagesdev} = 1;
+                        $filesystems{$name}->{isimagesdev} = 1;
+                        $fs->{isimagesdev} = 1;
                         $imagesdev = $name;
                     }
-                    return $filesystems{$1}->{Name} if ($action eq 'getimagesdevice');
+                    return $name if ($action eq 'getimagesdevice');
+                } else {
+                    next;
                 }
+            } else {
                 next;
             }
             $fs->{Name} = $name;

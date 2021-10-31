@@ -317,6 +317,8 @@ END
                 $cmdres .=  `$cmd 2>\&1`;
                 if ($cmdres =~ /password OK/) {
                     $res .=  "The Samba password was changed! ";
+                    $cmd = qq[samba-tool user setexpiry $in{edituser_cn} --noexpiry];
+                    $cmdres .=  `$cmd 2>\&1`;
                 } else {
                     $res .= "The Samba password was NOT changed! ";
                 }

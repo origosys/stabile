@@ -43,6 +43,7 @@ sub zimbra {
         chomp $running;
         $running = 1 unless ($running =~ /inactive/);
         my $setupdone = (glob("/opt/zimbra/log/zmsetup.*.log"))?1:0;
+        # Zimbra moves the log file from /tmp when done
         unless ($running && $setupdone) {
             my $status = `tail -n 15 /tmp/zmsetup.*.log`;
             $form .= <<END
@@ -91,7 +92,7 @@ END
             </small>
         </form>
 
-        <form class="passwordform" id="zimbradomains_form" action="index.cgi?action=zimbradomains&tab=zimbra" method="post" onsubmit="limitZimbraSpinner('zimbradomains'); return false;" accept-charset="utf-8" autocomplete="off">
+        <form class="passwordform" id="zimbradomains_form" action="index.cgi?action=zimbradomains&tab=zimbra" method="post" onsubmit="\$('#mycheck').val('1'); limitZimbraSpinner('zimbradomains'); return false;" accept-charset="utf-8" autocomplete="off">
             <input type="hidden" id="mycheck" name="mycheck" value="1" />
             <div><small>Server aliases:</small></div>
             <div class="row">
@@ -165,8 +166,8 @@ END
                 });
             }, 200);
 
-        }).fail(function() {
-            salert( "An error occurred :(" );
+        }).fail(function( data ) {
+            salert( "Please wait for all Zimbra services to restart..." );
             \$("#" + target + "_button").prop("disabled", false ).html('Set!');
             \$(".kubebutton").prop("disabled", false );
         });
@@ -223,10 +224,10 @@ END
                     `perl -pi -e 's/.*$esc_dnsdomain\n//s' /etc/hosts`;
                     `echo "$internalip $aliases $dom" >> /etc/hosts`; # necessary to allow getssl do its own checks
                     $message .= "Running getssl...";
-                    my $sslres = `getssl -f  -U $dom | tee /tmp/getssl.out \&2>1`;
+                    my $sslres = `getssl -f -U $dom 2<\&1 | tee -a /tmp/zimbra.out`;
                     unless ($sslres =~ /error/i || $sslres =~ /failed/i) {
                         if (-e "/etc/ssl/certs/stabile.crt") {
-                            $message .= "Let's encrypt centificates were installed for $dom $sans";
+                            $message .= "Let's encrypt centificates were installed for $dom $sans - please wait for Zimbra to restart!";
                         } else {
                             $message .= "Unable to obtain Let's encrypt centificates - certificates are not in place";
                         }
@@ -293,14 +294,14 @@ END
                             $spf =~ s/([^^A-Za-z0-9\-_.!~*'()])/ sprintf "%%%0x", ord $1 /eg;
                             $dmarc =~ s/([^^A-Za-z0-9\-_.!~*'()])/ sprintf "%%%0x", ord $1 /eg;
 
-                            my $cmd = qq|curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$dkey.$newdom\&value=$dkim\&type=TXT"|;
-                            $mes = `$cmd`;
+                            my $cmd = qq|curl -k --silent --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$dkey.$newdom\&value=$dkim\&type=TXT"|;
+                            $mes = `$cmd 2>\&1 | tee -a /tmp/zimbra.out`;
                             $mes =~ s/Status=//g; $mes = $1 if ($mes =~ /(.+) -> .*/); $message .= $mes;
-                            $cmd = qq|curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$newdom\&value=$spf\&type=TXT"|;
-                            $mes = `$cmd`;
+                            $cmd = qq|curl -k --silent --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$newdom\&value=$spf\&type=TXT"|;
+                            $mes = `$cmd 2>\&1 | tee -a /tmp/zimbra.out`;
                             $mes =~ s/Status=//g; $mes = $1 if ($mes =~ /(.+) -> .*/); $message .= $mes;
-                            $cmd = qq|curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=_dmarc.$newdom\&value=$dmarc\&type=TXT"|;
-                            $mes = `$cmd`;
+                            $cmd = qq|curl -k --silent --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=_dmarc.$newdom\&value=$dmarc\&type=TXT"|;
+                            $mes = `$cmd 2>\&1 | tee -a /tmp/zimbra.out`;
                             $mes =~ s/Status=//g; $mes = $1 if ($mes =~ /(.+) -> .*/); $message .= $mes;
                         }
                     } else {

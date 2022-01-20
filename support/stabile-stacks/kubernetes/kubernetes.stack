@@ -1,5 +1,6 @@
-VERSION=1.0
-BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+VERSION=1.0b
+APPID=1326
+BASEIMAGE=ubuntu-bionic.1.0c.master.qcow2
 REBASE=0
 BASESUITE=
 SIZE=

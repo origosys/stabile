@@ -1,5 +1,5 @@
 APPID=1724
-VERSION=1.0a
+VERSION=1.0b
 BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
 DATAIMAGE=20G
 DATAMOUNT=/opt/zimbra
@@ -31,4 +31,5 @@ DESCRIPTION=<div>\
 </div>\
 <hr>\
 <div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
-<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/zimbra" target="_blank">Stack source code</a></div>
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/zimbra" target="_blank">Stack source code</a></div>\
+<div>NOTE: To sucessfully build this stack, you must modify your hosts file like e.g.: "echo 127.0.0.1 zimbra.stabile.int zimbra >> /etc/hosts"</div>

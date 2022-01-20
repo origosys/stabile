@@ -1,5 +1,5 @@
 APPID=3663
-VERSION=1.0b
+VERSION=1.0c
 MAINTAINER=Christian Orellana <christian@origo.io>
 BASEIMAGE=ubuntu-bionic-base.18.04.master.qcow2
 REBASE=1

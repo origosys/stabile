@@ -1,0 +1,40 @@
+APPID=1713
+VERSION=1.0b
+BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+DATAIMAGE=20G
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=minio
+APPNAME=Minio
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=libdata-password-perl
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=2048
+VCPU=2
+LOGO=https://www.stabile.io/images/apps/minio-logo.png
+THUMBNAIL=https://www.stabile.io/images/apps/minio-emblem.png
+SUMMARY=Minio offers high-performance, S3 compatible object storage
+DESCRIPTION=<div class="app-description">\
+    <div>\
+        This Stack provides an installation of the Open Source object storage software <a href="https://min.io" target="_blank">Minio</a>.\
+        <ul>\
+        <li>Minio is installed following <a href="https://min.io/download" target="_blank">these</a> <a href="https://docs.min.io/minio/baremetal/">instructions</a>.</li>\
+        <li>Minio is served using Apache as a reverse proxy.</li>\
+        <li>The stack also installs and configures <a href="http://prometheus.io">Prometheus</a> for Minio metrics.</li>\
+        </ul>\
+        MinIO offers high-performance, S3 compatible object storage. Native to Kubernetes, MinIO is the only object storage suite available on every public cloud, every Kubernetes distribution, the private cloud and the edge. MinIO is software-defined and is 100% open source under GNU AGPL v3.\
+    </div>\
+</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/minio" target="_blank">Stack source code</a></div>

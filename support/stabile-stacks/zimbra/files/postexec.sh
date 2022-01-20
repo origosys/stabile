@@ -55,7 +55,7 @@ echo "Configuring DNS Server"
  mv /etc/dnsmasq.conf /etc/dnsmasq.conf.original
 # Reference for indented heredocs: https://unix.stackexchange.com/a/11426/440352
 cat >> /etc/dnsmasq.conf <<-EOL
-server=8.8.8.8
+server=1.1.1.1
 listen-address=127.0.0.1
 domain=${DOMAIN}
 mx-host=${DOMAIN},$HOSTNAME.${DOMAIN},0
@@ -75,7 +75,7 @@ sed -i -e "s|PASSWORD_PLACEHOLDER|${PASSWORD}|g" ${zimbrascript}
 
 echo "Installing Zimbra Collaboration Software Only"
 # echo "10.2.0.19 files.origo.io" >> /etc/hosts;
-cd "/tmp/files/stabile"/ && wget "https://files.origo.io/pub/${zimbrafolder}.tgz"
+cd "/tmp/files/stabile"/ && wget --no-check-certificate "https://files.origo.io/pub/${zimbrafolder}.tgz"
 cd "/tmp/files/stabile"/ && tar -zxf ${zimbrafolder}.tgz
 cd "/tmp/files/stabile/${zimbrafolder}"/ && ./install.sh -s < "${keystrokes}"
 echo "Installing Zimbra Collaboration and injecting the configuration"

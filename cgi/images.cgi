@@ -3201,7 +3201,12 @@ END
             $filesystems{$name} = $fs;
         } elsif ( $fs->{Type} eq 'zfs') {
             my $name = $fs->{Filesystem};
-            if ($name =~ /(.+)\/(.+)/) { # only include zfs pools but look for use as backup and images
+            # only include zfs pools but look for use as backup and images, exclude shapshots
+            if ($name =~ /(.+)\/(.+)/
+                && !($name =~ /SNAPSHOT/)
+                && !($name =~ /stabile-backup\/images/)
+                && !($name =~ /stabile-backup\/node/)
+            ) {
                 $name = $1;
                 if ($fs->{Mounted} eq $backupdir) {
                     if ($action eq 'listimagesdevices') {
@@ -3221,23 +3226,19 @@ END
                         $imagesdev = $name;
                     }
                     return $name if ($action eq 'getimagesdevice');
-                } else {
-                    next;
                 }
-            } else {
-                next;
+                $fs->{Name} = $name;
+                $fs->{nametype} = "$name ($fs->{Type} $fs->{Size})";
+                delete $fs->{on};
+                $filesystems{$name} = $fs;
             }
-            $fs->{Name} = $name;
-            $fs->{nametype} = "$name ($fs->{Type} $fs->{Size})";
-            delete $fs->{on};
-            $filesystems{$name} = $fs;
         }
     }
     if ($action eq 'getbackupdevice' || $action eq 'getimagesdevice') {
         return $rootdev;
     }
-    $filesystems{$rootdev}->{isbackupdev} = 1 unless ($backupdev);
-    $filesystems{$rootdev}->{isimagesdev} = 1 unless ($imagesdev);
+    $filesystems{$rootdev}->{isbackupdev} = 1 unless ($backupdev || $action eq 'listimagesdevices');
+    $filesystems{$rootdev}->{isimagesdev} = 1 unless ($imagesdev || $action eq 'listbackupdevices');
     # Lowercase keys
     foreach my $k (keys %filesystems) {
         my %hash = %{$filesystems{$k}};
@@ -3294,6 +3295,7 @@ END
             foreach my $fs2 (@{$fs->{children}}) {
                 next if ($fs2->{type} eq 'loop');
                 next if ($fs2->{type} eq 'squashfs');
+                next if ($fs2->{size} =~ /K$/);
                 if ($filesystems{$fs2->{name}}) {
                     $filesystems{$fs2->{name}}->{blocksize} = $fs2->{size};
                 } elsif (!$zdevs{$fs2->{name}} && !$zdevs{$rootdev}) { # Don't add partitions already used for ZFS

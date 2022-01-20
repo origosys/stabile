@@ -219,7 +219,8 @@ END
               qq|"storagequota": $storagequota, "nodestoragequota": $nodestoragequota, "memoryquota": $memoryquota, "vcpuquota": $vcpuquota, |.
               qq|"fullname": "$fullname", "email": "$email", "opemail": "$opemail", "alertemail": "$alertemail", |.
               qq|"phone": "$phone", "opphone": "$opphone", "opfullname": "$opfullname", "appstoreurl": "$appstoreurl", |.
-              qq|"allowfrom": "$allowfrom", "lastlogin": "$lastlogin", "lastloginfrom": "$lastloginfrom", "allowinternalapi": "$allowinternalapi", "billto": "$billto", |;
+              qq|"allowfrom": "$allowfrom", "lastlogin": "$lastlogin", "lastloginfrom": "$lastloginfrom", "allowinternalapi": "$allowinternalapi", "billto": "$billto", |.
+              qq|"dnsdomain": "$dnsdomain", |;
 
     if ($isadmin && $engineid) {
         $engine_h{"engineid"} = $engineid;
@@ -744,7 +745,10 @@ Enable a user.
 END
     }
     my $username = $obj->{'username'};
+    return unless ($username);
     if ($isadmin || ($user eq $engineuser)) {
+        # Create user on this engine if not yet created
+        do_save($username, 'save', $obj);
         my $uprivileges = $register{$username}->{'privileges'};
         $uprivileges =~ s/d//;
         $uprivileges .= 'n' unless ($uprivileges =~ /n/);# These are constant sources of problems - enable by default when enabling users to alleviate situation
@@ -891,14 +895,14 @@ END
 }
 
 sub do_save {
-    my ($uuid, $action, $obj) = @_;
+    my ($username, $action, $obj) = @_;
     if ($help) {
         return <<END
-POST:username, fullname, email, opemail, alertemail, phone, opphone, opfullname, allowfrom, allowinternalapi, accounts, accountsprivileges, storagepools, memoryquota, storagequota, nodestoragequota, vcpuquota, externalipquota, rxquota, txquota, billto:
-Saves a user. If [username] does not exist, it is created if privileges allow this.
+POST:username, password, fullname, email, opemail, alertemail, phone, opphone, opfullname, allowfrom, allowinternalapi, accounts, accountsprivileges, storagepools, memoryquota, storagequota, nodestoragequota, vcpuquota, externalipquota, rxquota, txquota, billto:
+Saves a user. If [username] does not exist, it is created if privileges allow this. [password] can be plaintext or a SHA256 hash.
 END
     }
-    my $username = $obj->{"username"};
+    $username = $username || $obj->{"username"};
     unless ($username && (($user eq $username) || $isadmin || ($user eq $engineuser))) {
         $postreply = "Status=ERROR Please provide a valid username\n";
         return $postreply;
@@ -1637,7 +1641,7 @@ sub updateEngineUsers {
     	address city company country email fullname phone
         state zip alertemail opemail opfullname opphone
         memoryquota storagequota vcpuquota externalipquota rxquota txquota nodestoragequota
-        accounts accountsprivileges privileges modified
+        accounts accountsprivileges privileges modified dnsdomains
     );
     my $ures;
     my $ucount = 0;
@@ -1674,7 +1678,7 @@ sub updateEngineUsers {
 
     }
     $ures = substr($res, 0, -2) . "\n";
-    $res .= "Status=OK Synced $ucount users\n";
+    $res .= "Status=OK Received $ucount user updates from Registry\n";
     return $res;
 }
 
@@ -1709,6 +1713,6 @@ sub sendEngineUser {
 #        $content = $browser->request($req)->content();
         my $fullname = $register{$username}->{'fullname'};
         $fullname = Encode::decode('utf8', $fullname);
-        return "Updated $fullname on $dnsdomain\n";
+        return "Updated $fullname in registry\n";
     }
 }

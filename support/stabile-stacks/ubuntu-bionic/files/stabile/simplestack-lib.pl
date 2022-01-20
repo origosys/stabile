@@ -330,16 +330,20 @@ END
             } else {
                 $result = &html_escape($rv->[1]);
                 chomp $result;
-                my $d2 = $d;
-                $d2 =~ tr/./-/;
-                my $rid = "$tab-result-$d2";
-                $rid =~ tr/-/_/;
-                my $disp = ($p==0)?'':"display:none; ";
-                if ($result) {
-                    $res .= qq|<span class="label label-success" style="cursor:pointer;" onclick='\$("#$rid").toggle();'>$d ran command succesfully</span>\n|;
-                    $res .= qq|<ul><pre id="$rid" style="max-height:160px; font-size:12px; overflow: auto; $disp">$result</pre></ul>\n|;
+                if ($in{format} eq 'plain') {
+                    $res .= qq|$d returned:\n$result|;
                 } else {
-                    $res .= qq|<span class="label label-success">$d ran command succesfully</span><br />\n|;
+                    my $d2 = $d;
+                    $d2 =~ tr/./-/;
+                    my $rid = "$tab-result-$d2";
+                    $rid =~ tr/-/_/;
+                    my $disp = ($p==0)?'':"display:none; ";
+                    if ($result) {
+                        $res .= qq|<span class="label label-success" style="cursor:pointer;" onclick='\$("#$rid").toggle();'>$d ran command succesfully</span>\n|;
+                        $res .= qq|<ul><pre id="$rid" style="max-height:160px; font-size:12px; overflow: auto; $disp">$result</pre></ul>\n|;
+                    } else {
+                        $res .= qq|<span class="label label-success">$d ran command succesfully</span><br />\n|;
+                    }
                 }
             }
         }

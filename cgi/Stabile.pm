@@ -441,7 +441,6 @@ $main::dnsDelete = sub {
     if ($username) {
         if ($name =~ /(\d+\.\d+\.\d+\.\d+)/) {
             $checkval = 'OK'; # We now per default allow user to delete his own records
-    #        $checkval = $1;
         } else {
             $checkval = 'OK'; # We now per default allow user to delete his own records
             my $checkname = $name;
@@ -461,26 +460,26 @@ $main::dnsDelete = sub {
             return "ERROR Invalid name $checkname\n" unless ($checkval);
         }
 
-        my @regkeys;
-        if ($checkval && $checkval ne 'OK') {
-            unless (tie %networkreg,'Tie::DBI', {
-                db=>'mysql:steamregister',
-                table=>'networks',
-                key=>'uuid',
-                autocommit=>0,
-                CLOBBER=>0,
-                user=>$dbiuser,
-                password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
-            @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
-        }
+        # my @regkeys;
+        # if ($checkval && $checkval ne 'OK') {
+        #     unless (tie %networkreg,'Tie::DBI', {
+        #         db=>'mysql:steamregister',
+        #         table=>'networks',
+        #         key=>'uuid',
+        #         autocommit=>0,
+        #         CLOBBER=>0,
+        #         user=>$dbiuser,
+        #         password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
+        #     @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
+        # }
 
-        if ($isadmin || $checkval eq "OK"
-        #    || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username) # we now allow a user to delete all his own records
-        ) {
-            ; # OK
-        } else {
-            return "ERROR Invalid user ($username) for $name, $checkval, not allowed\n";
-        }
+        # if ($isadmin || $checkval eq "OK"
+        # #    || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username) # we now allow a user to delete all his own records
+        # ) {
+        #     ; # OK
+        # } else {
+        #     return "ERROR Invalid user ($username) for $name, $checkval, not allowed\n";
+        # }
         untie %networkreg;
     }
 
@@ -1031,6 +1030,11 @@ sub preInit {
     $preserveimagesonremove = index($privileges,"p")!=-1;
     $fulllist = $options{f} && $isadmin;
     $fullupdate = $options{p} && $isadmin;
+
+    my $bto = $userreg{$billto};
+    my @bdnsdomains = split(/, ?/, $bto->{'dnsdomains'});
+    my @udnsdomains = split(/, ?/, $u->{'dnsdomains'});
+    $dnsdomain = $udnsdomains[0] || $bdnsdomains[0] || $dnsdomain;
 
     $Stabile::sshcmd = $sshcmd;
     $Stabile::disablesnat = $disablesnat;

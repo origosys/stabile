@@ -26,6 +26,17 @@ if ($action eq 'mountpools') {
 } elsif  ($action eq 'initapps') {
     print `curl --silent http://localhost:10000/stabile/index.cgi?action=initapps`;
     exit 0;
+} elsif  ($action eq 'runcommand') {
+    print "Running command: $ARGV[0]\n";
+    my $res = `curl --silent "http://localhost:10000/stabile/index.cgi?action=runcommand&tab=commands&command=$ARGV[0]"`;
+    my $res_obj = from_json($res);
+    print "$res_obj->{status}\n";
+    my $res_obj = from_json($res);
+    my $servers_obj = $res_obj->{servers};
+    my $servers = to_json($servers_obj);
+    my $cmd = qq|curl --silent -X POST --data 'servers=$servers' "http://localhost:10000/stabile/index.cgi?action=getresults&tab=commands&format=plain"|;
+    print `$cmd`;
+    exit 0;
 } elsif  ($action eq 'activateapps') {
     print `curl --silent http://localhost:10000/stabile/index.cgi?action=activateapps`;
     exit 0;
@@ -65,11 +76,12 @@ if ($action eq 'mountpools') {
 
 } elsif  ($action eq 'resizestorage') {
     my $rsize = $ARGV[0];
+    $rsize = $1 * 1024*1024*1024 if ($rsize =~ /(\d+) ?G/i);
     my $dev = $ARGV[1] || 'vdb';
     if ($rsize>0) {
         print "resizing $dev $rsize...\n";
         print "Unmount partition\n";
-        my $res = `umount /mnt/data`;
+        my $res = `umount /dev/$dev`;
         sleep 1;
         print "Detaching image\n";
         $res = `curl -k --silent https://$gw/stabile/servers?action=detach`;
@@ -93,14 +105,14 @@ if ($action eq 'mountpools') {
             if ($blks =~ /vdc1/ && !($blks =~ /vdb1/)) {$dev = 'vdc1'; $dev0 = 'vdc';} # Device got attached to vdc instead of vdb - it happens...
             if ($dev) {
                 print "Growing partition 1 on $dev\n";
-                print `umount /mnt/data`;
+                print `umount /dev/$dev`;
                 $res = `growpart /dev/$dev0 1`;
                 print "Checking /dev/$dev\n";
                 $res .= `e2fsck -fy /dev/$dev`;
                 $res .= `resize2fs /dev/$dev`;
                 print $res;
-                print "Remounting partition $dev on /mnt/data\n";
-                $res = `mount /dev/$dev /mnt/data`;
+                print "Remounting partition /dev/$dev\n";
+                $res = `mount /dev/$dev`;
                 print $res;
                 print "Done.\n";
             } else {
@@ -111,7 +123,11 @@ if ($action eq 'mountpools') {
         print "Usage: stabile-helper resizestorage <size> [device]\n";
     }
     exit 0;
+} elsif (!($0 =~  /stabile-ubuntu.pl/)) { #Exit here if we were called as stabile-helper
+        print "Usage $0: stabile-helper mountpools|initapps|activateapps|liststorage|resizestorage|runcommand\n";
+        exit 0;
 }
+
 
 print "Configuring ports for shellinabox...\n";
 # Disallow shellinabox access from outside

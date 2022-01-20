@@ -27,6 +27,7 @@ $proxygw = $Stabile::config->get('PROXY_GW') || $proxyip;
 $proxysubnet = $Stabile::config->get('PROXY_SUBNET_SIZE');
 my $engineid = $Stabile::config->get('ENGINEID') || "";
 $dodns = $Stabile::config->get('DO_DNS') || "";
+$enginelinked = $Stabile::config->get('ENGINE_LINKED') || "";
 
 my $tenders = $Stabile::config->get('STORAGE_POOLS_ADDRESS_PATHS');
 @tenderlist = split(/,\s*/, $tenders);

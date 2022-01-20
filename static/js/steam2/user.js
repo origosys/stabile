@@ -96,6 +96,7 @@ function(xhr, cookie){
                 user.showcost = response.items[0].showcost;
                 user.billto = response.items[0].billto;
                 user.appstoreurl = response.items[0].appstoreurl;
+                user.dnsdomain = response.items[0].dnsdomain;
                 IRIGO.user = user;
                 if (!IRIGO.alerts) IRIGO.alerts = [];
             },

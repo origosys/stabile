@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `lasttkt` varchar(512) DEFAULT NULL,
   `allowinternalapi` varchar(4) DEFAULT NULL,
   `billto` varchar(256) DEFAULT NULL,
+  `dnsdomains` varchar(512) DEFAULT NULL,
 
   PRIMARY KEY (`username`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

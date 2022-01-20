@@ -637,6 +637,7 @@ define([
                 $(".info-account").show();
                 $(".info-system").hide();
                 $(".info-services").hide();
+                $("#info_dnsdomain").html(IRIGO.user.dnsdomain);
 
                 // Display vitals for a system
             } else if (gridItem.issystem == 1) {

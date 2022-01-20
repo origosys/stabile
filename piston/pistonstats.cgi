@@ -85,19 +85,19 @@ for ($i=1; $i <= $numberOfDomainsSubmitted; $i++) {
 #
 #	my $cpuTime = getParam($params, "$i.domain.cpuTime") / getParam($params, "$i.domain.nrVirtCpu");
 #    $cpuTime = 1 if ($cpuTime > 1);
-	my $cpuTime = getParam($params, "$i.domain.cpuTime");
-	my $cpuLoad = getParam($params, "$i.domain.cpuLoad");
-	my $rd_bytes = getParam($params, "$i.blk.hd.rd_bytes");
-	my $wr_bytes = getParam($params, "$i.blk.hd.wr_bytes");
-	my $rd_kbytes_s = getParam($params, "$i.blk.hd.rd_kbytes_s");
-	my $wr_kbytes_s = getParam($params, "$i.blk.hd.wr_kbytes_s");
-	my $rx_bytes = getParam($params, "$i.if.vnet.rx_bytes");
-	my $tx_bytes = getParam($params, "$i.if.vnet.tx_bytes");
-	my $rx_kbytes_s = getParam($params, "$i.if.vnet.rx_kbytes_s");
-	my $tx_kbytes_s = getParam($params, "$i.if.vnet.tx_kbytes_s");
-	my $nrVirtCpu = getParam($params, "$i.domain.nrVirtCpu");
-	my $memory = getParam($params, "$i.domain.memory");
-	my $maxMem = getParam($params, "$i.domain.maxMem");
+	my $cpuTime = getParam($params, "$i.domain.cpuTime")+0;
+	my $cpuLoad = getParam($params, "$i.domain.cpuLoad")+0;
+	my $rd_bytes = getParam($params, "$i.blk.hd.rd_bytes")+0;
+	my $wr_bytes = getParam($params, "$i.blk.hd.wr_bytes")+0;
+	my $rd_kbytes_s = getParam($params, "$i.blk.hd.rd_kbytes_s")+0;
+	my $wr_kbytes_s = getParam($params, "$i.blk.hd.wr_kbytes_s")+0;
+	my $rx_bytes = getParam($params, "$i.if.vnet.rx_bytes")+0;
+	my $tx_bytes = getParam($params, "$i.if.vnet.tx_bytes")+0;
+	my $rx_kbytes_s = getParam($params, "$i.if.vnet.rx_kbytes_s")+0;
+	my $tx_kbytes_s = getParam($params, "$i.if.vnet.tx_kbytes_s")+0;
+	my $nrVirtCpu = getParam($params, "$i.domain.nrVirtCpu")+0;
+	my $memory = getParam($params, "$i.domain.memory")+0;
+	my $maxMem = getParam($params, "$i.domain.maxMem")+0;
 
 	my $rrd_data = "$timestamp".
 		":".$cpuTime.

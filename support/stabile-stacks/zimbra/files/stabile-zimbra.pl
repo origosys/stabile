@@ -24,14 +24,21 @@ my $dom = ($dnsdomain && $dnssubdomain)?"$externalip.$dnssubdomain.$dnsdomain":"
 my $zdoms;
 $zdoms = `cat /etc/stabile/zimbradomains` if (-e "/etc/stabile/zimbradomains");
 chomp $zdoms;
+
+my $adoms = `sudo -u zimbra /opt/zimbra/bin/zmprov gad`;
+while (!($adoms =~ /stabile\.int/)) { # Make sure Zimbra is alive before proceeding
+    `echo "Waiting for Zimbra to start ($adoms)..." >> /tmp/zimbra.out`;
+    sleep 20;
+    $adoms = `sudo -u zimbra /opt/zimbra/bin/zmprov gad`;
+}
 unless ($zdoms && $zdoms =~ /$dom/) {
     print "Adding domain alias $dom\n";
-    print `sudo -u zimbra /opt/zimbra/bin/zmprov createAliasDomain $dom stabile.int`;
-    print `sudo -u zimbra /opt/zimbra/bin/zmprov addAccountAlias admin\@stabile.int admin\@$dom`;
-    print `sudo -u zimbra /opt/zimbra/bin/zmprov mcf zimbraMtaSmtpdRejectUnlistedRecipient yes`;
-    print `sudo -u zimbra /opt/zimbra/bin/zmprov mcf zimbraMtaSmtpdRejectUnlistedSender yes`;
+    print `sudo -u zimbra /opt/zimbra/bin/zmprov createAliasDomain $dom stabile.int 2>\&1 | tee -a /tmp/zimbra.out`;
+    print `sudo -u zimbra /opt/zimbra/bin/zmprov addAccountAlias admin\@stabile.int admin\@$dom 2>\&1 | tee -a /tmp/zimbra.out`;
+    print `sudo -u zimbra /opt/zimbra/bin/zmprov mcf zimbraMtaSmtpdRejectUnlistedRecipient yes 2>\&1 | tee -a /tmp/zimbra.out`;
+    print `sudo -u zimbra /opt/zimbra/bin/zmprov mcf zimbraMtaSmtpdRejectUnlistedSender yes 2>\&1 | tee -a /tmp/zimbra.out`;
 
-    print `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$dom\&value=$dom\&type=MX"`;
+    print `curl -k --max-time 5 "https://$gw/stabile/networks?action=dnscreate\&name=$dom\&value=$dom\&type=MX" 2>\&1 | tee -a /tmp/zimbra.out`;
 
     # print `sudo -u zimbra /opt/zimbra/bin/zmlocalconfig -e postfix_smtpd_banner=`;
     # print `sudo -u zimbra /opt/zimbra/bin/zmlocalconfig -e zimbramtamyhostname=`;
@@ -73,12 +80,21 @@ if ($action eq "updatecerts") {
 
         `cp /root/.getssl/$dom/$dom.crt /tmp/$dom.crt`;
         `chown zimbra:zimbra /tmp/$dom.crt`;
-        print `cd /opt/zimbra/; sudo -u zimbra /opt/zimbra/bin/zmcertmgr deploycrt comm /tmp/$dom.crt /tmp/fullchain.crt`;
+        print `cd /opt/zimbra/; sudo -u zimbra /opt/zimbra/bin/zmcertmgr deploycrt comm /tmp/$dom.crt /tmp/fullchain.crt 2>\&1 | tee -a /tmp/zimbra.out`;
         # Self-signed certs to localhost no longer work which prevents /opt/zimbra/libexec/zmstatuslog from connecting, so change ldap
-        print `sudo -u zimbra /opt/zimbra/bin/zmlocalconfig -e ldap_host=$dom ldap_url=ldap://$dom:389 ldap_master_url=ldap://$dom:389 ldap_bind_url=ldap://$dom:389`;
+        print `sudo -u zimbra /opt/zimbra/bin/zmlocalconfig -e ldap_host=$dom ldap_url=ldap://$dom:389 ldap_master_url=ldap://$dom:389 ldap_bind_url=ldap://$dom:389 2>\&1 | tee -a /tmp/zimbra.out`;
         print `rm /opt/zimbra/zmstat/pid/*`;
-        print `cd /opt/zimbra/; sudo -u zimbra /opt/zimbra/bin/zmstatctl restart &`;
-        print `cd /opt/zimbra/; sudo -u zimbra /opt/zimbra/bin/zmcontrol restart &`;
+
+        #my $archname = 'x86_64-linux-gnu-thread-multi'; #/usr/bin/perl -V:archname
+        # my $zcmdprefix = qq|cd /opt/zimbra/; sudo -u zimbra JYTHONPATH=/opt/zimbra/common/lib/jylibs SNMPCONFPATH=/opt/zimbra/conf PERLLIB=/opt/zimbra/common/lib/perl5/$archname:/opt/zimbra/common/lib/perl5 PERLLIB=/opt/zimbra/common/lib/perl5/$archname:/opt/zimbra/common/lib/perl5 JAVA_HOME=/opt/zimbra/common/lib/jvm/java PATH=/opt/zimbra/bin:\${JAVA_HOME}/bin:/opt/zimbra/common/bin:/opt/zimbra/common/sbin:/usr/sbin:\${PATH}|;
+        #my $zcmdpostfix = " 2>\&1 | tee -a /tmp/zimbra.out &";
+
+        `echo "Restarting Zimbra" >> /tmp/zimbra.out`;
+        print `cd /opt/zimbra/; su - zimbra -c "/opt/zimbra/bin/zmcontrol restart 2>\&1" | tee -a /tmp/zimbra.out \&`;
+#        print `$zcmdprefix /opt/zimbra/bin/zmopendkimctl start $zcmdpostfix`;
+#        print `$zcmdprefix /opt/zimbra/bin/zmstatctl restart $zcmdpostfix`;
+#        print `$zcmdprefix /opt/zimbra/bin/zmlogswatchctl restart $zcmdpostfix`;
+#        print `$zcmdprefix /opt/zimbra/bin/zmswatchctl restart $zcmdpostfix`;
     } else {
         print "No cert found in /root/.getssl/$dom - please configure getssl manually or try running stabile-ubuntu.pl\n";
     }

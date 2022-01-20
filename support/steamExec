@@ -125,8 +125,12 @@ if (lc($arg1) eq "backupallimages" ) {
     if ($opentcpports || $openudpports) {
         my $basedom = `awk -F'[/:]' '/https:/{print \$4}' /etc/stabile/baseurl`;
         chomp $basedom;
-        $baseip = `dig +short $basedom`;
-        chomp $baseip;
+        if ($basedom =~ /\d+\.\d+\.\d+\.\d+/) {
+            $baseip = $basedom;
+        } else {
+            $baseip = `dig +short $basedom`;
+            chomp $baseip;
+        }
         $baseip = '' if ($baseip =~ /^127/);
     }
     if (($opentcpports || $openudpports) && $baseip) {

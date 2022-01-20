@@ -8,7 +8,7 @@ echo "Performing post-install operations"
 
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
-cp /usr/share/webmin/stabile/tabs/kubernetes/manifests/*-test.yaml /root/
+cp /usr/share/webmin/stabile/tabs/kubernetes/manifests/*-test.yaml /home/stabile/
 
 # Remove unneeded tabs
 # rm -r /usr/share/webmin/stabile/tabs/servers
@@ -56,7 +56,6 @@ br_netfilter" >> /etc/modules-load.d/modules.conf
 
 echo "#!/bin/bash
 export KUBECONFIG=/etc/kubernetes/admin.conf" > /etc/profile.d/kubernetes.sh
-chmod 644 /etc/kubernetes/admin.conf
 echo "env_KUBECONFIG=/etc/kubernetes/admin.conf" >> /etc/webmin/miniserv.conf
 echo 'Defaults	env_keep += "KUBECONFIG"' > /etc/sudoers.d/kubeconfig
 chmod 440 /etc/sudoers.d/kubeconfig

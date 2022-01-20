@@ -27,10 +27,11 @@ if ($intip && $mip) {
                 $joincmd =~ s/\s+/ /g;
 
                 # Install CNI
-                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml >> /root/initout.log`;
-                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml >> /root/initout.log`;
-#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> /root/initout.log 2>\&1`;
-#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml >> /root/initout.log 2>\&1`;
+#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml >> /root/initout.log`;
+#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml >> /root/initout.log`;
+
+                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> /root/initout.log 2>\&1`;
+                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml >> /root/initout.log 2>\&1`;
 
             # Allow admin node to run pods
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl taint nodes --all node-role.kubernetes.io/master- >> /root/initout.log 2>\&1`;
@@ -98,12 +99,6 @@ if ($intip && $mip) {
                     }
                 }
 
-            # Make kubectl work for stabile user
-                `mkdir /home/stabile/.kube`;
-                `chmod 600 /etc/kubernetes/admin.conf`;
-                `cp -i /etc/kubernetes/admin.conf /home/stabile/.kube/config`;
-                `chown -R stabile:stabile /.kube`;
-
             # Set strictARP to true as per instructions here: https://metallb.universe.tf/installation/
             # And install metallb
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl get configmap -n kube-system -o yaml > configmap.yaml && sed -i "s/strictARP:.*\$/strictARP: true/" configmap.yaml && kubectl replace -f configmap.yaml`;
@@ -121,6 +116,15 @@ if ($intip && $mip) {
             # Make joincmd available to nodes
                 `echo "$joincmd" > /usr/share/webmin/stabile/tabs/kubernetes/joincmd.sh`;
                 `chmod 755 /usr/share/webmin/stabile/tabs/kubernetes/joincmd.sh`;
+
+            # Make kubectl work for stabile user
+                `mkdir /home/stabile/.kube`;
+                `chown -R 1001:1001 /home/stabile/.kube`;
+                `chown 1001:1001 /etc/kubernetes/admin.conf`;
+#                `chmod 600 /etc/kubernetes/admin.conf`;
+#                `chmod -R og+r /etc/kubernetes/`;
+                `cp -i /etc/kubernetes/admin.conf /home/stabile/.kube/config`;
+                `chown -R stabile:stabile /home/stabile/.kube`;
 
                 `echo "Done..." >> /root/initout.log`;
             } else {

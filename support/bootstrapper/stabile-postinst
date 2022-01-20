@@ -1729,6 +1729,7 @@ sub upgrade {
 	`echo "ALTER TABLE domains ADD networkuuids varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 	`echo "ALTER TABLE domains ADD networknames varchar(2048);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 	`echo "ALTER TABLE systems ADD autostart varchar(16);" | mysql steamregister 2>/dev/null 1>/dev/null`;
+	`echo "ALTER TABLE users ADD dnsdomains varchar(512);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 
 	`echo "ALTER TABLE networks MODIFY name varchar(256);" | mysql steamregister 2>/dev/null 1>/dev/null`;
 

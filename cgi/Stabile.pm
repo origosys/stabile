@@ -1034,13 +1034,15 @@ sub preInit {
     my $bto = $userreg{$billto};
     my @bdnsdomains = split(/, ?/, $bto->{'dnsdomains'});
     my @udnsdomains = split(/, ?/, $u->{'dnsdomains'});
-#    $dnsdomain = '' if ($dnsdomain eq '--'); # TODO - ugly
-#    $udnsdomains[0] = '' if ($udnsdomains[0] eq '--');
-#    $bdnsdomains[0] = '' if ($bdnsdomains[0] eq '--');
+    $dnsdomain = '' if ($dnsdomain eq '--'); # TODO - ugly
+    $udnsdomains[0] = '' if ($udnsdomains[0] eq '--');
+    $bdnsdomains[0] = '' if ($bdnsdomains[0] eq '--');
     $dnsdomain = $udnsdomains[0] || $bdnsdomains[0] || $dnsdomain; # override config value
 
     my $bstoreurl = $bto->{'appstoreurl'};
+    $bstoreurl = '' if ($bstoreurl eq '--');
     my $ustoreurl = $u->{'appstoreurl'};
+    $ustoreurl = '' if ($ustoreurl eq '--');
     $appstoreurl = $bstoreurl || $ustoreurl || $appstoreurl; # override config value
 
     $Stabile::sshcmd = $sshcmd;

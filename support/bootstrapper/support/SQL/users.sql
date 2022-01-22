@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `allowinternalapi` varchar(4) DEFAULT NULL,
   `billto` varchar(256) DEFAULT NULL,
   `dnsdomains` varchar(512) DEFAULT NULL,
+  `appstoreurl` varchar(512) DEFAULT NULL,
 
   PRIMARY KEY (`username`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;

@@ -637,7 +637,8 @@ define([
                 $(".info-account").show();
                 $(".info-system").hide();
                 $(".info-services").hide();
-                $("#info_dnsdomain").html(IRIGO.user.dnsdomain);
+                if (user.enginelinked) $("#info_dnsdomain").html(IRIGO.user.dnsdomain).show();
+                else $("#info_dnsdomain").hide();
 
                 // Display vitals for a system
             } else if (gridItem.issystem == 1) {
@@ -646,11 +647,11 @@ define([
                 v += '<span class="terminal"><button dojoType="dijit.form.Button" class="btn btn-info btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="terminal_button" type="button" onclick="systembuilder.system.terminal();";>Terminal</button>';
-                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab" style="margin-right:10px;" href="#home" class="small" onclick="systembuilder.system.terminal_in_tab();">in new tab</a></span></span>';
+                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab glyphicon glyphicon-new-window" href="#home" onclick="systembuilder.system.terminal_in_tab();"></a></span></span>';
                 v += '<span class="manage_system"><button class="btn btn-success btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="manage_system_button" type="button" onclick="systembuilder.system.manage();">Manage</button>';
-                v += '<span style="padding: 0 0 4px 6px;"><a id="manage_in_tab" class="manage_in_tab" href="#home" class="small" onclick="systembuilder.system.manage_in_tab();">in new tab</a></span></span>';
+                v += '<span style="padding: 0 0 4px 6px;"><a id="manage_in_tab" class="manage_in_tab glyphicon glyphicon-new-window" href="#home" onclick="systembuilder.system.manage_in_tab();"></a></span></span>';
                 v += "</span></div></div>";
                 for (i in gridItem.children) {
                     if (gridItem.children[i].memory && !gridItem.children[i].issystem) {
@@ -787,11 +788,11 @@ define([
                 v += '<span class="terminal"><button dojoType="dijit.form.Button" class="btn btn-info btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="terminal_button" type="button" onclick="systembuilder.system.terminal();";>Terminal</button>';
-                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab" style="margin-right:10px;" href="#home" class="small" onclick="systembuilder.system.terminal_in_tab();">in new tab</a></span></span>';
+                v += '<span style="padding: 0 0 4px 6px;"><a id="terminal_in_tab" class="manage_in_tab glyphicon glyphicon-new-window" href="#home" onclick="systembuilder.system.terminal_in_tab();"></a></span></span>';
                 v += '<span class="manage_system"><button class="btn btn-success btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="manage_system_button" type="button" onclick="systembuilder.system.manage();">Manage</button>';
-                v += '<span style="padding: 0 0 4px 6px;"><a id="manage_in_tab" class="manage_in_tab" href="#home" class="small" onclick="systembuilder.system.manage_in_tab();">in new tab</a></span></span>';
+                v += '<span style="padding: 0 0 4px 6px;"><a id="manage_in_tab" class="manage_in_tab glyphicon glyphicon-new-window" href="#home" onclick="systembuilder.system.manage_in_tab();"></a></span></span>';
                 v += "</span></div></div>";
                 v += (aimages>0?"<b>Active server:</b> ":"</h3></div><b>Inactive server</b>: ") + gridItem.vcpu + " vCPU" + (gridItem.vcpu>1?"s, ":", ") +
                 gridItem.memory + " MB memory" + "<br>" +

@@ -93,6 +93,12 @@ define([
             },
             {
                 formatter: function(item) {
+                    console.log("item", item);
+                    return '<td>DNS domains</td><td>' + (item.dnsdomains || IRIGO.user.dnsdomain) + '</td>';
+                }
+            },
+            {
+                formatter: function(item) {
                     return '<td>Created</td><td>' + home.timestampToLocaleString(item.created) + '</td>';
                 }
             },

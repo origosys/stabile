@@ -74,7 +74,7 @@ sub getObj {
         $obj = \%hobj; # We do this to get around a weird problem with freeze...
         my @props = qw ( restorefile engineid enginename engineurl username user password pwd fullname email
             opemail alertemail phone opphone opfullname allowfrom allowinternalapi privileges accounts accountsprivileges
-            storagepools memoryquota storagequota nodestoragequota vcpuquota externalipquota rxquota txquota billto );
+            storagepools memoryquota storagequota nodestoragequota vcpuquota externalipquota rxquota txquota billto dnsdomains appstoreurl );
         foreach my $prop (@props) {
             if (defined $h{$prop}) {
                 $obj->{$prop} = $h{$prop};
@@ -220,7 +220,7 @@ END
               qq|"fullname": "$fullname", "email": "$email", "opemail": "$opemail", "alertemail": "$alertemail", |.
               qq|"phone": "$phone", "opphone": "$opphone", "opfullname": "$opfullname", "appstoreurl": "$appstoreurl", |.
               qq|"allowfrom": "$allowfrom", "lastlogin": "$lastlogin", "lastloginfrom": "$lastloginfrom", "allowinternalapi": "$allowinternalapi", "billto": "$billto", |.
-              qq|"dnsdomain": "$dnsdomain", |;
+              qq|"dnsdomain": "$dnsdomain", "appstoreurl": "$appstoreurl", |;
 
     if ($isadmin && $engineid) {
         $engine_h{"engineid"} = $engineid;
@@ -898,7 +898,7 @@ sub do_save {
     my ($username, $action, $obj) = @_;
     if ($help) {
         return <<END
-POST:username, password, fullname, email, opemail, alertemail, phone, opphone, opfullname, allowfrom, allowinternalapi, accounts, accountsprivileges, storagepools, memoryquota, storagequota, nodestoragequota, vcpuquota, externalipquota, rxquota, txquota, billto:
+POST:username, password, fullname, email, opemail, alertemail, phone, opphone, opfullname, allowfrom, allowinternalapi, accounts, accountsprivileges, storagepools, memoryquota, storagequota, nodestoragequota, vcpuquota, externalipquota, rxquota, txquota:
 Saves a user. If [username] does not exist, it is created if privileges allow this. [password] can be plaintext or a SHA256 hash.
 END
     }
@@ -959,6 +959,8 @@ END
     my $txquota = $reguser->{'txquota'};
     my $tasks = $reguser->{'tasks'};
     my $ubillto = $reguser->{'billto'};
+    my $udnsdomains = $reguser->{'dnsdomains'};
+    my $uappstoreurl = $reguser->{'appstoreurl'}; $uappstoreurl = '' if ($uappstoreurl eq '--');
     my $created = $reguser->{'created'} || $current_time; # set created timestamp for new users
 
     # Only allow admins to change user privileges and quotas
@@ -978,6 +980,8 @@ END
         $txquota = (defined $obj->{"txquota"}) ? $obj->{"txquota"} : $reguser->{'txquota'};
         $tasks = $obj->{"tasks"} || $reguser->{'tasks'};
         $ubillto = $obj->{"billto"} || $reguser->{'billto'};
+        $udnsdomains = $obj->{"dnsdomains"} || $udnsdomains; $udnsdomains = '' if ($udnsdomains eq '--');
+        $uappstoreurl = $obj->{"appstoreurl"} || $uappstoreurl;
         $uaccounts = $obj->{"accounts"} || $reguser->{'accounts'};
         $uaccountsprivileges = $obj->{"accountsprivileges"} || $reguser->{'accountsprivileges'};
         my @ua = split(/,? /, $uaccounts);
@@ -1033,7 +1037,9 @@ END
             tasks              => $tasks,
             allowinternalapi   => $allowinternalapi || 1, # specify '--' to explicitly disallow
             billto             => $ubillto,
-            created           => $created,
+            dnsdomains         => $udnsdomains,
+            appstoreurl        => $uappstoreurl,
+            created            => $created,
             modified           => $current_time,
             action             => ""
         };
@@ -1641,7 +1647,7 @@ sub updateEngineUsers {
     	address city company country email fullname phone
         state zip alertemail opemail opfullname opphone
         memoryquota storagequota vcpuquota externalipquota rxquota txquota nodestoragequota
-        accounts accountsprivileges privileges modified dnsdomains
+        accounts accountsprivileges privileges modified dnsdomains appstoreurl
     );
     my $ures;
     my $ucount = 0;

@@ -85,17 +85,17 @@
     </ul>
 
     <div id="tabs-content" class="tab-content" style="margin:0; background-color:white;">
-        <div id="homecontent" class="tab-pane fade in active grid-tab">
+        <div id="homecontent" class="tab-pane in active grid-tab">
         </div>
-        <div id="serverscontent" class="tab-pane fade grid-tab">
+        <div id="serverscontent" class="tab-pane grid-tab">
         </div>
-        <div id="imagescontent" class="tab-pane fade grid-tab">
+        <div id="imagescontent" class="tab-pane grid-tab">
         </div>
-        <div id="networkscontent" class="tab-pane fade grid-tab">
+        <div id="networkscontent" class="tab-pane grid-tab">
         </div>
         <div id="userscontent" class="tab-pane grid-tab">
         </div>
-        <div id="nodescontent" class="tab-pane fade grid-tab">
+        <div id="nodescontent" class="tab-pane grid-tab">
         </div>
     </div>
 
@@ -201,8 +201,15 @@
                           toastr.options.timeOut = 3000;
                           toastr.options.preventDuplicates = true;
                           toastr.options.progressBar = false;
-                          toastr.alert(message, "Alert history");
+                          toastr.alert(message, 'Alert history <a onclick="IRIGO.toastclear();" class="pull-right" style="font-weight: 400;">clear</a>');
                       }
+                  }
+
+                  IRIGO.toastclear = function() {
+                      IRIGO.alerts = [];
+                      toastr.remove();
+                  //    toastr.clear();
+                      $("#toasthistory").hide();
                   }
 
               IRIGO.toast = function(message) {
@@ -228,7 +235,7 @@
                   }
                       if (!nohistory) {
                           IRIGO.alerts.unshift({"message": message, "time": new Date()});
-                          if (IRIGO.alerts.length>20) IRIGO.alerts.pop();
+                          if (IRIGO.alerts.length>12) IRIGO.alerts.pop();
                           $("#toasthistory").show();
                       }
               }
@@ -333,6 +340,28 @@
             $('#clear_activity_button').on('click', function () {
                 clearActivity();
             });
+                  $(document).on('click', function(evt) { // Hidi Dojo dialogs when clicking outside
+                      if (evt.target.className.indexOf("dijitDialogUnderlay")!=-1) {
+                          $.each($(".dijitDialog"), function( index, value ) {
+                              dijit.byId(value.id).hide();
+                          });
+                      }
+                  });
+
+                  $('#hometab').on('shown.bs.tab', function (e) {location="#home";});
+                  $('#serverstab').on('shown.bs.tab', function (e) {location="#servers";});
+                  $('#imagestab').on('shown.bs.tab', function (e) {location="#images";});
+                  $('#networkstab').on('shown.bs.tab', function (e) {location="#networks";});
+                  if ($('#nodestab')) $('#nodestab').on('shown.bs.tab', function (e) {location="#nodes";});
+                  if ($('#userstab')) $('#userstab').on('shown.bs.tab', function (e) {location="#users";});
+
+                  $('a[data-toggle=tab]').on('click', function () {
+                    console.log($(this)[0].hash.substring(1));
+                    if ($(this)[0].hash.substring(1) == 'homecontent') {
+                        console.log("resizing");
+                        if (typeof homepane !== 'undefined') setTimeout(function() { home.bodyResize(); homepane.resize();}, 100);
+                    }
+                  });
         });
     });
 

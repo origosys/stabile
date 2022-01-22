@@ -48,6 +48,11 @@ ol li, ul li {
 {
 /*    visibility:hidden; */
 }
+.manage_in_tab {
+    margin-right: 20px;
+    vertical-align: middle;
+    text-decoration: none;
+}
 #manageSystemIframe {
     padding: 0 10px;
 }

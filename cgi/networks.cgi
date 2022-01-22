@@ -559,7 +559,7 @@ sub do_getappstoreurl {
     if ($help) {
         return <<END
 GET::
-Get URL to the app store belonging to engine.
+Get URL to the app store belonging to engine or user (uverrides engine default).
 END
     }
 

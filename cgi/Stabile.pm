@@ -370,10 +370,10 @@ $main::dnsCreate = sub {
                 if ($register{$regkeys[0]}->{'user'} eq $username) {
                     ; # OK
                 } else {
-                    return "ERROR Invalid value $checkval, not allowed\n";
+                    return qq|{"status": "Error", "message": "Invalid value $checkval, not allowed"}|;
                 }
             } elsif (scalar @regkeys >1) {
-                return "ERROR Invalid value $checkval\n";
+                return qq|{"status": "Error", "message": "Invalid value $checkval"}|;
             }
             untie %networkreg;
             if ($type eq 'A') {
@@ -385,7 +385,7 @@ $main::dnsCreate = sub {
     }
 
     if ($type ne 'MX' && $type ne 'TXT' && `host $name.$dnsdomain authns1.cabocomm.dk` =~ /has address/) {
-        return "OK $name is already registered\n";
+        return qq|{"status": "Error", "message": "$name is already registered"}|;
     };
 
     if ($enginelinked && $name && $value) {
@@ -421,11 +421,11 @@ $main::dnsCreate = sub {
                $res .= $line unless ($line =~ /^\d/);
             }
         }
-        $res =~ s/://g;
+    #    $res =~ s/://g;
         return "$res\n";
 
     } else {
-        return "ERROR Problem creating dns record with data $name, $value. " . ($enginelinked?"":" Engine is not linked!") . "\n";
+        return qq|{"status": "Error", "message": "Problem creating dns record with data $name, $value.| . ($enginelinked?"":" Engine is not linked!") . qq|"}|;
     }
 };
 
@@ -480,7 +480,7 @@ $main::dnsDelete = sub {
         # } else {
         #     return "ERROR Invalid user ($username) for $name, $checkval, not allowed\n";
         # }
-        untie %networkreg;
+        # untie %networkreg;
     }
 
     $main::syslogit->($user, "info", "Deleting DNS entry $name $dnsdomain");
@@ -501,7 +501,7 @@ $main::dnsDelete = sub {
         $postreq->{'username'} = $username || $user;
         $postreq->{'domain'} = "$dnsdomain";
         $content = $browser->post($posturl, $postreq)->content();
-        $content =~ s/://g;
+    #    $content =~ s/://g;
         return $content;
     } else {
         return "ERROR Invalid data $name." . ($enginelinked?"":" Engine is not linked!") . "\n";
@@ -509,40 +509,43 @@ $main::dnsDelete = sub {
 };
 
 $main::dnsUpdate = sub {
-    my ($engineid, $name, $username) = @_;
+    my ($engineid, $name, $value, $type, $oldname, $oldvalue, $username) = @_;
     $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
+    $type = uc $type;
+    $type || 'CNAME';
 
     # Only allow deletion of records corresponding to user's own networks when username is supplied
     # When username is not supplied, we assume checking has been done
-    my $checkval;
-    if ($username) {
-        if ($name =~ /\d+\.\d+\.\d+\.\d+/) {
-            $checkval = $name;
-        } else {
-            my $checkname = $name;
-            # Remove trailing period
-            $checkname = $1 if ($checkname =~ /(.+)\.$/);
-            $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
-            $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
-            return "ERROR Invalid value $checkname\n" unless ($checkval);
-        }
-
-        unless (tie %networkreg,'Tie::DBI', {
-            db=>'mysql:steamregister',
-            table=>'networks',
-            key=>'uuid',
-            autocommit=>0,
-            CLOBBER=>0,
-            user=>$dbiuser,
-            password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
-        my @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
-        if ($isadmin || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username)) {
-            ; # OK
-        } else {
-            return "ERROR Invalid user for $checkval, not allowed\n";
-        }
-        untie %networkreg;
-    }
+    # Obsolete
+    # my $checkval;
+    # if ($username) {
+    #     if ($name =~ /\d+\.\d+\.\d+\.\d+/) {
+    #         $checkval = $name;
+    #     } else {
+    #         my $checkname = $name;
+    #         # Remove trailing period
+    #         $checkname = $1 if ($checkname =~ /(.+)\.$/);
+    #         $checkname = "$checkname.$dnsdomain" unless ($checkname =~ /(.+)\.$dnsdomain$/);
+    #         $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
+    #         return "ERROR Invalid value $checkname\n" unless ($checkval);
+    #     }
+    #
+    #     unless (tie %networkreg,'Tie::DBI', {
+    #         db=>'mysql:steamregister',
+    #         table=>'networks',
+    #         key=>'uuid',
+    #         autocommit=>0,
+    #         CLOBBER=>0,
+    #         user=>$dbiuser,
+    #         password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
+    #     my @regkeys = (tied %networkreg)->select_where("externalip = '$checkval' OR internalip = '$checkval'");
+    #     if ($isadmin || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username)) {
+    #         ; # OK
+    #     } else {
+    #         return "ERROR Invalid user for $checkval, not allowed\n";
+    #     }
+    #     untie %networkreg;
+    # }
 
     $main::syslogit->($user, "info", "Updating DNS entries for $name $dnsdomain");
     if ($enginelinked && $name) {
@@ -559,10 +562,13 @@ $main::dnsUpdate = sub {
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
         $postreq->{'name'} = $name;
+        $postreq->{'value'} = $value;
+        $postreq->{'type'} = $type;
+        $postreq->{'oldname'} = $oldname if ($oldname);
+        $postreq->{'oldvalue'} = $oldvalue if ($oldvalue);
         $postreq->{'username'} = $username || $user;
         $postreq->{'domain'} = $dnsdomain;
         $content = $browser->post($posturl, $postreq)->content();
-        $content =~ s/://g;
         return $content;
     } else {
         return "ERROR Invalid data $name." . ($enginelinked?"":" Engine is not linked!") . "\n";
@@ -570,7 +576,7 @@ $main::dnsUpdate = sub {
 };
 
 $main::dnsList = sub {
-    my ($engineid, $username) = @_;
+    my ($engineid, $username, $domain) = @_;
     if ($enginelinked) {
         require LWP::Simple;
         my $browser = LWP::UserAgent->new;
@@ -580,14 +586,15 @@ $main::dnsList = sub {
         my $tktkey = $tktcfg->get('TKTAuthSecret') || '';
         my $tkthash = sha512_hex($tktkey);
         my $posturl = "https://www.origo.io/irigo/engine.cgi?action=dnslist";
+        $domain = $domain || $dnsdomain;
 
         my $postreq = ();
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
-        $postreq->{'domain'} = $dnsdomain;
+        $postreq->{'domain'} = $domain;
         $postreq->{'username'} = $username || $user;
         $content = $browser->post($posturl, $postreq)->content();
-        $content =~ s/://g;
+    #    $content =~ s/://g;
         return $content;
     } else {
         return "ERROR Engine is not linked!\n";

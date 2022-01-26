@@ -69,7 +69,14 @@ sub getObj {
     $console = 1 if $h{"console"};
     $api = 1 if $h{"api"};
     my $uuid = $h{"uuid"};
-    my $action = $h{'action'};
+    my $obj;
+    $action = $action || $h{'action'};
+    if (
+        $action =~ /^dns/
+    ) {
+        $obj = \%h;
+        return $obj;
+    }
     $uuid = $curuuid if ($uuid eq 'this');
     if ($uuid =~ /(\d+\.\d+\.\d+\.\d+)/) { # ip addresses are unique across networks so we allow this
         foreach my $val (values %register) {
@@ -443,49 +450,43 @@ END
 
 }
 
+sub do_dnslist {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET:domain:
+Lists entries in [domain] or if not specified, the default zone: $dnsdomain.
+END
+    }
+
+    my $res = $main::dnsList->($engineid, $user, $params{'domain'});
+    return $res;
+}
+
 sub do_dnscreate {
     my ($uuid, $action) = @_;
     if ($help) {
         return <<END
 GET:name, value, type:
-Create a DNS record in the the subdomain belonging to the the registering engine.
-<b>name</b> is a domain name in the Engine's zone. <b>value</b> is either an IP address for A records or a domain name for other. <b>[type]</b> is A, CNAME or MX.
+Create a DNS record in the the subdomain belonging to the user's default DNS domain.
+<b>name</b> is a domain name in the Engine's zone. <b>value</b> is either an IP address for A records or a domain name for other. <b>[type]</b> is A, CNAME, TXT or MX.
 END
     }
 
-    my $res;
-    $res .= header('text/plain') unless $console;
-    $res .= "Status=" . $main::dnsCreate->($engineid, $params{'name'}, $params{'value'}, $params{'type'}, $user);
+    my $res = $main::dnsCreate->($engineid, $params{'name'}, $params{'value'}, $params{'type'}, $user);
     return $res;
 }
 
 sub do_dnsupdate {
-    my ($uuid, $action) = @_;
+    my ($uuid, $action, $obj) = @_;
     if ($help) {
         return <<END
-GET:name:
-Updates CNAME records pointing to a A record, to point to the given 'name' in the the subdomain belonging to the the registering engine.
+GET:name,value,type,oldname,oldvalue:
+Updates CNAME records pointing to a A record with value 'value', to point to the new 'name' in the the default DNS domain.
 END
     }
 
-    my $res;
-    $res .= header('text/plain') unless $console;
-    $res .= "Status=" . $main::dnsUpdate->($engineid, $params{'name'}, $user);
-    return $res;
-}
-
-sub do_dnslist {
-    my ($uuid, $action) = @_;
-    if ($help) {
-        return <<END
-GET::
-Lists entries in $dnsdomain zone.
-END
-    }
-
-    my $res;
-    $res .= header('text/plain') unless $console;
-    $res .= $main::dnsList->($engineid, $user);
+    my $res = $main::dnsUpdate->($engineid, $obj->{'name'}, $obj->{'value'}, $obj->{'type'}, $obj->{'oldname'}, $obj->{'oldvalue'}, $user);
     return $res;
 }
 
@@ -548,9 +549,7 @@ Delete a DNS record in the configured zone.
 END
     }
 
-    my $res;
-    $res .= header('text/plain') unless $console;
-    $res .= $main::dnsDelete->($engineid, $params{'name'}, $user);
+    my $res = $main::dnsDelete->($engineid, $params{'name'}, $user);
     return $res;
 }
 
@@ -570,12 +569,34 @@ END
     return $res;
 }
 
+sub do_listdnsdomains {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET::
+Get the DNS domains current user has access to.
+END
+    }
+    unless ( tie(%userreg,'Tie::DBI', Hash::Merge::merge({table=>'users', key=>'username', CLOBBER=>1}, $Stabile::dbopts)) ) {return 0};
+    my $billto = $userreg{$user}->{'billto'};
+    my $bdomains = ($userreg{$billto})?$userreg{$billto}->{'dnsdomains'}:'';
+    my $domains = ($enginelinked)?($userreg{$user}->{'dnsdomains'} || $bdomains || $dnsdomain) :'';
+    untie %userreg;
+    my @doms = split(/, ?/, $domains);
+    my $subdomain = ($enginelinked)?substr($engineid, 0, 8):'';
+    my $linked = ($enginelinked)?'true':'false';
+    my $res;
+    $res .= header('application/json') unless $console;
+    $res .= qq|{"domains": | . to_json(\@doms) . qq|, "subdomain": "$subdomain", "enginelinked": "$linked", "billto": "$billto", "user": "$user"}|;
+    return $res;
+}
+
 sub do_getdnsdomain {
     my ($uuid, $action) = @_;
     if ($help) {
         return <<END
 GET::
-Get the domain and the subdomain this Engine registers entries in.
+Get the default DNS domain and the subdomain this Engine registers entries in.
 END
     }
     my $domain = ($enginelinked)?$dnsdomain:'';
@@ -1100,7 +1121,8 @@ END
                 } else {
                     $postreply .= "Status=OK Allocated external IP: $externalip\n" unless ($regnet->{'externalip'} eq $externalip);
                     if ($dodns) {
-                        $postreply .= "Status=OK Trying to register DNS " . $main::dnsCreate->($engineid, $externalip, $externalip, 'A', $user);
+                        $postreply .= "Status=OK Trying to register DNS ";
+                        $main::dnsCreate->($engineid, $externalip, $externalip, 'A', $user);
                     }
                 }
                 $internalip = getNextInternalIP($internalip, $uuid, $id);

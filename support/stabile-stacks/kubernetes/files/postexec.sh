@@ -9,6 +9,7 @@ echo "Performing post-install operations"
 # Add this app's assets to Webmin
 mv /tmp/files/stabile/tabs/* /usr/share/webmin/stabile/tabs/
 cp /usr/share/webmin/stabile/tabs/kubernetes/manifests/*-test.yaml /home/stabile/
+chown 1001:1001 /home/stabile/*
 
 # Remove unneeded tabs
 # rm -r /usr/share/webmin/stabile/tabs/servers

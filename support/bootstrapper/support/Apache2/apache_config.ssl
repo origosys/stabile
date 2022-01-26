@@ -88,6 +88,10 @@
         Options FollowSymLinks
     </Location>
 
+    <Location "/stabile/netinfo">
+        Options ExecCGI
+    </Location>
+
     <Directory "/mnt/stabile/images">
         AllowOverride All
 	    Options -Indexes

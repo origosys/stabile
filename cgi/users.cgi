@@ -1645,7 +1645,7 @@ sub updateEngineUsers {
     my @ulist = @$json_obj;
     my @efields = qw(password
     	address city company country email fullname phone
-        state zip alertemail opemail opfullname opphone
+        state zip alertemail opemail opfullname opphone billto
         memoryquota storagequota vcpuquota externalipquota rxquota txquota nodestoragequota
         accounts accountsprivileges privileges modified dnsdomains appstoreurl
     );

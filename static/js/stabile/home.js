@@ -643,7 +643,7 @@ define([
                 // Display vitals for a system
             } else if (gridItem.issystem == 1) {
                 nodesHash = [];
-                v = '<div id="vitalsHeader"><div style="width:97%;"><div class="row"><span class="col-sm-6" style="display:inline-block;"><h3>Stack: '+ gridItem.name + '</h3></span><span style="display:inline-block; text-align:right;">';
+                v = '<div id="vitalsHeader"><div style="width:97%;"><div class="row"><span class="col-sm-6" style="display:inline-block;"><h3>Stack: '+ gridItem.name + '</h3></span><span style="display:inline-block; text-align:right; float:right;">';
                 v += '<span class="terminal"><button dojoType="dijit.form.Button" class="btn btn-info btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="terminal_button" type="button" onclick="systembuilder.system.terminal();";>Terminal</button>';
@@ -784,7 +784,7 @@ define([
                 appstatus.innerHTML = "";
                 appid.innerHTML = "";
 
-                v = '<div id="vitalsHeader"><div style="width:97%;"><div class="row"><span class="col-sm-6" style="display:inline-block;"><h3>Server: '+ serverLink + '</h3></span><span class="col-sm-6" style="display:inline-block; text-align: right;">';
+                v = '<div id="vitalsHeader"><div style="width:97%;"><div class="row"><span class="col-sm-6" style="display:inline-block;"><h3>Server: '+ serverLink + '</h3></span><span class="col-sm-6" style="display:inline-block; text-align: right; float:right;">';
                 v += '<span class="terminal"><button dojoType="dijit.form.Button" class="btn btn-info btn-xs" '
                     + ((user.is_readonly)?'disabled ':'')
                     + 'id="terminal_button" type="button" onclick="systembuilder.system.terminal();";>Terminal</button>';

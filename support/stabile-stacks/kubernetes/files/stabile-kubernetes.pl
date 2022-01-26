@@ -66,6 +66,9 @@ if ($intip && $mip) {
             # Set local-storage as default storageclass
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl patch storageclass local-storage -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' >> /root/initout.log 2>\&1`;
 
+            # Install nginx ingress controller
+            #    `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.1/deploy/static/provider/cloud/deploy.yaml >> /root/initout.log 2>\&1`;
+
             # Install Dashboard
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/alternative.yaml >> /root/initout.log`;
 

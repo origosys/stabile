@@ -544,12 +544,12 @@ sub do_dnsdelete {
     my ($uuid, $action) = @_;
     if ($help) {
         return <<END
-GET:name:
+GET:name, value, type:
 Delete a DNS record in the configured zone.
 END
     }
 
-    my $res = $main::dnsDelete->($engineid, $params{'name'}, $user);
+    my $res = $main::dnsDelete->($engineid, $params{'name'}, $params{'value'}, $params{'type'}, $user);
     return $res;
 }
 

@@ -430,60 +430,16 @@ $main::dnsCreate = sub {
 };
 
 $main::dnsDelete = sub {
-    my ($engineid, $name, $username) = @_;
+    my ($engineid, $name, $value, $type, $username) = @_;
     my $dnssubdomain = substr($engineid, 0, 8);
     $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
     $name =$1 if ($name =~ /(.+)\.$dnssubdomain/);
-    $name = "$1.$dnssubdomain" if ($name =~ /^(\d+\.\d+\.\d+\.\d+)$/);
-    # Only allow deletion of records corresponding to user's own networks when username is supplied
-    # When username is not supplied, we assume checking has been done
-    my $checkval;
-    if ($username) {
-        if ($name =~ /(\d+\.\d+\.\d+\.\d+)/) {
-            $checkval = 'OK'; # We now per default allow user to delete his own records
-        } else {
-            $checkval = 'OK'; # We now per default allow user to delete his own records
-            my $checkname = $name;
-            # Remove trailing period
-            $checkname = $1 if ($checkname =~ /(.+)\.$/);
-            if ($checkname =~ /^(\d+\.\d+\.\d+\.\d+)$/) {
-                $checkname = "$checkname.$dnssubdomain.$dnsdomain";
-                $checkval = $1 if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/);
-            } else {
-                $checkname = "$checkname.$dnsdomain";
-                if (`host $checkname authns1.cabocomm.dk` =~ /has address (\d+\.\d+\.\d+\.\d+)/) {
-                    $checkval = $1;
-                } elsif (`nslookup $checkname authns1.cabocomm.dk` =~ /text = /) {
-                    $checkval = "OK"; # We need to be able to delete DMARC TXT records...
-                }
-            }
-            return "ERROR Invalid name $checkname\n" unless ($checkval);
-        }
-
-        # my @regkeys;
-        # if ($checkval && $checkval ne 'OK') {
-        #     unless (tie %networkreg,'Tie::DBI', {
-        #         db=>'mysql:steamregister',
-        #         table=>'networks',
-        #         key=>'uuid',
-        #         autocommit=>0,
-        #         CLOBBER=>0,
-        #         user=>$dbiuser,
-        #         password=>$dbipasswd}) {throw Error::Simple("Error Register could not be accessed")};
-        #     @regkeys = (tied %networkreg)->select_where("externalip = '$checkval'");
-        # }
-
-        # if ($isadmin || $checkval eq "OK"
-        # #    || (scalar @regkeys == 1 && $register{$regkeys[0]}->{'user'} eq $username) # we now allow a user to delete all his own records
-        # ) {
-        #     ; # OK
-        # } else {
-        #     return "ERROR Invalid user ($username) for $name, $checkval, not allowed\n";
-        # }
-        # untie %networkreg;
+    if ($name =~ /^(\d+\.\d+\.\d+\.\d+)$/) {
+        $name = "$1.$dnssubdomain";
+        $type = $type || 'A';
     }
 
-    $main::syslogit->($user, "info", "Deleting DNS entry $name $dnsdomain");
+    $main::syslogit->($user, "info", "Deleting DNS entry $type $name $dnsdomain");
     if ($enginelinked && $name) {
         require LWP::Simple;
         my $browser = LWP::UserAgent->new;
@@ -498,6 +454,8 @@ $main::dnsDelete = sub {
         $postreq->{'engineid'} = $engineid;
         $postreq->{'enginetkthash'} = $tkthash;
         $postreq->{'name'} = $name;
+        $postreq->{'value'} = $value;
+        $postreq->{'type'} = $type;
         $postreq->{'username'} = $username || $user;
         $postreq->{'domain'} = "$dnsdomain";
         $content = $browser->post($posturl, $postreq)->content();
@@ -813,7 +771,7 @@ $main::updateUI = sub {
             $res .= `chown www-data:www-data /tmp/$duser.tasks`;
 #            sleep 1;
             eval {`/usr/bin/pkill -HUP -f ui_update`; 1;} or do {;};
-            `echo "duh: $duser" >> /tmp/duh`;
+#            `echo "duh: $duser" >> /tmp/duh`;
         }
 #        eval {`/usr/bin/pkill -HUP -f $duser~ui_update`; 1;} or do {;};
     } or do {$e=1; $res .= "ERROR Problem writing to tasks pipe $@\n";};

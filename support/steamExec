@@ -154,8 +154,8 @@ if (lc($arg1) eq "backupallimages" ) {
     if ($openudpports && $baseip) {
         print "Allowing incoming UDP traffic to $baseip for ports $openudpports\n";
         my $ports = join(",",split(/, ?/, $openudpports));
-        print `iptables -D INPUT -p udp -m tcp -m multiport --dports $ports -j ACCEPT 2>/dev/null`;
-        print `iptables -I INPUT -p udp -m tcp -m multiport --dports $ports -j ACCEPT`;
+        print `iptables -D INPUT -p udp -m udp -m multiport --dports $ports -j ACCEPT 2>/dev/null`;
+        print `iptables -I INPUT -p udp -m udp -m multiport --dports $ports -j ACCEPT`;
     }
     if (`pgrep pressurecontrol`) {
         debuglog("Running post-boot routines...");

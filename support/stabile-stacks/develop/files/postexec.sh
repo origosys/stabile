@@ -15,16 +15,16 @@ echo '<?php/*|{"c":"c_cpp","coffee":"coffee","cpp":"c_cpp","css":"css","d":"d","
 
 # Make a simple project with a Python file
 mkdir "/var/www/html/workspace/MyProject"
-echo "#!/usr/bin/env python
+echo "#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
 # enable debugging
 import cgitb
 cgitb.enable()
 
-print 'Content-Type: text/html;charset=utf-8'
-print
-print '<h1>Hello World!</h1>'" > /var/www/html/workspace/MyProject/hello.py
+print ('Content-Type: text/html;charset=utf-8')
+print ()
+print ('<h1>Hello World!</h1>')" > /var/www/html/workspace/MyProject/hello.py
 chmod 755 /var/www/html/workspace/MyProject/hello.py
 
 # Install some Codiad plugins

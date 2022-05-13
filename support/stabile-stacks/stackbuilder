@@ -70,6 +70,7 @@ my $rebase = $config->get("REBASE");
 my $basesuite = $config->get("BASESUITE") || 'xenial';
 my $basename = $config->get("BASENAME") || 'ubuntu-16.04';
 $basename = 'ubuntu-18.04' if ($basesuite eq 'bionic');
+$basename = 'ubuntu-20.04' if ($basesuite eq 'focal');
 my $name = $config->get("NAME");
 die "You must supply a name [NAME]" unless ($name);
 my $appname = $config->get("APPNAME");
@@ -184,7 +185,7 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
                 }
             } else {
                 #            die "You need to install python-vm-builder in order to build a base image\n" unless (`which vmbuilder`);
-                die "You need to install virt-builder in order to build a base image\n" unless (`which virt-builder`);
+                die "You need to install virt-builder (provided by libguestfs-tools) in order to build a base image\n" unless (`which virt-builder`);
                 # We unfortunately have to patch vmbuilder
                 ## See: http://askubuntu.com/questions/819844/kvm-vmbuilder-fails
 
@@ -204,7 +205,7 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
 
                 #my $cmd = qq|vmbuilder kvm ubuntu -o -v --debug --suite $basesuite --arch amd64 --components main,universe,multiverse --rootsize $size --user stabile --pass stabile --hostname $name --tmpfs 2048 --addpkg linux-image-generic --addpkg wget --addpkg curl --domain stabile.io --ip 10.1.1.2|;
                 # print "$cmd\n";
-                $cmd = qq|virt-builder $basename -o "$cwd/$dname.master.qcow2" --arch amd64 --size $size --hostname $name --format qcow2|;
+                $cmd = qq|virt-builder $basename -o "$cwd/$dname.master.qcow2" --arch x86_64 --graphics vnc --virt-type=kvm --size $size --hostname $name --format qcow2|;
                 print "$cmd\n";
                 print `$cmd`;
                 # The downloaded image is in sparse format - get rid of unused/sparse space

@@ -517,7 +517,7 @@ if ($pid) {
                     if ($ip && $networkuser && $networkuser eq $user) {
                         $geturi =~ s/$networkuuid/$ip/;
                         #$geturi .= '/' unless ($geturi =~ /\/$/);
-                        print "Getting $networkuuid: $geturi ($uri)\n";
+                        print "Getting $networkuuid: $geturi ($uri)\n" if ($debug);
                         $request->uri($geturi);
                         $request->remove_header( 'Referer' );
                         $request->header('Host' => $host) if ($host);
@@ -557,7 +557,7 @@ if ($pid) {
                         $response->remove_header( 'Content-Security-Policy');
                         $response->push_header( 'Content-Security-Policy' => "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://ajax.googleapis.com https://code.jquery.com https://ajax.microsoft.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://ajax.googleapis.com https://code.jquery.com" );
                         $c->send_response( $response );
-                        print "Got: $geturi\n";
+                        print "Got: $geturi\n" if ($debug);
                     } else {
                         my $msg = "Not found: $networkuuid, $ip, $networkuser, " . $user;
                     #    $c->send_status_line('200', $msg);

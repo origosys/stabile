@@ -1,6 +1,6 @@
-VERSION=1.0b
+VERSION=1.0c
 APPID=1794
-BASEIMAGE=ubuntu-bionic.1.0b.master.qcow2
+BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
 REBASE=0
 INSTANCES=2
 BASESUITE=
@@ -13,7 +13,7 @@ TAR=
 TARTARGET=
 GIT=https://github.com/Codiad/Codiad
 GITTARGET=/var/www/codiad
-DEBS=php-zip php-mbstring expect php-ssh2 golang-go nodejs nodejs-dev npm iozone3 netperf iptables-persistent
+DEBS=php-zip php-mbstring expect php-ssh2 golang-go nodejs libnode-dev npm iozone3 netperf iptables-persistent
 PREEXEC=/tmp/files/preexec.sh
 POSTEXEC=/tmp/files/postexec.sh
 SERVICE=

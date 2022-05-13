@@ -92,7 +92,7 @@ sub Init {
     # simplify globals initialized in Stabile.pm
     $tktuser = $tktuser || $Stabile::tktuser;
     $user = $user || $Stabile::user;
-    $isadmin = $isdamin || $Stabile::isadmin;
+    $isadmin = $isadmin || $Stabile::isadmin;
     $sshcmd = $sshcmd || $Stabile::sshcmd;
     $disablesnat = $disablesnat || $Stabile::disablesnat;
 
@@ -3649,7 +3649,8 @@ END
 
     my $virtualsize = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
     chomp $virtualsize;
-    my $master = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+#    my $master = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+    my $master = `qemu-img info --force-share "$imagepath" | sed -n -e 's/^backing file: //p'`;
     chomp $master;
 
     # Now deal with image2
@@ -3669,7 +3670,8 @@ END
 
         my $virtualsize2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^virtual size: .*(//p' | sed -n -e 's/ bytes)//p'`;
         chomp $virtualsize2;
-        my $master2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+#        my $master2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^backing file: //p' | sed -n -e 's/ (actual path:.*)\$//p'`;
+        my $master2 = `qemu-img info --force-share "$image2path" | sed -n -e 's/^backing file: //p'`;
         chomp $master2;
         if ($register{$master2}) {
             $register{$master2}->{'status'} = 'used';

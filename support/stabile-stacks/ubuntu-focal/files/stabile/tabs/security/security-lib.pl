@@ -232,6 +232,7 @@ sub get_limit {
 sub set_limit {
     my $limit = shift;
     my $message;
+    my $rstatus;
     my ($validlimit, $sshlimit, $mess) = validate_limit($limit);
     $message .= $mess;
     my $iip = "$1.0" if ($internalip =~ /(\d+\.\d+\.\d+)\.\d+/);
@@ -239,21 +240,35 @@ sub set_limit {
     # Configure webmin on admin server
     $cmd = qq|perl -pi -e "s/allow=(.*)/allow=$iip\\/24 127.0.0.1 $validlimit/;" /etc/webmin/miniserv.conf|;
     $message .= `$cmd`;
-    my $conf = "/etc/apache2/sites-available/webmin-ssl";
-    # Handle name change in Xenial
-    $conf .= '.conf' if (-e "$conf.conf");
-    $cmd = qq|perl -pi -e 's/allow from (.*)/allow from $validlimit/;' $conf|;
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
+    $message .= $rstatus unless ($rstatus =~ /OK:/);
+
+    $cmd = qq|perl -pi -e 's/allow from (.*)/allow from $validlimit/;' /etc/apache2/sites-available/webmin-ssl.conf|;
     $message .= `$cmd`;
-    `systemctl reload apache2`;
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
+    $message .= $rstatus unless ($rstatus =~ /OK:/);
+
+    $cmd = `systemctl reload apache2`;
+    `$cmd`;
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
+    $message .= $rstatus unless ($rstatus =~ /OK:/);
+
     # Configure ssh on admin server
     $cmd = qq|perl -pi -e 's/sshd: ?(.*) \#stabile/sshd: $validlimit #stabile/;' /etc/hosts.allow|;
     $message .= `$cmd`;
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
+    $message .= $rstatus unless ($rstatus =~ /OK:/);
+
     $cmd = qq|perl -pi -e 's/AllowUsers ?(.*) \#stabile/AllowUsers $sshlimit #stabile/;' /etc/ssh/sshd_config|;
     $message .= `$cmd`;
-    `systemctl restart sshd`;
-    # Also configure ssh on other servers in app
-    my $rstatus = run_command($cmd, $internalip) if (defined &run_command);
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
     $message .= $rstatus unless ($rstatus =~ /OK:/);
+
+    $cmd = `systemctl restart sshd`;
+    `$cmd`;
+    $rstatus = run_command($cmd, $internalip) if (defined &run_command); # Also configure other servers in app
+    $message .= $rstatus unless ($rstatus =~ /OK:/);
+
     # Verify a bit
     my $allow = `cat /etc/hosts.allow`;
     if ($allow=~ /sshd: ?(.*) #stabile/)
@@ -279,11 +294,7 @@ sub set_limit {
     } else {
         `systemctl reload webmin`;
     }
-    # Reload apache
-    $cmd = qq|systemctl apache2 reload|;
-    `$cmd`;
-    # Also reload on other servers
-    run_command($cmd, $internalip) if (defined &run_command);
+
     chomp $message;
     return qq|Content-type: application/json\n\n{"message": "$message"}|;
 }

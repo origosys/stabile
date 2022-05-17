@@ -1,0 +1,39 @@
+VERSION=1.0a
+APPID=1795
+BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
+DATAIMAGE=20G
+STORAGEPOOL2=-1
+REBASE=0
+INSTANCES=5
+BASESUITE=
+SIZE=
+NAME=mongodb
+APPNAME=Mongodb
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=https://github.com/SamuelTallet/MongoDB-PHP-GUI
+GITTARGET=/var/www/mongodb-php-gui
+DEBS=php-mongodb default-jre iptables-persistent mongodb-org composer iozone3
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=4096
+VCPU=2
+LOGO=https://www.stabile.io/images/apps/logo-mongodb.png
+THUMBNAIL=https://www.stabile.io/images/apps/logo-mongodb.png
+SUMMARY=The MongoDB stack installs four Ubuntu VM's set up as a MongoDB sharded cluster.
+DESCRIPTION=<section>\
+    <p style="margin-bottom:20px;">\
+        Mongo is a lean stack that installs a sharded MongoDB cluster on 4 Ubuntu VM's.<br>\
+        The VM's are configured as 1 config server, 1 query router and 2 shard servers. None of the servers are configured with redundant replicas, i.e. there is only one replica in each replica set, which should obviously be corrected, before using this stack in a critical production environment.\
+        To add more shard servers to your MongoDB cluster, simply add more servers using the stack UI.\
+        The stack also installs the excellent <a href="https://github.com/SamuelTallet/MongoDB-PHP-GUI">Mongo DB PHP GUI</a> by Samuel Tallet.\
+    </p>\
+</section>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/mongodb" target="_blank">Stack source code</a></div>

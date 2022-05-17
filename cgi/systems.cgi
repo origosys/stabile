@@ -2716,6 +2716,8 @@ sub getSystemsListing {
                 $val{'networktype1'} = $networkreg{$val{'networkuuid1'}}->{'type'} if ($networkreg{$val{'networkuuid1'}});
                 $val{'imageuuid'} = $imagereg{$val{'image'}}->{'uuid'} if ($imagereg{$val{'image'}});
                 $val{'imageuuid2'} = $imagereg{$val{'image2'}}->{'uuid'} if ($imagereg{$val{'image2'}} && $val{'image2'} && $val{'image2'} ne '--');
+                $val{'internalip'} = $networkreg{$val{'networkuuid1'}}->{'internalip'} if ($networkreg{$val{'networkuuid1'}});
+                $val{'externalip'} = $networkreg{$val{'networkuuid1'}}->{'externalip'} if ($networkreg{$val{'networkuuid1'}});
 
                 my $networkuuid1; # needed for generating management url
                 if ($sysuuid && $sysuuid ne '--') { # We are dealing with a server that's part of a system

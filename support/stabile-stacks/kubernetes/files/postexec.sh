@@ -23,8 +23,8 @@ systemctl enable stabile-kubernetes
 apt-mark hold kubeadm kubelet kubectl
 
 # Set up SSL access to Kubernetes Dashboard on port 10002
-cp /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-available/kubernetes-ssl.conf
-perl -pi -e 's/<VirtualHost _default_:443>/<VirtualHost _default_:10002>/;' /etc/apache2/sites-available/kubernetes-ssl.conf
+#cp /etc/apache2/sites-available/default-ssl.conf /etc/apache2/sites-available/kubernetes-ssl.conf
+#perl -pi -e 's/<VirtualHost _default_:443>/<VirtualHost _default_:10002>/;' /etc/apache2/sites-available/kubernetes-ssl.conf
 
 #perl -pi -e 's/(\s+<\/VirtualHost>)/        ProxyPass \/ http:\/\/dashboardip:80\/\n        ProxyPassReverse \/ http:\/\/dashboardip:80\/\n        Header set Authorization "Bearer \${KUBE_TOKEN}"\n$1/;' /etc/apache2/sites-available/kubernetes-ssl.conf
 #perl -pi -e 's/(DocumentRoot \/var\/www\/html)/$1\n        <Location \/>\n            deny from all\n            allow from 127.0.0.1 #stabile\n        <\/Location>/;' /etc/apache2/sites-available/kubernetes-ssl.conf

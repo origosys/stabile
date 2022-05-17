@@ -256,7 +256,8 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
         #    print `modprobe nbd max_part=63`;
             print `qemu-nbd -c /dev/nbd1 "$cwd/$dname-data.master.qcow2"`;
             print `sfdisk /dev/nbd1 << EOF\n;\nEOF`;
-            print `mkfs.ext4 /dev/nbd1p1`;
+        #    print `mkfs.ext4 /dev/nbd1p1`;
+            print `mkfs.xfs /dev/nbd1p1`;
             print ">> Mounting data image $dataimage on /tmp/$dname$datamount...\n";
             print `mkdir -p "/tmp/$dname$datamount"`;
             print `mount /dev/nbd1p1 "/tmp/$dname$datamount"`;

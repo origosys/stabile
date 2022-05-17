@@ -155,7 +155,7 @@ if ($intip && $mip) {
         }
     }
 } else {
-    `echo "Not ready $intip, $mit" > /root/initprob`;
+    `echo "Not ready $intip, $mip" > /root/initprob`;
 }
 
 sub show_management_server {

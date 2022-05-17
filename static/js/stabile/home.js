@@ -2624,7 +2624,7 @@ Engine linked to Stabile Registry: " + ((user.enginelinked)?"yes":"no") + ((user
             home.updateUser();
         });
         dojo.subscribe("home:removal", function(task){
-            console.log("system removed", task.uuid, dijit.byId('createSystemDialog').get("sysuuid"));
+            console.log("system removed", task.uuid);
             var duuid = dijit.byId('createSystemDialog').get("sysuuid");
             if(dijit.byId('createSystemDialog') !== undefined && (duuid == task.uuid || duuid == task.domuuid))
                 dijit.byId('createSystemDialog').hide();

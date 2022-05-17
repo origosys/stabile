@@ -432,8 +432,8 @@ $main::dnsCreate = sub {
 $main::dnsDelete = sub {
     my ($engineid, $name, $value, $type, $username) = @_;
     my $dnssubdomain = substr($engineid, 0, 8);
-    $name = $1 if ($name =~ /(.+)\.$dnsdomain/);
-    $name =$1 if ($name =~ /(.+)\.$dnssubdomain/);
+    $name = $1 if ($name =~ /(.+)\.$dnsdomain$/);
+#    $name =$1 if ($name =~ /(.+)\.$dnssubdomain/);
     if ($name =~ /^(\d+\.\d+\.\d+\.\d+)$/) {
         $name = "$1.$dnssubdomain";
         $type = $type || 'A';

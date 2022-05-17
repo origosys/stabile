@@ -70,9 +70,9 @@ a2enmod proxy
 a2enmod proxy_http
 
 echo "*filter
-:INPUT ACCEPT [56:14705]
+:INPUT ACCEPT [0:0]
 :FORWARD ACCEPT [0:0]
-:OUTPUT ACCEPT [56:6504]
+:OUTPUT ACCEPT [0:0]
 -A INPUT ! -s 10.0.0.0/8 -p udp -m udp --dport 12865 -j DROP
 -A INPUT ! -s 10.0.0.0/8 -p tcp -m tcp --dport 12865 -j DROP
 COMMIT" > /etc/iptables/rules.v4

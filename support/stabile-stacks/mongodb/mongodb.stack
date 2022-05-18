@@ -4,7 +4,7 @@ BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
 DATAIMAGE=20G
 STORAGEPOOL2=-1
 REBASE=0
-INSTANCES=5
+INSTANCES=3
 BASESUITE=
 SIZE=
 NAME=mongodb
@@ -28,10 +28,13 @@ THUMBNAIL=https://www.stabile.io/images/apps/logo-mongodb.png
 SUMMARY=The MongoDB stack installs four Ubuntu VM's set up as a MongoDB sharded cluster.
 DESCRIPTION=<section>\
     <p style="margin-bottom:20px;">\
-        Mongo is a lean stack that installs a sharded MongoDB cluster on 4 Ubuntu VM's.<br>\
-        The VM's are configured as 1 config server, 1 query router and 2 shard servers. None of the servers are configured with redundant replicas, i.e. there is only one replica in each replica set, which should obviously be corrected, before using this stack in a critical production environment.\
-        To add more shard servers to your MongoDB cluster, simply add more servers using the stack UI.\
-        The stack also installs the excellent <a href="https://github.com/SamuelTallet/MongoDB-PHP-GUI">Mongo DB PHP GUI</a> by Samuel Tallet.\
+        Mongo is a lean stack that installs a sharded MongoDB 4.4 cluster on 3 Ubuntu VM's (we'll be happy to do a Mongo5 version if anyone asks).<br>\
+        This stack is basically an automation of the steps described in: <a target="_blank" href="https://www.mongodb.com/docs/manual/tutorial/deploy-sharded-cluster-with-keyfile-access-control/">https://www.mongodb.com/docs/manual/tutorial/deploy-sharded-cluster-with-keyfile-access-control/</a> .<br>\
+        The VM's are configured as 1 config server, 1 query router and 1 shard server.<br>\
+        To add more shard servers, simply add servers from the "servers" tab - they will automatically join the cluster.<br>\
+        None of the servers are configured with redundant replicas, i.e. there is only one replica in each replica set, which should obviously be corrected, before using this stack in a critical production environment.<br>\
+        To add more shard servers to your MongoDB cluster, simply add more servers using the stack UI.<br>\
+        The stack also installs the excellent <a target="_blank" href="https://github.com/SamuelTallet/MongoDB-PHP-GUI">Mongo DB PHP GUI</a> by Samuel Tallet.\
     </p>\
 </section>\
 <hr>\

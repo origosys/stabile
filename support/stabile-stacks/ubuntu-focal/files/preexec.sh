@@ -34,7 +34,7 @@ passwd -l root
 
 # Mount data disk
 mkdir /mnt/data
-echo "/dev/vdb1       /mnt/data       ext4    noatime 0       0" >> /etc/fstab
+echo "/dev/vdb1       /mnt/data       xfs    noatime 0       0" >> /etc/fstab
 
 # Set hostname
 echo ubuntu-focal > /etc/hostname

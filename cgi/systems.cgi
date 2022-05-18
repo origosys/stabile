@@ -828,6 +828,8 @@ Suspend, resume, start, shutdown, destroy og backup individual servers or server
 END
     }
     my $issystem = $obj->{'issystem'} || $register{$uuid};
+    my $reguser;
+    $reguser = $register{$uuid}->{'user'} if ($register{$uuid});
 
     unless ( tie(%domreg,'Tie::DBI', Hash::Merge::merge({table=>'domains'}, $Stabile::dbopts)) ) {return "Unable to access domain register"};
     unless (tie(%imagereg,'Tie::DBI', Hash::Merge::merge({table=>'images', key=>'path'}, $Stabile::dbopts)) ) {$res .= qq|{"status": "Error": "message": "Unable to access images register"}|; return $res;};

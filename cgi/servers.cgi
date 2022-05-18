@@ -214,7 +214,7 @@ sub getObj {
             $postreply .= "Status=ERROR No privileges: $networkname1 $networkname2\n";
             return 0;
         }
-        if ((($user ne $reguser) && $action ) || ($reguser && $status eq "new"))
+        if ( ($reguser && ($user ne $reguser) && $action ) || ($reguser && $status eq "new"))
         {
             $postreply .= "Status=ERROR No privileges: $name\n";
             return 0;

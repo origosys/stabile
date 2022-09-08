@@ -1,6 +1,6 @@
-VERSION=1.0d
+VERSION=1.0f
 APPID=1326
-BASEIMAGE=ubuntu-bionic.1.0c.master.qcow2
+BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
 REBASE=0
 BASESUITE=
 SIZE=
@@ -12,6 +12,7 @@ TAR=
 TARTARGET=
 GIT=
 GITTARGET=
+PRICE=-400
 DEBS=docker.io kubeadm kubelet kubectl helm screen libyaml-libyaml-perl
 PREEXEC=/tmp/files/preexec.sh
 POSTEXEC=/tmp/files/postexec.sh
@@ -21,20 +22,47 @@ MEMORY=4096
 VCPU=2
 INSTANCES=2
 DATAIMAGE=20G
+DATAIMAGEFS=xfs
 STORAGEPOOL2=-1
 LOGO=https://www.stabile.io/irigo/images/apps/kubernetes-logo.png
 THUMBNAIL=https://www.stabile.io/irigo/images/apps/kubernetes-icon.svg
-SUMMARY=Kubernetes is an open-source system for automating deployment, scaling, and management of containerized applications.
-DESCRIPTION=<div class="app-description">\
+SUMMARY=2-node Kubernetes cluster with built-in access to Stabile loadbalancers and storage classes.
+DESCRIPTION=<link rel="stylesheet" href="https://www.stabile.io/irigo/css/videopopup.css">\
+<div class="app-description">\
     <div>This stack deploys a Kubernetes cluster with two nodes. One node doubles as the control plane and worker node. The other is a worker node. Once your cluster is up and running, you can add more worker nodes, by simply adding servers to your stack from the "servers" tab in the stack UI.\
     </div>\
+    <div>\
         Our Kubernetes stack installs two storage classes - one for accessing local SSD storage and one for accessing shared NFS storage.<br>\
         The stack also installs the exellent <a href="https://metallb.universe.tf/" target="_blank">MetalLB</a>, which integrates with the IP address provisioning in Stabile.<br>\
         A number of yaml manifests are included for testing. They are located in /home/stabile. A simple implementation of a provider for <a href="https://github.com/kubernetes-sigs/external-dns" target="_blank">External DNS</a> (which integrates with the Stabile Cloud DNS service) is provided.<br>\
         To learn more about using Kubernetes on Stabile, please read and try to follow some of our <a href="https://www.origo.io/info/stabiledocs/guides/" target="_blank">guides</a>.\
-    <div>\
+    </div>\
+    <p>Here's a short time-laps video of the installation process:</p>\
+    <div style="margin-bottom:30px; text-align:center;">\
+        <a id="vidLink" href="https://www.stabile.io/info/wp-content/uploads/2021/06/Kubernetes-demo.mp4" target="_blank"><img style="margin-top: 10px; box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.35); max-width: 160px;" src="https://www.stabile.io/info/wp-content/uploads/2021/06/Kubernetes-demo.png" alt=""></a>\
+    </div>\
+    <div id="vidBox" style="display:none;">\
+        <div id="vidCont">\
+            <video id="kubevid" controls>\
+                <source src="https://www.stabile.io/info/wp-content/uploads/2021/06/Kubernetes-demo.mp4" type="video/mp4">\
+            </video>\
+        </div>\
     </div>\
 </div>\
+    <script src="https://www.stabile.io/irigo/js/videopopup.js"></script>\
+    <script>\
+        $(function () {\
+            $('#vidLink')[0].href="javascript:void(0);";\
+            $('#vidLink')[0].target="_self";\
+            $('#vidBox').VideoPopUp({\
+                opener: "vidLink",\
+                idvideo: "kubevid",\
+                backgroundColor:"#17212a",\
+                pausevideo:true,\
+                maxweight:"640"\
+            });\
+        });\
+    </script>\
 <hr>\
 <div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
 <div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/kubernetes">Stack source code</a></div>

@@ -416,13 +416,16 @@ sub getObj {
 }
 
 sub createNodeTask {
-    my ($mac, $newtask, $wake) = @_;
+    my ($mac, $newtask, $status, $wake) = @_;
     unless ( tie(%nodereg,'Tie::DBI', Hash::Merge::merge({table=>'nodes', key=>'mac'}, $Stabile::dbopts)) )
         {$postreply .= "Status=Error Node register could not be accessed"};
 
-    if ($nodereg{$mac}->{'status'} =~ /asleep|inactive/  && !$wake) {
+    if ($status eq "active" && $nodereg{$mac}->{'stor'} ne 'lvm') {
+        $postreply .= "Status=Error Node $mac is not using LVM, unable to backup active image\n";
+        return "node is is not using LVM, unable to backup active image.";
+    } elsif ($nodereg{$mac}->{'status'} =~ /asleep|inactive/  && !$wake) {
         $postreply .= "Status=Error Node $mac is asleep, not waking\n";
-        return "Node is asleep, please wake first!";
+        return "node is asleep, please wake first!";
     } else {
         my $tasks = $nodereg{$mac}->{'tasks'};
         $nodereg{$mac}->{'tasks'} = $tasks . "$newtask\n";
@@ -4807,8 +4810,9 @@ END
         $status eq "moving" || $status eq "converting") {
         $postreply .= "Status=ERROR Problem backing up $obj->{type} image: $obj->{name}\n";
     } elsif ($obj->{regstoragepool} == -1) {
-        if (createNodeTask($obj->{mac}, "BACKUP $user $uistatus $status \"$path\" \"$backupdir\" $remolder")) {
-            $postreply .= "OK not backingup image: $obj->{name} (on node, node probably asleep)\n";
+        my $res = createNodeTask($obj->{mac}, "BACKUP $user $uistatus $status \"$path\" \"$backupdir\" $remolder", $status);
+        if ($res) {
+            $postreply .= "OK not backingup image: $obj->{name} (on node, $res)\n";
         } else {
             $register{$path}->{'status'} = $uistatus;
             $uistatus = "lbackingup" if ($status eq "active"); # Do lvm snapshot before backing up

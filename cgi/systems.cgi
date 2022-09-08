@@ -3479,7 +3479,7 @@ sub remove {
         if ($domreg{$uuid}->{'status'} eq 'shutoff' || $domreg{$uuid}->{'status'} eq 'inactive') {
             push @domains, $uuid;
         } elsif ($destroy) {
-            Stabile::Servers::destroyUserServers($user, 1, $uuid);
+            Stabile::Servers::destroyUserServers($reguser, 1, $uuid);
             push @domains, $uuid if ($domreg{$uuid}->{'status'} eq 'shutoff' || $domreg{$uuid}->{'status'} eq 'inactive');
         }
      #   $postreply .= "Status=OK Removing server $domreg{$uuid}->{'name'} ($uuid)\n";

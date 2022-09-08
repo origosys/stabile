@@ -27,7 +27,7 @@ apt-mark hold kubeadm kubelet kubectl
 #perl -pi -e 's/<VirtualHost _default_:443>/<VirtualHost _default_:10002>/;' /etc/apache2/sites-available/kubernetes-ssl.conf
 
 #perl -pi -e 's/(\s+<\/VirtualHost>)/        ProxyPass \/ http:\/\/dashboardip:80\/\n        ProxyPassReverse \/ http:\/\/dashboardip:80\/\n        Header set Authorization "Bearer \${KUBE_TOKEN}"\n$1/;' /etc/apache2/sites-available/kubernetes-ssl.conf
-#perl -pi -e 's/(DocumentRoot \/var\/www\/html)/$1\n        <Location \/>\n            deny from all\n            allow from 127.0.0.1 #stabile\n        <\/Location>/;' /etc/apache2/sites-available/kubernetes-ssl.conf
+#perl -pi -e 's/(DocumentRoot \/var\/www\/html)/$1\n        <Location \/>\n            deny from all\n            allow from 127.0.0.1\n        <\/Location>/;' /etc/apache2/sites-available/kubernetes-ssl.conf
 
 perl -pi -e 's/Listen 443/Listen 443\n    Listen 10002/;' /etc/apache2/ports.conf
 echo "export KUBE_TOKEN= " >> /etc/apache2/envvars

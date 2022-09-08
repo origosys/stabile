@@ -13,12 +13,12 @@ sub kubernetes {
         my $token = `cat /root/admin-user.token`;
         chomp $token;
         my $allow = `cat /etc/apache2/sites-available/kubernetes-ssl.conf`;
-        my $kubelimit = $1 if ($allow =~ /allow from (.+) \#stabile/);
+        my $kubelimit = $1 if ($allow =~ /allow from (.+)/);
         my $curip = qq|<div style="font-size: 13px;">leave empty to disallow all access, your current IP is <a style="text-decoration: none;" href="#" onclick="\$('#limitkube').val('$ENV{HTTP_X_FORWARDED_FOR} ' + \$('#limitkube').val());">$ENV{HTTP_X_FORWARDED_FOR}</a></div>| if ($ENV{HTTP_X_FORWARDED_FOR});
 
         my $kubepwform = <<END
     <form class="passwordform" id="kubepassword_form" action="index.cgi?action=kubepassword&tab=kubernetes" method="post" onsubmit="limitKubeSpinner('kubepassword'); \$('#kubepassword').val(''); return false;" accept-charset="utf-8" id="linform" autocomplete="off">
-        <div class="small">Set password for dashboard user "admin" user:</div>
+        <div class="small">Set password for dashboard user "admin":</div>
         <div class="row">
             <div class="col-sm-10">
                 <input id="kubepassword" type="password" name="kubepassword" autocomplete="off" value="" class="password">
@@ -29,16 +29,17 @@ sub kubernetes {
         </div>
     </form>
     <div class="small">
-        After allowing access from your IP address, you can access the <a target="_blank" href="https://$externalip:10002/">dashboard</a> with username 'admin'.
+        After allowing access from your IP address, you can access the <a target="_blank" href="https://$externalip:10002/">dashboard</a> with username 'admin'.<br>
+        You can also download a <a href="kubeconfig" download="kubeconfig">kubeconfig file</a> to access your cluster with kubectl.
     </div>
 END
         ;
 
         my $kubelimitform = <<END
-        <h6>Dashboard</h6>
+        <h6>Dashboard and kubeconfig</h6>
     <div>
 		<form class="passwordform" id="limitkube_form" action="index.cgi?action=limitkube&tab=kubernetes" method="post" onsubmit="limitKubeSpinner(); return false;" accept-charset="utf-8">
-			<div class="small">Allow Kubernetes dashboard login from:</div>
+			<div class="small">Allow Kubernetes kubectl and dashboard login from:</div>
 			<div class="row">
 				<div class="col-sm-10">
 					<input id="limitkube" type="text" name="limitkube" value="$kubelimit" placeholder="IP address or network, e.g. '192.168.0.0/24 127.0.0.1'">
@@ -406,13 +407,20 @@ END
         my $message = "Please supply a limit!";
         if (defined $in{limitkube}) {
             my $limit = $in{limitkube};
-            my ($validlimit, $mess) = validate_limit($limit);
+            my ($validlimit, $sshlimit, $mess) = validate_limit($limit);
             my $conf = "/etc/apache2/sites-available/kubernetes-ssl.conf";
             if ($validlimit) {
-                if (`grep '#stabile' /etc/apache2/sites-available/kubernetes-ssl.conf`)
+                if (`grep 'allow from' /etc/apache2/sites-available/kubernetes-ssl.conf`)
                 {
-                    $message =  "Kubernetes dashboard access was changed!";
-                    $message .= `perl -pi -e 's/allow from (.*) \#stabile/allow from $validlimit #stabile/;' $conf`;
+                    $message =  "Kubernetes apiserver and dashboard access was changed!";
+                    my @limits = split(" ", $validlimit);
+                    $message .= `iptables -D INPUT -p tcp --dport 6443 -j DROP 2>/dev/null`;
+                    foreach my $lim (@limits) {
+                        $message .= `iptables -D INPUT -p tcp --dport 6443 -s $lim -j ACCEPT 2>/dev/null`;
+                        $message .= `iptables -A INPUT -p tcp --dport 6443 -s $lim -j ACCEPT 2>/dev/null`;
+                    }
+                    $message .= `iptables -A INPUT -p tcp --dport 6443 -j DROP 2>/dev/null`;
+                    $message .= `perl -pi -e 's/allow from (.*)/allow from $validlimit/;' $conf`;
                 } else {
                     $message =  "Unable to process kubernetes-ssl.conf!";
                 }

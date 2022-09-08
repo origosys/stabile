@@ -77,11 +77,15 @@ if ($action eq 'mountpools') {
 } elsif  ($action eq 'resizestorage') {
     my $rsize = $ARGV[0];
     $rsize = $1 * 1024*1024*1024 if ($rsize =~ /(\d+) ?G/i);
-    my $dev = $ARGV[1] || 'vdb';
+    my $dev = $ARGV[1] || 'vdb1';
     if ($rsize>0) {
         print "resizing $dev $rsize...\n";
         print "Unmount partition\n";
         my $res = `umount /dev/$dev`;
+        unless ($res =~ /unmounted/) {
+            print "Unable to unmount /dev/$dev\n";
+            exit 1;
+        }
         sleep 1;
         print "Detaching image\n";
         $res = `curl -k --silent https://$gw/stabile/servers?action=detach`;
@@ -99,20 +103,38 @@ if ($action eq 'mountpools') {
             sleep 1;
             my $blks = `lsblk -l`;
             print "Found blockdevices:\n$blks\n";
-            $dev = '';
-            my $dev0 = 'vdb';
-            if ($blks =~ /vdb1/) {$dev = 'vdb1';}
-            if ($blks =~ /vdc1/ && !($blks =~ /vdb1/)) {$dev = 'vdc1'; $dev0 = 'vdc';} # Device got attached to vdc instead of vdb - it happens...
+            my $rdev = $1 if ($dev =~ /(vd.)\d/);
+            unless ($blks =~ /$dev/) {
+                if ($dev eq 'vdb1') { # Check if disk got attached to vdc instead of vdb - it happens...
+                    if ($blks =~ /vdc1/ ) {$dev = 'vdc1'; $rdev = 'vdc';}
+                } else {
+                    $dev = '';
+                }
+            }
+            my $resizecmd = "";
+            $blks = `lsblk -f`;
+            if ($blks =~ /$dev ext/) {
+                $resizecmd = "resize2fs";
+                print `umount -v /dev/$dev`;
+            } elsif ($blks =~ /$dev xfs/) {
+                $resizecmd = "xfs_growfs";
+                print `mount -v /dev/$dev`;
+            } else {
+                print "No supported file system found on partition\n",
+                $dev = '';
+            }
             if ($dev) {
                 print "Growing partition 1 on $dev\n";
-                print `umount /dev/$dev`;
-                $res = `growpart /dev/$dev0 1`;
+                $res = `growpart /dev/$rdev 1`;
+                # Try to make sure filesystem has no errors
                 print "Checking /dev/$dev\n";
-                $res .= `e2fsck -fy /dev/$dev`;
-                $res .= `resize2fs /dev/$dev`;
+#                $res .= `e2fsck -fy /dev/$dev`;
+                $res .= `fsck -fy /dev/$dev`;
+                $res .= `fsck -fy /dev/$dev` if ($res =~ /still has errors/);
+                $res .= `$resizecmd /dev/$dev`;
                 print $res;
                 print "Remounting partition /dev/$dev\n";
-                $res = `mount /dev/$dev`;
+                $res = `mount -v /dev/$dev`;
                 print $res;
                 print "Done.\n";
             } else {

@@ -17,9 +17,11 @@ sub storage {
 <button class="btn btn-default" id="update_storage" title="Click to reload storage status." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); updatestorageStatus(); return false;"><span class="glyphicon glyphicon-repeat"></button>
 <button class="btn btn-default" id="resize_storage" title="Click to resize storage." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); resizestorage(); return false;">Resize</button>
 </form>
-<div class="small">
+<div class="small well">
 Please be aware that you can only increase disk volume size - NOT decrease. Also note, that this cannot be undone. Once your disk volume has been increased,
-the only way to reduce storage use is to create a new disk, copy your data to this, and delete the old disk.
+the only way to reduce storage use is to create a new disk, copy your data to this, and delete the old disk.<br>
+Also please note that online resizing is not possible unless the file system mounted on /dev/vdbx can be unmounted during the process.<br>
+To try resizing from the terminal, type e.g. "sudo stabile-helper 60G"
 </div>
 </div>
 END

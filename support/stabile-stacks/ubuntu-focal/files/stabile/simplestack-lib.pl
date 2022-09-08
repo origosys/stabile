@@ -285,7 +285,7 @@ sub get_results {
                             my $pclass = "info";
                             my $bsize = '';
                             $pclass = "warning" if ($fs->{'Use%'} > 75);
-                            $pclass = "error" if ($fs->{'Use%'} > 90);
+                            $pclass = "danger" if ($fs->{'Use%'} > 90);
                             my @fsizes = (20,40,60,80,100,150,200,400,600,800,1000);
                             my $options = '';
                             $bsize = $fs->{Blocksize} || $fs->{Size};

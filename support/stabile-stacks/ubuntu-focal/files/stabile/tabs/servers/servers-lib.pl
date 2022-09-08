@@ -17,10 +17,10 @@ Click on a server to launch a terminal and log in with username "stabile" and th
 <table style="display:inline-block; margin:0; padding:4px;"><tr><td><img src="images/loader.gif"></td></tr></table>
 </div>
 <form style="margin-bottom:8px;" class="passwordform" action="index.cgi?tab=servers" onsubmit="return false;">
-<input id="n" name="n" type="text" title="The number of servers you want to add/remove" rel="tooltip" data-placement="bottom" value="1" style="width:40px; display: inline; margin-right:3px;"></input>
+<input id="n" name="n" type="text" title="The number of servers you want to add" rel="tooltip" data-placement="bottom" value="1" style="width:40px; display: inline; margin-right:3px;"></input>
 <input type="hidden" name="delete" id="delete">
 <button class="btn btn-default" id="add_servers" title="Click to add servers to your stack. Type in the number of servers you want to add in the text field." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); addServers('', \$('#n').val()); return false;"><span class="glyphicon glyphicon-plus"></span></button>
-<button class="btn btn-default" id="remove_servers" title="Click to remove servers from your stack. Type in the number of servers you want to remove in the text field." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); addServers(1, \$('#n').val()); return false;"><span class="glyphicon glyphicon-minus"></span></span></button>
+<!-- button class="btn btn-default" id="remove_servers" title="Click to remove servers from your stack. Type in the number of servers you want to remove in the text field." rel="tooltip" data-placement="bottom" onclick="\$('[rel=tooltip]').tooltip('hide'); addServers(1, \$('#n').val()); return false;"><span class="glyphicon glyphicon-minus"></span></span></button -->
 <button class="btn btn-default" id="refresh_servers" title="Refresh" onclick="listServers(true); return false;"><span class="glyphicon glyphicon-repeat"></span></button>
 </form>
 </div>

@@ -34,6 +34,7 @@ use URI::Escape;
 use URI;
 use Data::Dumper;
 use File::Path;
+use Digest::SHA qw(sha512_base64);
 
 $ENV{PATH} = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV'};
@@ -77,10 +78,12 @@ my $self_redirect = $q->param('redirect') || 0;
 $username = '';
 $username = &trim(lc($q->param('username'))) if ($q->param('username'));
 my $password = $q->param('password');
+my $totp = $q->param('totp');
 my $timeout = $q->param('timeout');
 my $unauth = $q->param('unauth');
 my $ip_addr = $at->ignore_ip ? '' : $ENV{REMOTE_ADDR};
 my $redirected = 0;
+my $validtoken = 0;
 
 my $logo = "/stabile/static/img/logo.png";
 my $logo_icon = "/stabile/static/img/logo-icon.png";
@@ -198,9 +201,12 @@ unless ($fatal || $redirected) {
     $fatal = "AuthTkt error: " . $at->errstr;
 
   } elsif ($mode eq 'login') {
-    if ($username) {
-      my ($valid, $tokens) = $AuthTktConfig::validate_sub->($username, $password);
-      if ($valid) {
+    if ($username && $password) {
+      my ($valid, $tokens) = $AuthTktConfig::validate_sub->($username, $password, $totp);
+      $validtoken = $valid;
+      if ($valid == 2) { # User has 2fa enabled - present 2fa login screen
+        push @errors, 'Indtast venigst din 2-faktor authentication kode';
+      } elsif ($valid) {
 #       my $user_data = join(':', encrypt($password), time(), ($ip_addr ? $ip_addr : ''));
         my $user_data = join(':', time(), ($ip_addr ? $ip_addr : ''));    # Optional
         my $tkt = $at->ticket(uid => $username, data => $user_data, 
@@ -310,15 +316,32 @@ EOD
   }
 
   else {
-    print qq(<p class="alert alert-danger" style="width:400px; padding:10px; margin: 10px;"><span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>\n), join(qq(<br />\n), @errors), "</p>\n"
+    my $sha_pwd = $password;
+    $sha_pwd = sha512_base64($password) unless (length($password) == 86);
+    print qq(<p class="alert alert-info" style="width:400px; padding:10px; margin: 10px;"><span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>\n), join(qq(<br />\n), @errors), "</p>\n"
       if @errors;
     print <<EOD;
 <div id="auth-header">
     <a href="#"><img src="$logo" border="0" style="height:48px; vertical-align:middle; margin:20px;"/></a>
 </div>
 <form name="login" method="post" style="width:200px;" id="auth-form" accept-charset="utf-8">
-<input value="$username" type="text" name="username" class="form-control" placeholder="Username"/>
-<input type="password" id="password" name="password" class="form-control" placeholder="Password"/>
+EOD
+    ;
+    if ($validtoken == 2) {
+      print <<EOD;
+ 			       <input type="hidden" name="username" id="username" value="$username">
+                   <input type="hidden" name="password" id="password" value="$sha_pwd">
+                   <img class="logo" src="/stabic/img/google_auth.png" style="margin-bottom: 20px;">
+                   <input type="number" pattern="[0-9.]+" maxlength="6" minlength="6" name="totp" id="totp" class="form-control required password" aria-label="totp" aria-required="true" required="" placeholder="Authentication Token"  autofocus="on">
+EOD
+      ;
+    } else {
+      print <<EOD;
+                  <input value="$username" type="text" name="username" class="form-control" placeholder="Username"/>
+                  <input type="password" id="password" name="password" class="form-control" placeholder="Password"/>
+EOD
+    }
+  print <<EOD;
 <input type="submit" value="Login" class="btn btn-success btn-sm pull-right" />
 EOD
     print qq(<input type="hidden" name="back" value="$back_html" />\n) if $back_html;

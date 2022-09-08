@@ -13,6 +13,7 @@ use Digest::SHA qw(sha512_base64);
 use Sys::Syslog qw( :DEFAULT setlogsock);
 use Net::Subnet;
 use ConfigReader::Simple;
+use Auth::GoogleAuth;
 
 # CSS stylesheet to use (optional)
 our $STYLESHEET = 'tkt.css';
@@ -55,14 +56,14 @@ $COOKIE_BASE = ".$COOKIE_BASE" unless ($COOKIE_BASE =~ /^\./);
 # This version uses Apache::Htpasswd and a standard htpasswd file.
 sub validate
 {
-	my ($username, $password) = @_;
+	my ($username, $password, $totp) = @_;
 	require Apache::Htpasswd;
 	my $ht = Apache::Htpasswd->new({ passwdFile => '/etc/apache2/htpasswd-stabile', ReadOnly => 1 });
 	return $ht->htCheckPassword($username, $password);
 }
 
 sub sqlvalidate {
-	my ($username, $password) = @_;
+	my ($username, $password, $totp) = @_;
 	$username = lc $username;
 	$username = $1 if ($username =~ /(.+)/); # Untaint
     my $config = ConfigReader::Simple->new("/etc/stabile/config.cfg",
@@ -84,7 +85,10 @@ sub sqlvalidate {
 	my $validip = 0;
 	my $validuser = 0;
 
-	my $allowfrom = $register{$username}->{'allowfrom'} if ($register{$username});
+	my $u = $register{$username};
+	my $allowfrom = $u->{'allowfrom'};
+	my $totpsecret = $u->{'totpsecret'};
+
 	my $from = $ENV{'REMOTE_ADDR'};
 	if ($allowfrom) {
 	    my @allows = split(/,\s*/, $allowfrom);
@@ -108,8 +112,25 @@ sub sqlvalidate {
 	if ($validip && $validuser) {
         # First check if md5 checksums match
         my $upassword = $register{$username}->{'password'};
-        if ($password && ($upassword eq md5_base64($password) || $upassword eq sha512_base64($password))){
-            $valid = 1;
+        if ($password && (
+			$upassword eq md5_base64($password)
+			|| $upassword eq sha512_base64($password)
+			|| ($totp && ($upassword eq $password)) # password is hashed when sent from totp form
+		)){
+			if ($totpsecret && $totpsecret ne '--') { # User has 2fa enabled
+				if ($totp) {
+					my $auth = Auth::GoogleAuth->new();
+					if ($auth->verify($totp, 1, $totpsecret)) {
+						$valid = 1;
+					} else {
+						$valid = 2;
+					}
+				} else {
+					$valid = 2;
+				}
+			} else {
+				$valid = 1;
+			}
         # If plaintexts match, then assume we are dealing with a new user and convert the password to it's md5 checksum
         } elsif ($password && $register{$username}->{'password'} eq $password) {
             $valid = 1;

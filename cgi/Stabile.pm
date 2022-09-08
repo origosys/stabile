@@ -982,9 +982,9 @@ sub preInit {
     $Stabile::usernodestoragequota = 0+ $u->{'nodestoragequota'} if ($u->{'storagequota'});
     $usermemoryquota = 0+ $u->{'memoryquota'} if ($u->{'memoryquota'});
     $uservcpuquota = 0+ $u->{'vcpuquota'} if ($u->{'vcpuquota'});
-    $userexternalipquota = 0+ $u->{'externalipquota'} if ($u->{'externalipquota'});
-    $userrxquota = 0+ $u->{'rxquota'} if ( $u->{'rxquota'});
-    $usertxquota = 0+ $u->{'txquota'} if ($u->{'txquota'});
+    $Stabile::userexternalipquota = 0+ $u->{'externalipquota'} if ($u->{'externalipquota'});
+    $Stabile::userrxquota = 0+ $u->{'rxquota'} if ( $u->{'rxquota'});
+    $Stabile::usertxquota = 0+ $u->{'txquota'} if ($u->{'txquota'});
 
     $billto = $u->{'billto'};
     $Stabile::userprivileges = $u->{'privileges'};

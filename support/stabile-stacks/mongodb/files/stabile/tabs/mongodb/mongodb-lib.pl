@@ -169,6 +169,7 @@ END
                 my $res = `echo "db.getSiblingDB('admin').updateUser('stabile',{pwd:'$pwd'})" | mongo -u "stabile" -p "$oldpwd"  --authenticationDatabase "admin"`;
                 unless (system(qq|htpasswd -b $conf stabile $pwd|) || $res =~ /exception/) {
                     `echo "$pwd" > /etc/mongod.pass`;
+                    `echo "$pwd" > /usr/share/webmin/stabile/tabs/mongodb/mongod.pass`;
                     $message =  "MongoDB dashboard password was changed!";
                 } else {
                     $message =  "Unable to change password! $res";

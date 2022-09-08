@@ -13,13 +13,14 @@ my $mserver = show_management_server();
 if ($mserver) {
     $mip = $mserver->{internalip};
 }
+my $extip = get_externalip();
 
 if ($intip && $mip) {
     if ($intip eq $mip) {
         if (-e "/usr/share/webmin/stabile/tabs/kubernetes/joincmd.sh") {
             ;
         } else {
-            my $kinit = `kubeadm init --pod-network-cidr=10.244.0.0/16 | tee /root/initout.log 2>\&1`;
+            my $kinit = `kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-cert-extra-sans=$extip | tee /root/initout.log 2>\&1`;
             if ($kinit =~ /(kubeadm join .+--discovery-token-ca-cert-hash sha256:.+)/s) {
                 my $joincmd = $1;
                 $joincmd =~ s/\n//;
@@ -28,10 +29,10 @@ if ($intip && $mip) {
 
                 # Install CNI
 #                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml >> /root/initout.log`;
-#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/v3.10/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml >> /root/initout.log`;
+                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml >> /root/initout.log`;
 
-                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> /root/initout.log 2>\&1`;
-                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml >> /root/initout.log 2>\&1`;
+#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml >> /root/initout.log 2>\&1`;
+#                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> /root/initout.log 2>\&1`;
 
             # Allow admin node to run pods
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl taint nodes --all node-role.kubernetes.io/master- >> /root/initout.log 2>\&1`;
@@ -82,19 +83,24 @@ if ($intip && $mip) {
                     `perl -pi -e 's/dashboardip/$daship/' /etc/apache2/sites-available/kubernetes-ssl.conf`;
                 }
             # Get the token
-                my $adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
+                #my $adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
                 my $token;
-                $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
-                `echo "Got admin-user: $adminuser and token: $token" >> /root/initout.log`;
+                #$token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
+                #`echo "Got admin-user: $adminuser and token: $token" >> /root/initout.log`;
+                # New method for Kubernetes 1.24: https://itnext.io/big-change-in-k8s-1-24-about-serviceaccounts-and-their-secrets-4b909a4af4e0
+                $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard create token admin-user --duration=999999h`;
+                chomp $token;
+                `echo "Got admin-user token: $token" >> /root/initout.log`;
                 if ($token =~ /^ey/) {
                     `echo "$token" > /root/admin-user.token`;
                     `perl -pi -e 's/export KUBE_TOKEN=.*/export KUBE_TOKEN=$token/' /etc/apache2/envvars`;
                     `systemctl restart apache2`;
                 } else {
                     sleep 15;
-                    $adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
-                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
-                    `echo "Tried again and got admin-user: $adminuser and token: $token" >> /root/initout.log`;
+                    #$adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
+                    #$token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
+                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard create token admin-user --duration=999999h`;
+                    `echo "Tried again and got admin-user token: $token" >> /root/initout.log`;
                     if ($token =~ /^ey/) {
                         `echo "$token" > /root/admin-user.token`;
                         `perl -pi -e 's/export KUBE_TOKEN=.*/export KUBE_TOKEN=$token/' /etc/apache2/envvars`;
@@ -129,11 +135,31 @@ if ($intip && $mip) {
                 `cp -i /etc/kubernetes/admin.conf /home/stabile/.kube/config`;
                 `chown -R stabile:stabile /home/stabile/.kube`;
 
+            # Make kubeconfig available for download
+                `cp -i /etc/kubernetes/admin.conf /usr/share/webmin/stabile/kubeconfig`;
+                `perl -pi -e 's/server: https.*/server: https:\\\/\\\/$extip:6443/' /usr/share/webmin/stabile/kubeconfig`;
+
                 `echo "Done..." >> /root/initout.log`;
             } else {
                 `echo "$kinit" > /root/initerr`
             }
         }
+        # Limit access to apiserver (port 6443) and  bird (port 179)
+        my $localnet = "$ipstart.0/24";
+        print `iptables -D INPUT -p tcp --dport 6443 -s 127.0.0.1 -j ACCEPT 2>/dev/null`;
+        print `iptables -D INPUT -p tcp --dport 6443 -s $localnet -j ACCEPT 2>/dev/null`;
+        print `iptables -D INPUT -p tcp --dport 6443 -j DROP 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 6443 -s 127.0.0.1 -j ACCEPT 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 6443 -s $localnet -j ACCEPT 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 6443 -j DROP 2>/dev/null`;
+
+        print `iptables -D INPUT -p tcp --dport 179 -s 127.0.0.1 -j ACCEPT 2>/dev/null`;
+        print `iptables -D INPUT -p tcp --dport 179 -s $localnet -j ACCEPT 2>/dev/null`;
+        print `iptables -D INPUT -p tcp --dport 179 -j DROP 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 179 -s 127.0.0.1 -j ACCEPT 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 179 -s $localnet -j ACCEPT 2>/dev/null`;
+        print `iptables -A INPUT -p tcp --dport 179 -j DROP 2>/dev/null`;
+
     } else {
         if (-e "/root/joincmd.sh") {
             ;
@@ -189,3 +215,22 @@ sub get_internalip {
     }
     return $internalip;
 }
+
+sub get_externalip {
+    my $externalip;
+    if (!(-e "/tmp/externalip")) {
+        $externalip = $1 if (`curl -sk https://$gw/stabile/networks/this` =~ /"externalip" : "(.+)",/);
+        chomp $externalip;
+        if ($externalip eq '--') {
+            # Assume we have ens4 up with an external IP address
+            $externalip = `ifconfig ens4 | grep -o 'inet addr:\\\S*' | sed -n -e 's/^inet addr://p'`;
+            chomp $externalip;
+        }
+        `echo "$externalip" > /tmp/externalip` if ($externalip);
+    } else {
+        $externalip = `cat /tmp/externalip` if (-e "/tmp/externalip");
+        chomp $externalip;
+    }
+    return $externalip;
+}
+

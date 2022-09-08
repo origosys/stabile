@@ -249,7 +249,7 @@ END
     $res .= header('application/json') unless ($console || $action eq 'tablelist');
     my @curregvalues;
 
-    updateBilling();
+#    updateBilling();
     my @regkeys;
     if ($fulllist) {
         @regkeys = keys %register;
@@ -2172,8 +2172,8 @@ sub getNextExternalIP {
 		# my $id = $2;
 		$ids{$ip} = $val->{'uuid'} unless ($extuuid eq $val->{'uuid'});
 	}
-    
-	if (overQuotas(1)) { # Enforce quotas
+    my $oc = overQuotas(1);
+	if ($oc) { # Enforce quotas
         $postreply .= "Status=ERROR Over quota allocating external IP\n";
 	} elsif ($extip && $extip =~  m/($bnet1)\.(\d+)/ && $2>=$bhost1 && $2<$bhost2) {
 	# An external ip was supplied - check if it's free and ok
@@ -2194,7 +2194,7 @@ sub getNextExternalIP {
 			}
 		}
 	}
-	$postreply .= "Status=ERROR No more external IPs available\n" if (!$nextip);
+	$postreply .= "Status=ERROR No more ($oc) external IPs available\n" unless ($nextip);
 	return $nextip;
 }
 
@@ -2382,17 +2382,17 @@ sub overQuotas {
 	my $overquota = 0;
     return $overquota if ($Stabile::userprivileges =~ /a/); # Don't enforce quotas for admins
 
-	my $externalipquota = $userexternalipquota;
+	my $externalipquota = $Stabile::userexternalipquota;
 	if (!$externalipquota) {
         $externalipquota = $Stabile::config->get('EXTERNAL_IP_QUOTA');
     }
 
-	my $rxquota = $userrxquota;
+	my $rxquota = $Stabile::userrxquota;
 	if (!$rxquota) {
         $rxquota = $Stabile::config->get('RX_QUOTA');
     }
 
-	my $txquota = $usertxquota;
+	my $txquota = $Stabile::usertxquota;
 	if (!$txquota) {
         $txquota = $Stabile::config->get('TX_QUOTA');
     }
@@ -2404,14 +2404,13 @@ sub overQuotas {
 		    $usedexternalips += 1;
 		}
 	}
-	if (($usedexternalips + $reqips) > $externalipquota && $externalipquota > 0) { # -1 means no quota
+	if ((($usedexternalips + $reqips) > $externalipquota) && $externalipquota > 0) { # -1 means no quota
 	    $overquota = $usedexternalips;
 	} elsif ($rx > $rxquota*1024 && $rxquota > 0) {
 	    $overquota = -1;
 	} elsif ($tx > $txquota*1024 && $txquota > 0) {
 	    $overquota = -2;
 	}
-
 	return $overquota;
 }
 
@@ -2519,7 +2518,7 @@ sub updateBilling {
     $rx = ($rx_bytes_total>$prev_rx_bytes_total)?$rx_bytes_total - $prev_rx_bytes_total:$rx_bytes_total;
     $tx = ($tx_bytes_total>$prev_tx_bytes_total)?$tx_bytes_total - $prev_tx_bytes_total:$tx_bytes_total;
     my $oq = overQuotas();
-    if ($oq) {
+    if ($oq && $oq<0) {
         foreach my $id (keys %billing) {
             $main::syslogit->($user, 'info', "$user over rx/tx quota ($oq) stopping network $id");
             Stop($id, 'stop');

@@ -421,10 +421,11 @@ define([
             console.log("master changed", item);
             if (item[0]) {
                 var appid = item[0].appid[0];
+                var version = item[0].version[0];
                 if (appid && appid!='--') { // && IRIGO.user.enginelinked) {
                     console.log("loading app", appid);
                     systembuilder.currentManagementlink = item[0].managementlink;
-                    systembuilder.system.prepareSystem(appid);
+                    systembuilder.system.prepareSystem(appid, version);
                 } else {
                     console.log("loading unknown app", item[0].managementlink[0]);
                     if (item[0].managementlink[0] && item[0].managementlink[0]!='') {
@@ -485,7 +486,7 @@ define([
             });
         },
         set_cdrom: function(item) {
-            if (!item.length || item.length==0)
+            if (!item.length || item.length==0)
                 systembuilder.system.cdrom_not_found();
             else
                 dijit.byId("wizard_cdrom").setValue(item[0].path[0]);
@@ -494,9 +495,9 @@ define([
             console.log("CDrom not found");
         },
 
-        prepareSystem: function(args){
-            if (args) {
-                var topic_url = "/stabile/systems?action=appstore&appid=" + args;
+        prepareSystem: function(appid, version){
+            if (appid) {
+                var topic_url = "/stabile/systems?action=appstore&appid=" + appid + "&version=" + version;
                 var topicargs = {
                     url: topic_url,
                     callbackParamName: 'callback'

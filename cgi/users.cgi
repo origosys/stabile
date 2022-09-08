@@ -74,7 +74,7 @@ sub getObj {
         $obj = \%hobj; # We do this to get around a weird problem with freeze...
         my @props = qw ( restorefile engineid enginename engineurl username user password pwd fullname email
             opemail alertemail phone opphone opfullname allowfrom allowinternalapi privileges accounts accountsprivileges
-            storagepools memoryquota storagequota nodestoragequota vcpuquota externalipquota rxquota txquota billto dnsdomains appstoreurl );
+            storagepools memoryquota storagequota nodestoragequota vcpuquota externalipquota rxquota txquota billto dnsdomains appstoreurl totpsecret );
         foreach my $prop (@props) {
             if (defined $h{$prop}) {
                 $obj->{$prop} = $h{$prop};
@@ -935,6 +935,7 @@ END
     my $opphone = $obj->{"opphone"} || $reguser->{'opphone'};
     my $opfullname = $obj->{"opfullname"} || $reguser->{'opfullname'};
     my $allowfrom = $obj->{"allowfrom"} || $reguser->{'allowfrom'};
+    my $totpsecret = $obj->{"totpsecret"} || $reguser->{'totpsecret'};
     my $allowinternalapi = $obj->{"allowinternalapi"} || $reguser->{'allowinternalapi'};
 
     if ($allowfrom) {
@@ -1023,6 +1024,7 @@ END
             opphone            => $opphone,
             opfullname         => $opfullname,
             allowfrom          => $allowfrom,
+            totpsecret         => $totpsecret,
             privileges         => $uprivileges,
             accounts           => $uaccounts,
             accountsprivileges => $uaccountsprivileges,
@@ -1085,9 +1087,11 @@ END
         if ($user eq $reguser || $isadmin) {
             next if ($reguser eq 'irigo' || $reguser eq 'guest');
             my %val = %{$valref}; # Deference and assign to new ass array, effectively cloning object
-                $val{'password'} = '';
-                $val{'status'} = ($val{'privileges'} =~ /d/)?'disabled':'enabled';
-                push @curregvalues,\%val if ((!$userfilter && !$usermatch) || $reguser =~ /$userfilter/ || $reguser eq $usermatch);
+            $val{'password'} = '';
+            $val{'status'} = ($val{'privileges'} =~ /d/)?'disabled':'enabled';
+            if ((!$userfilter && !$usermatch) || ($userfilter && $reguser =~ /$userfilter/) || $reguser eq $usermatch) {
+                push @curregvalues,\%val;
+            }
         }
     }
     if ($action eq 'tablelist') {
@@ -1647,7 +1651,7 @@ sub updateEngineUsers {
     	address city company country email fullname phone
         state zip alertemail opemail opfullname opphone billto
         memoryquota storagequota vcpuquota externalipquota rxquota txquota nodestoragequota
-        accounts accountsprivileges privileges modified dnsdomains appstoreurl
+        accounts accountsprivileges privileges modified dnsdomains appstoreurl totpsecret
     );
     my $ures;
     my $ucount = 0;

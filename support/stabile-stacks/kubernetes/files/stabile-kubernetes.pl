@@ -10,6 +10,7 @@ my $gw = "$ipstart.1" if ($ipstart);
 my $intip = get_internalip();
 my $mip;
 my $mserver = show_management_server();
+my $dashboardns = "kubernetes-dashboard";
 if ($mserver) {
     $mip = $mserver->{internalip};
 }
@@ -71,13 +72,15 @@ if ($intip && $mip) {
             #    `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.1/deploy/static/provider/cloud/deploy.yaml >> /root/initout.log 2>\&1`;
 
             # Install Dashboard
-                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/alternative.yaml >> /root/initout.log`;
+            #    `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/alternative.yaml >> /root/initout.log`;
+            #    `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v1.10.1/src/deploy/alternative/kubernetes-dashboard.yaml >> /root/initout.log`;
+                `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml >> /root/initout.log`;
 
             # Create dashboard admin-useradmin-user
                 `KUBECONFIG=/etc/kubernetes/admin.conf kubectl apply -f /usr/share/webmin/stabile/tabs/kubernetes/manifests/dashboard-user.yaml >> /root/initout.log 2>\&1`;
 
             # Get the dashboard ip address and set it in proxy
-                my $dashline = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl get Service -n kubernetes-dashboard | grep kubernetes-dashboard`;
+                my $dashline = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl get Service -n $dashboardns | grep kubernetes-dashboard`;
                 my $daship = $1 if ($dashline =~ /ClusterIP \s+ (\d+\.\d+\.\d+\.\d+)/) ;
                 if ($daship) {
                     `perl -pi -e 's/dashboardip/$daship/' /etc/apache2/sites-available/kubernetes-ssl.conf`;
@@ -88,7 +91,7 @@ if ($intip && $mip) {
                 #$token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
                 #`echo "Got admin-user: $adminuser and token: $token" >> /root/initout.log`;
                 # New method for Kubernetes 1.24: https://itnext.io/big-change-in-k8s-1-24-about-serviceaccounts-and-their-secrets-4b909a4af4e0
-                $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard create token admin-user --duration=999999h`;
+                $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n $dashboardns create token admin-user --duration=999999h`;
                 chomp $token;
                 `echo "Got admin-user token: $token" >> /root/initout.log`;
                 if ($token =~ /^ey/) {
@@ -99,7 +102,7 @@ if ($intip && $mip) {
                     sleep 15;
                     #$adminuser = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}"`;
                     #$token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard get secret $adminuser -o go-template="{{.data.token | base64decode}}"` if ($adminuser);
-                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n kubernetes-dashboard create token admin-user --duration=999999h`;
+                    $token = `KUBECONFIG=/etc/kubernetes/admin.conf kubectl -n $dashboardns create token admin-user --duration=999999h`;
                     `echo "Tried again and got admin-user token: $token" >> /root/initout.log`;
                     if ($token =~ /^ey/) {
                         `echo "$token" > /root/admin-user.token`;

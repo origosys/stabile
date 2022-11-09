@@ -205,7 +205,7 @@ unless ($fatal || $redirected) {
       my ($valid, $tokens) = $AuthTktConfig::validate_sub->($username, $password, $totp);
       $validtoken = $valid;
       if ($valid == 2) { # User has 2fa enabled - present 2fa login screen
-        push @errors, 'Indtast venigst din 2-faktor authentication kode';
+        push @errors, 'Please type your 2-factor authentication code';
       } elsif ($valid) {
 #       my $user_data = join(':', encrypt($password), time(), ($ip_addr ? $ip_addr : ''));
         my $user_data = join(':', time(), ($ip_addr ? $ip_addr : ''));    # Optional

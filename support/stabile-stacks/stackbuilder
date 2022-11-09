@@ -71,6 +71,7 @@ my $basesuite = $config->get("BASESUITE") || 'xenial';
 my $basename = $config->get("BASENAME") || 'ubuntu-16.04';
 $basename = 'ubuntu-18.04' if ($basesuite eq 'bionic');
 $basename = 'ubuntu-20.04' if ($basesuite eq 'focal');
+$basename = 'ubuntu-22.04' if ($basesuite eq 'jammy');
 my $name = $config->get("NAME");
 die "You must supply a name [NAME]" unless ($name);
 my $appname = $config->get("APPNAME");
@@ -79,8 +80,10 @@ die "Directory '$dir' [DIR] does not exist" unless (!$dir || -d $dir);
 my $dirtarget = $config->get("DIRTARGET") || '/tmp';
 my $tar = $config->get("TAR");
 my $tartarget = $config->get("TARTARGET") || '/tmp';
+my $tarowner = $config->get("TAROWNER");
 my $git = $config->get("GIT");
 my $gittarget = $config->get("GITTARGET") || '/tmp';
+my $gitowner = $config->get("GITOWNER");
 my $downloadurl = $config->get("DOWNLOADURL");
 my $debs = $config->get("DEBS");
 my $preexec = $config->get("PREEXEC");
@@ -206,7 +209,7 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
 
                 #my $cmd = qq|vmbuilder kvm ubuntu -o -v --debug --suite $basesuite --arch amd64 --components main,universe,multiverse --rootsize $size --user stabile --pass stabile --hostname $name --tmpfs 2048 --addpkg linux-image-generic --addpkg wget --addpkg curl --domain stabile.io --ip 10.1.1.2|;
                 # print "$cmd\n";
-                $cmd = qq|virt-builder $basename -o "$cwd/$dname.master.qcow2" --arch x86_64 --graphics vnc --virt-type=kvm --size $size --hostname $name --format qcow2|;
+                $cmd = qq|virt-builder $basename -o "$cwd/$dname.master.qcow2" --arch x86_64 --size $size --hostname $name --format qcow2|;
                 print "$cmd\n";
                 print `$cmd`;
                 # The downloaded image is in sparse format - get rid of unused/sparse space
@@ -323,19 +326,31 @@ if (!$rebuild && -e "$cwd/$dname.master.qcow2") { # Master image already exists,
     }
 
     # Unpack tar
-    if ($tar && -e $tar) {
+    if ($tar) {
         print ">> Unpacking files...\n";
-        if ($tar =~ /\.zip$/) {
-            print `unzip $tar -d "/tmp/$dname/$tartarget" > /dev/null`;
-        } else {
-            print `tar xfv $tar -C "/tmp/$dname/$tartarget"`;
+        if ($tar =~ /^http(s?):\/\//) {
+            print "Downloading $tar to /tmp/$dname/tmp\n";
+            my $cmd = qq|wget "$tar" --directory-prefix "/tmp/$dname/tmp" 2>&1|;
+            print "$cmd\n";
+            my $dl = `$cmd`;
+            $tar = $1 if ($dl =~ /Saving to: '(.+)'/);
+            print "Received: $tar\n";
         }
+        if ($tar =~ /\.zip$/) {
+            print `unzip $tar -d "/tmp/$dname$tartarget" > /dev/null`;
+        } elsif ($tar =~ /\.tgz$/ || $tar =~ /\.tar\.gz$/) {
+            print `tar zxf "$tar" -C "/tmp/$dname$tartarget"`;
+        } else {
+            print `tar xf "$tar" -C "/tmp/$dname$tartarget"`;
+        }
+        `chown -R $tarowner "/tmp/$dname$tartarget"` if ($tarowner);
     }
 
     # Git clone
     if ($git) {
         print ">> Cloning from Git repo...\n";
         print `git clone $git "/tmp/$dname$gittarget"`;
+        `chown -R $gitowner "/tmp/$dname/$gittarget"` if ($gitowner);
     }
 
     # Run post exec script

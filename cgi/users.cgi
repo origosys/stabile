@@ -935,7 +935,8 @@ END
     my $opphone = $obj->{"opphone"} || $reguser->{'opphone'};
     my $opfullname = $obj->{"opfullname"} || $reguser->{'opfullname'};
     my $allowfrom = $obj->{"allowfrom"} || $reguser->{'allowfrom'};
-    my $totpsecret = $obj->{"totpsecret"} || $reguser->{'totpsecret'};
+    my $totpsecret = $reguser->{'totpsecret'};
+    $totpsecret = $obj->{"totpsecret"} if (defined $obj->{"totpsecret"});
     my $allowinternalapi = $obj->{"allowinternalapi"} || $reguser->{'allowinternalapi'};
 
     if ($allowfrom) {
@@ -1688,7 +1689,7 @@ sub updateEngineUsers {
 
     }
     $ures = substr($res, 0, -2) . "\n";
-    $res .= "Status=OK Received $ucount user updates from Registry\n";
+    $res .= "Status=OK Received $ucount updates on " .(scalar(@ulist)). " registry users\n";
     return $res;
 }
 

@@ -929,6 +929,22 @@ sub preInit {
         }
         untie %networkreg;
         untie %domreg;
+    } else { # Check authorized referers to mitigate CSRF attacks. If no referer in ENV we let it pass to allow API access.
+        if (-e "/etc/stabile/basereferers"
+            && $ENV{HTTP_REFERER}
+        ) {
+            my $basereferers = `cat /etc/stabile/basereferers`;
+            chomp $basereferers;
+            my @baserefs = split(/\s+/, $basereferers);
+            my $match = 0;
+            foreach my $ref (@baserefs) {
+                if ($ENV{HTTP_REFERER} =~ /$ref/) {
+                    $match = 1;
+                    last;
+                }
+            }
+            $user = '' unless ($match);
+        }
     }
     $user = $1 if $user =~ /(.+)/; #untaint
     $tktuser = $user;

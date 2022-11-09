@@ -1,4 +1,4 @@
-VERSION=1.0f
+VERSION=1.0g
 APPID=1326
 BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
 REBASE=0
@@ -12,7 +12,8 @@ TAR=
 TARTARGET=
 GIT=
 GITTARGET=
-PRICE=-400
+PRICE=-340
+ORDER=15
 DEBS=docker.io kubeadm kubelet kubectl helm screen libyaml-libyaml-perl
 PREEXEC=/tmp/files/preexec.sh
 POSTEXEC=/tmp/files/postexec.sh

@@ -1172,12 +1172,19 @@ END
 #    <loader readonly='yes' type='pflash'>/usr/share/OVMF/OVMF_CODE.fd</loader>
 #    <nvram template='/usr/share/OVMF/OVMF_VARS.fd'/>
 
-        if ($vgpu && $vgpu ne "--") { $xml .= <<ENDXML
+        if ($vgpu && $vgpu ne "--") {
+            $xml .= <<ENDXML
   <cpu mode='host-passthrough'>
     <feature policy='disable' name='hypervisor'/>
   </cpu>
 ENDXML
 ;
+        } else {
+            $xml .= <<ENDXML
+  <cpu mode='host-model'>
+  </cpu>
+ENDXML
+            ;
         }
         $xml .=  <<ENDXML
   <name>$uname</name>

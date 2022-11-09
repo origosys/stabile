@@ -27,6 +27,7 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/stabile-wordpress.service'
 chmod 664 /etc/systemd/system/stabile-wordpress.service
+systemctl enable stabile-wordpress
 
 # Configure Apache
 
@@ -85,7 +86,7 @@ default-collation=utf8_general_ci" > /var/lib/mysql/wordpress_default/db.opt'
 
 chown -R mysql:mysql /var/lib/mysql/wordpress_default
 
-systemctl enable mysql
+systemctl enable mariadb
 
 # Allow theme installation automatic upgrades etc
 chown -R www-data:www-data /var/lib/wordpress
@@ -101,7 +102,12 @@ echo "\n" | add-apt-repository "ppa:ondrej/php"
 apt-get update
 apt-get -q -y install php7.4 php7.4-cli php7.4-common php7.4-curl php7.4-intl php7.4-json php7.4-mysql php7.4-opcache php7.4-readline php7.4-xml
 a2enmod php7.4
-a2dismod php7.2
+#a2dismod php7.2
+
+# Fix permissions
+rm /usr/share/wordpress/wp-includes/js/underscore.*
+cp -a /usr/share/javascript/underscore/underscore.js /usr/share/javascript/underscore/underscore.min.js /usr/share/wordpress/wp-includes/js
+chown www-data:www-data /usr/share/wordpress/wp-includes/js/underscore.*
 
 # Bump up php limits
 perl -pi -e 's/.*post_max_size = .*/post_max_size = 64M/;' /etc/php/7.4/apache2/php.ini

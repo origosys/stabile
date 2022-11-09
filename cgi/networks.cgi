@@ -463,6 +463,18 @@ END
     return $res;
 }
 
+sub do_envdump {
+    my ($uuid, $action) = @_;
+    if ($help) {
+        return <<END
+GET::
+Dump environment variables
+END
+    }
+    return to_json(\%ENV, {pretty=>1});
+}
+
+
 sub do_dnscreate {
     my ($uuid, $action) = @_;
     if ($help) {

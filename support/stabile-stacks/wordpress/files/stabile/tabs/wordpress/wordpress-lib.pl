@@ -556,7 +556,8 @@ END
             my $redirect = defined $in{wpredirect} || $in{wpredirectcheck} eq '2';
             if ($redirect && !$redirecting) {
                 `a2enmod rewrite`;
-                my $msg = `perl -pi -e 's/<\\/VirtualHost>/RewriteEngine On\nRewriteRule (.*) https:\\/\\/\%{HTTP_HOST}\%{REQUEST_URI}\n<\\/VirtualHost>/s' /etc/apache2/sites-available/000-default.conf \&2>1`;
+
+                my $msg = `perl -pi -e 's/<\\/VirtualHost>/RewriteEngine On\nRewriteCond \%{REQUEST_URI} !\\/wp-admin\\/install.php\nRewriteRule (.*) https:\\/\\/\%{HTTP_HOST}\%{REQUEST_URI}\n<\\/VirtualHost>/s' /etc/apache2/sites-available/000-default.conf \&2>1`;
                 `systemctl reload apache2`;
                 $message .=  "<div class=\"message\">TLS redirection was enabled $msg</div>";
             } elsif ($redirecting) {
@@ -632,6 +633,11 @@ sub getWPtab {
     my $wpname = shift;
     my $wpaliases = shift;
     $wpaliases = join(' ', split(' ', $wpaliases));
+    my $dom = ($dnsdomain)?"$externalip.$dnssubdomain.$dnsdomain":$externalip;
+    if ($wpname ne 'default') {
+        $dom = $wpname;
+        $dom ="$dom.$dnsdomain" unless ($dom=~ /\./);
+    }
 
     my $wpuser;
     if ($wp eq 'new') {
@@ -658,7 +664,7 @@ sub getWPtab {
                     $curipwp
                 </div>
                 <div class="col-sm-2">
-                    <button class="btn btn-default" type="submit" onclick="spinner(this);">Set!</button>
+                    <button class="btn btn-default" type="button" onclick="spinner(this);">Set!</button>
                 </div>
             </div>
         </div>
@@ -696,7 +702,7 @@ END
     <div class="tab-pane" id="$wpname-site">
     <form class="passwordform wpform" id="wpform_$wpname" action="index.cgi?tab=wordpress\&show=$wpname-site" method="post" accept-charset="utf-8" autocomplete="off">
         <div>
-            <small>The website's domain name:</small>
+            <small>The website's <a href="http://$dom" target="_blank">domain name</a>:</small>
             <input class="wpdomain" id="wpdomain_$wpname" type="text" name="wpdomain_$wpname" value="$wp" disabled autocomplete="off">
         </div>
         <small>Aliases for the website:</small>
@@ -706,7 +712,7 @@ END
                 <input type="hidden" id="wpaliases_h_$wpname" name="wpaliases_h_$wpname" value="$wpaliases" autocomplete="off" />
             </div>
             <div class="col-sm-2">
-                <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wpaliases'); submit();" rel="tooltip" data-placement="top" title="Aliases that are not FQDNs will be created in the $dnsdomain domain as [alias].$dnsdomain">Set!</button>
+                <button type="button" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wpaliases'); submit();" rel="tooltip" data-placement="top" title="Aliases that are not FQDNs will be created in the $dnsdomain domain as [alias].$dnsdomain">Set!</button>
             </div>
         </div>
         <small>Set password for WordPress user '$wpuser':</small>
@@ -715,14 +721,15 @@ END
                 <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" class="password">
             </div>
             <div class="col-sm-2">
-                <button type="submit" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wppassword'); submit();">Set!</button>
+                <button type="button" class="btn btn-default" onclick="spinner(this); \$('#action_$wpname').val('wppassword'); submit();">Set!</button>
             </div>
         </div>
+        <small>After setting the password you can log in <a href="https://$dom/home/wp-admin" target="_blank">here</a> as '$wpuser'</small>
     <div style="height:10px;"></div>
 END
     ;
 
-    my $backupbutton = qq|<button class="btn btn-primary" rel="tooltip" data-placement="top" title="$backup_tooltip" onclick="\$('#action_$wpname').val('wpbackup'); \$('#wpform_$wpname').submit(); spinner(this);">Backup database</button>|;
+    my $backupbutton = qq|<button class="btn btn-primary" type="button" rel="tooltip" data-placement="top" title="$backup_tooltip" onclick="\$('#action_$wpname').val('wpbackup'); \$('#wpform_$wpname').submit(); spinner(this);">Backup database</button>|;
 
     if ($wp eq 'new') {
         $backup_tooltip = "You must save before you can back up";
@@ -745,21 +752,21 @@ END
                 <input id="wppassword_$wpname" type="password" name="wppassword" autocomplete="off" value="" disabled class="disabled" placeholder="Password can be set after creating website">
             </div>
             <div class="col-sm-2">
-                <button class="btn btn-default disabled" disabled>Set!</button>
+                <button class="btn btn-default type="button" disabled" disabled>Set!</button>
             </div>
         </div>
     <div style="height:10px;"></div>
 END
         ;
-        $backupbutton = qq|<button class="btn btn-primary disabled" rel="tooltip" data-placement="top" title="$backup_tooltip" onclick="spinner(this); return false;">Backup database</button>|;
+        $backupbutton = qq|<button class="btn btn-primary disabled" type="button" rel="tooltip" data-placement="top" title="$backup_tooltip" onclick="spinner(this); return false;">Backup database</button>|;
     }
 
-    my $restorebutton = qq|<button class="btn btn-primary disabled" rel="tooltip" data-placement="top" title="You must back up before you can restore" onclick="spinner(this); return false;">Restore database</button>|;
+    my $restorebutton = qq|<button class="btn btn-primary disabled" type="button" rel="tooltip" data-placement="top" title="You must back up before you can restore" onclick="spinner(this); return false;">Restore database</button>|;
     my $ftime;
 
     if (-e "/var/lib/wordpress/wordpress_$wpname.sql") {
         $ftime = make_date( (stat("/var/lib/wordpress/wordpress_$wpname.sql"))[9] ) . ' ' . `date +%Z`;
-        $restorebutton = qq|<button class="btn btn-primary" rel="tooltip" data-placement="top" title="Restore database from backup made $ftime" onclick="spinner(this); \$('#action_$wpname').val('wprestore'); \$('#wpform_$wpname').submit();">Restore database</button>|;
+        $restorebutton = qq|<button class="btn btn-primary" type="button" rel="tooltip" data-placement="top" title="Restore database from backup made $ftime" onclick="spinner(this); \$('#action_$wpname').val('wprestore'); \$('#wpform_$wpname').submit();">Restore database</button>|;
     }
 
     my $backupform .= <<END

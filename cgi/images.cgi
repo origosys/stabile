@@ -1119,15 +1119,22 @@ END
                 return $postreply;
             };
         } else {
+            # First try to mount using autodiscover -i. If that fails, try to mount /dev/sda1
             $cmd = qq|/usr/bin/guestmount --ro -o allow_other -a "$path" "$mountpath" -i 2>&1|;
             my $mes = qx($cmd);
             my $xc = $? >> 8;
-            $main::syslogit->($user, 'info', "Mounted $curimg $xc");
+            $main::syslogit->($user, 'info', "Trying to mount $curimg $xc");
             if ($xc) {
-                $postreply = header('text/html', '500 Internal Server Error') . $postreply unless ($console);
-                chomp $mes;
-                $postreply .= "Status=Error Problem mounting image ($mes).\n$cmd\n";
-                return $postreply;
+                $cmd = qq|/usr/bin/guestmount --ro -o allow_other -a "$path" "$mountpath"  -m /dev/sda1:/ 2>&1|;
+                $mes = qx($cmd);
+                $xc = $? >> 8;
+                $main::syslogit->($user, 'info', "Trying to mount $curimg $xc");
+                if ($xc) {
+                    $postreply = header('text/html', '500 Internal Server Error') . $postreply unless ($console);
+                    chomp $mes;
+                    $postreply .= "Status=Error Problem mounting image ($mes).\n$cmd\n";
+                    return $postreply;
+                }
             }
         }
 

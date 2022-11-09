@@ -23,7 +23,7 @@ else
   perl -pi -e "unless (\$match) {\$match = s/showdummy/' . \\\$showsite . '/;}" /usr/share/wordpress/wp-admin/install.php
   perl -pi -e 'if (!$match) {$match = s/showdummy/<?php echo \$showsite; ?>/;}' /usr/share/wordpress/wp-admin/install.php
 
-  perl -pi -e 's/(\/\/ Sanity check\.)/$1\n\$showsite=( (strpos(\$_SERVER[HTTP_HOST], ".stabile.io")===FALSE)? "default" : substr(\$_SERVER[HTTP_HOST], 0, strpos(\$_SERVER[HTTP_HOST], ".stabile.io")) );\n/' /usr/share/wordpress/wp-admin/install.php
+  perl -pi -e 's/(\/\/ Sanity check\.)/$1\n\$showsite=( (preg_match("\/\\.\\w+\\.\\w+\$\/", \$_SERVER[HTTP_HOST], \$matches, PREG_OFFSET_CAPTURE)===FALSE )? "default" : substr(\$_SERVER[HTTP_HOST], 0, \$matches[0][1]) );\n/' /usr/share/wordpress/wp-admin/install.php
 
 # Make link to virtual host work, even if not registered in DNS, by adding host=, which is interpreted by stabile proxy
   # perl -pi -e "s/(step=1)/\$1\&host=' . \\\$_SERVER[HTTP_HOST] .'/;" /usr/share/wordpress/wp-admin/install.php
@@ -38,3 +38,7 @@ else
 # Make strength meter work in install page after upgrading WordPress
 	perl -pi -e 's/(.+src.+ => )(empty.+),/$1\"\.\.\/wp-includes\/js\/zxcvbn\.min\.js\"/;' /usr/share/wordpress/wp-includes/script-loader.php
 fi
+
+# Allow root to log into mysql
+  echo "UPDATE mysql.user SET plugin = '' WHERE user = 'root' AND host = 'localhost';" | mysql
+  echo "FLUSH PRIVILEGES" | mysql

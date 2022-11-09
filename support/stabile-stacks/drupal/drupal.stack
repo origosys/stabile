@@ -1,0 +1,40 @@
+APPID=1931
+VERSION=1.0b
+BASEIMAGE=ubuntu-focal.1.0a.master.qcow2
+REBASE=0
+BASESUITE=
+SIZE=
+NAME=drupal
+APPNAME=Drupal
+DIR=files
+DIRTARGET=/tmp
+TAR=https://ftp.drupal.org/files/projects/drupal-9.4.6.tar.gz
+TARTARGET=/var/www
+TAROWNER=www-data:www-data
+GIT=
+GITTARGET=
+GITOWNER=
+DEBS=php7.4 libapache2-mod-php7.4 php7.4-common php7.4-mbstring php7.4-xmlrpc php7.4-soap php7.4-gd php7.4-xml php7.4-intl php7.4-mysql php7.4-cli php7.4-zip php7.4-curl composer software-properties-common mariadb-server mariadb-client
+PREEXEC=
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+MEMORY=4096
+VCPU=2
+LOGO=https://www.stabile.io/images/apps/logo-drupal.png
+THUMBNAIL=https://www.stabile.io/images/apps/logo-drupal.png
+SUMMARY=A no-nonsense way to run your own Drupal with support for multiple, independent sites.
+DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site Drupal server.</h4>\
+	<ul>\
+		<li>Install your own Drupal 9 Server with one click.</li>\
+		<li>Manage multiple sites on the same server with the user-friendly control panel.</li>\
+		<li>If you don't have your own domain, the app can automatically register your sites under uncloud.co domain.</li>\
+		<li>Size the server as you like if you need more memory or vCPUs.</li>\
+		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the web UI</li>\
+		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
+	</ul>\
+	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/drupal">Stack source code</a></div>

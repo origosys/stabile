@@ -502,7 +502,7 @@ define([
                 var mac;
                 var domstatus;
                 var maccpucores;
-                v = "<div id=\"vitalsHeader\"><h3>All systems</h3></div>";
+                v = "<div id=\"vitalsHeader\"><h3>All stacks</h3></div>";
                 for (i in gridItem) {
                     if (gridItem[i].issystem) {
                         var children = gridItem[i].children;

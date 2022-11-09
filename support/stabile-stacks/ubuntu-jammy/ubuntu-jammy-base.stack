@@ -1,0 +1,33 @@
+VERSION=22.04
+MAINTAINER=Christian Orellana <christian@origo.io>
+BASEIMAGE=
+REBASE=
+BASESUITE=bionic
+SIZE=20G
+MEMORY=
+NAME=ubuntu-jammy-base
+APPNAME=Ubuntu Jammy Base Image
+DIR=
+DIRTARGET=
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+DEBS=
+PREEXEC=
+POSTEXEC=
+SERVICE=
+TERMINALLINK=
+DATAIMAGE=
+
+# Ubuntu Jammy does not work with virt-install: https://github.com/libguestfs/libguestfs/issues/63
+# Instead we install 18.04 and do a do-release-upgrade
+# The following incantations are necessary:
+# ip addr add 10.2.1.4 dev ens3
+# ip link set ens3 up
+# ip route add default via 10.2.1.1 dev ens3 onlink
+# apt update
+# apt upgrade
+# When asked about grub, choose to keep the current version of config
+# do-release-upgrade
+# Also - GRUB_CMDLINE_LINUX_DEFAULT="" and GRUB_TERMINAL=console are changed in /etc/default/grub

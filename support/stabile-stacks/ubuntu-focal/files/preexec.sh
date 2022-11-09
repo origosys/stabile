@@ -23,7 +23,7 @@ chmod 664 /etc/systemd/system/stabile-shellinabox.service
 systemctl enable stabile-shellinabox.service
 
 # For debugging - remove before release
-#echo "stabile:stabile" | chpasswd
+# echo "stabile:stabile" | chpasswd
 # Add to sudoers
 usermod -aG sudo stabile
 # Empty passwords and disable login

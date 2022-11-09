@@ -1,0 +1,77 @@
+APPID=3665
+VERSION=1.0a
+MAINTAINER=Christian Orellana <christian@origo.io>
+BASEIMAGE=ubuntu-jammy-base.22.04.master.qcow2
+REBASE=1
+BASESUITE=jammy
+SIZE=20G
+MEMORY=
+NAME=ubuntu-jammy
+APPNAME=Ubuntu Jammy
+LOGO=https://www.origo.io/irigo/images/apps/logo-ubuntu-orange-300x249.png
+THUMBNAIL=https://www.origo.io/irigo/images/apps/logo-ubuntu-orange-150x124.png
+DIR=files
+DIRTARGET=/tmp
+TAR=
+TARTARGET=
+GIT=
+GITTARGET=
+PRICE=-70
+DEBS=apache2\
+     acpid\
+     dmidecode\
+     git\
+     iptables\
+     ifupdown\
+     libapache2-mod-php\
+     libjson-perl\
+     libstring-shellquote-perl\
+     liburi-encode-perl\
+     man\
+     nfs-common\
+     net-tools\
+     openssh-server\
+     sysbench\
+     perl\
+     libnet-ssleay-perl\
+     openssl\
+     libauthen-pam-perl\
+     libpam-runtime\
+     libio-pty-perl\
+     apt-show-versions\
+     apt-transport-https\
+     dctrl-tools\
+     python3-certbot-apache\
+     libconfigreader-simple-perl\
+     liburi-escape-xs-perl\
+     qemu-utils\
+     xfsprogs\
+     gnupg2\
+     curl\
+     unzip\
+     jq\
+     cloud-guest-utils
+PREEXEC=/tmp/files/preexec.sh
+POSTEXEC=/tmp/files/postexec.sh
+SERVICE=
+TERMINALLINK=/stabile/pipe/http://{uuid}:4200
+MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
+DATAIMAGE=20G
+DATAIMAGEFS=xfs
+SUMMARY=A lean install of Ubuntu Server 22.04 with Stabile API integration.
+DESCRIPTION=<div class="app-description">\
+    <div>\
+        This Stack is a lean install of Ubuntu Server 22.04 with light-weight Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.\
+    </div>\
+    <ul>\
+        <li>Install your very own Ubuntu Linux Server on SSD with one click.</li>\
+        <li>Easily scale out with more servers.</li>\
+        <li>Access to console from web UI during boot sequence.</li>\
+        <li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the web UI</li>\
+        <li>No lock-in: At any time you can download your images in qcow2-format</li>\
+        <li>Size the server as you like after installation.</li>\
+    </ul>\
+    </div>\
+<hr>\
+<div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
+<div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/ubuntu-jammy">Stack source code</a></div>

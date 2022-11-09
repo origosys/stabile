@@ -283,7 +283,7 @@ sub get_test_results {
     $p = 0;
     my $res;
     my %testnames = ('iops', 'IOPS', 'io', 'I/O (MB/s)', 'iopsdirect', 'IOPS direct', 'iodirect', 'I/O direct (MB/s)',
-                     'dd', 'Disk performance (MB/s)','ddnfs', 'NFS performance (MB/s)', 'cpu', 'CPU (sec)', 'cpu5', 'CPU 5 threads (sec)',
+                     'dd', 'Disk performance (MB/s)','ddnfs', 'NFS performance (MB/s)', 'cpu', 'CPU (events/s)', 'cpu5', 'CPU 5 threads (events/s)',
                      'memory', 'Memory (MB/s)', 'network', 'Network (MB/s)', 'netgw', 'Network gateway (MB/s)');
     my $skip = 1;
     my @tservers;
@@ -355,14 +355,14 @@ sub get_test_results {
                     } elsif ($test eq 'cpu') {
                         my $testkey = 'max prime 10000';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        if ($_ =~ /total time:\s+ (\S+)s/) {
+                        if ($_ =~ /events per second:\s+ (\S+)/) {
                             my @b1 = @{$tests{$testkey}}; push @b1, $1;
                             $tests{$testkey} = \@b1;
                         }
                     } elsif ($test eq 'cpu5') {
                         my $testkey = 'max prime 10000';
                         unless ($tests{$testkey}){my @a1; $tests{$testkey} = \@a1;}
-                        if ($_ =~ /total time:\s+ (\S+)s/) {
+                        if ($_ =~ /events per second:\s+ (\S+)/) {
                             my @b1 = @{$tests{$testkey}}; push @b1, $1;
                             $tests{$testkey} = \@b1;
                         }

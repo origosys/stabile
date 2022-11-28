@@ -1,20 +1,20 @@
-# Stabile
+# Origo OS
 
 <p style="text-align: center;"><img src="./static/img/logo-icon.png" alt="Stabile Logo" width="80"/></p>
 
-Stabile is a open source software platform for infrastructure orchestration. It is distributed in the hope of being useful, but without any warranty what so ever.
+Origo OS, also known by its code name, Stabile,  is a open source software platform for infrastructure orchestration. It is distributed in the hope of being useful, but without any warranty what so ever.
 
-This is the source code distribution of Stabile, and is intended for developers who want to contribute or explore the inner workings of the system. For general product information please see https://www.stabile.io.
+This is the source code distribution of Origo OS, and is intended for developers who want to contribute or explore the inner workings of the system. For general product information please see https://www.origo.io.
 
-Stabile is currently distributed as beta software. If you want to install the binary release and help us test the software, please read the EULA (https://www.origo.io/info/stabiledocs/licensing/stabile-eula), the documentation (https://www.origo.io/info/stabiledocs), before proceeding with the quick-start guide (https://www.origo.io/info/stabiledocs/single-node-quick-start). Be sure to provide feedback, so we can fix problems and bugs.
+If you want to install the binary release and help us test the software, please read the EULA (https://www.origo.io/info/stabiledocs/licensing/stabile-eula), the documentation (https://www.origo.io/info/stabiledocs), before proceeding with the quick-start guide (https://www.origo.io/info/stabiledocs/single-node-quick-start). Be sure to provide feedback, so we can fix problems and bugs.
 
-In short Stabile aims to make it easier to manage VM's, storage and networking in an organized manner, as well as package preconfigured collections of virtual servers, that provide useful services.
+In short Origo OS aims to make it easier to manage VM's, storage and networking in an organized manner. Origo OS is also useful for application distribution, since preconfigured collections of virtual servers can be packaged in a simple format and distributed.
 
-* Stabile is based on Ubuntu Linux
-* Stabile is designed to run on x86 hardware
-* Stabile is packaged and distributed to Engines as debian (.deb) packages for Ubuntu 18.04
+* Origo OS is based on Ubuntu Linux
+* Origo OS is designed to run on x86 hardware
+* Origo OS is packaged and distributed to Engines as debian (.deb) packages for Ubuntu 18.04
 
-In a Stabile-managed collection of servers, one server functions as the **administration server** 
+In an Origo OS-managed collection of servers, one server functions as the **administration server** 
 
 The administration server handles the following tasks:
 

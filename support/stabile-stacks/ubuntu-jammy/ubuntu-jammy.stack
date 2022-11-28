@@ -58,10 +58,10 @@ TERMINALLINK=/stabile/pipe/http://{uuid}:4200
 MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
 DATAIMAGE=20G
 DATAIMAGEFS=xfs
-SUMMARY=A lean install of Ubuntu Server 22.04 with Stabile API integration.
+SUMMARY=A lean install of Ubuntu Server 22.04 with Origo OS API integration.
 DESCRIPTION=<div class="app-description">\
     <div>\
-        This Stack is a lean install of Ubuntu Server 22.04 with light-weight Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.\
+        This Stack is a lean install of Ubuntu Server 22.04 with light-weight Origo OS API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.\
     </div>\
     <ul>\
         <li>Install your very own Ubuntu Linux Server on SSD with one click.</li>\

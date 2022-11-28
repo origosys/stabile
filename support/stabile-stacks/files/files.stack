@@ -42,7 +42,7 @@ DESCRIPTION=<section>\
     <li>The "Samba Configuration" from the "samba" drop-down allows you to limit who can actually write to the "shared" share, and you can specify users that should only have access to the shares associated with the grups they are members of.</li>\
     <li>You can also limit which hosts should have SMB and CIFS access to the server. This is then put in the smb.conf configuration file.</li>\
     </ul>\
-    <p style="margin-bottom:10px;">Please bear in mind, that this stack in its default configuration also limits access to the SMB/CIFS ports using <a target="_blank" href="https://www.origo.io/info/stabiledocs/web/networks/ports/">Stabile connection functionality</a>. If you use this, it is redundant to also limit via smb.conf.\
+    <p style="margin-bottom:10px;">Please bear in mind, that this stack in its default configuration also limits access to the SMB/CIFS ports using <a target="_blank" href="https://www.origo.io/info/stabiledocs/web/networks/ports/">Origo OS connection functionality</a>. If you use this, it is redundant to also limit via smb.conf.\
     </p>\
     <hr>\
     <div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\

@@ -34,7 +34,7 @@ DESCRIPTION=<h4>This is our take on an easy-to-use, multi-site Drupal server.</h
 		<li>Manage backups, access the console (including the BIOS), clone or snapshot images, all from the web UI</li>\
 		<li>No lock-in: At any time you can download your images in qcow2-format</li>\
 	</ul>\
-	<div>Please note that this stack uses Stabile DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
+	<div>Please note that this stack uses Origo DNS operations, and requires your engine to be linked with the registry. If your engine is not linked, the stack will not work correctly.</div>\
 <hr>\
 <div style="margin-top:20px;"><a href="https://pub.origo.io/support/projects/stabile-support/boards" target="_blank">Support and discussion</a></div>\
 <div><a href="https://gitlab.origo.io/origosys/stabile-stacks/-/tree/master/drupal">Stack source code</a></div>

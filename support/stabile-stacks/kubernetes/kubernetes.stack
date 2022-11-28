@@ -27,16 +27,16 @@ DATAIMAGEFS=xfs
 STORAGEPOOL2=-1
 LOGO=https://www.stabile.io/irigo/images/apps/kubernetes-logo.png
 THUMBNAIL=https://www.stabile.io/irigo/images/apps/kubernetes-icon.svg
-SUMMARY=2-node Kubernetes cluster with built-in access to Stabile loadbalancers and storage classes.
+SUMMARY=2-node Kubernetes cluster with built-in access to Origo OS loadbalancers and storage classes.
 DESCRIPTION=<link rel="stylesheet" href="https://www.stabile.io/irigo/css/videopopup.css">\
 <div class="app-description">\
     <div>This stack deploys a Kubernetes cluster with two nodes. One node doubles as the control plane and worker node. The other is a worker node. Once your cluster is up and running, you can add more worker nodes, by simply adding servers to your stack from the "servers" tab in the stack UI.\
     </div>\
     <div>\
         Our Kubernetes stack installs two storage classes - one for accessing local SSD storage and one for accessing shared NFS storage.<br>\
-        The stack also installs the exellent <a href="https://metallb.universe.tf/" target="_blank">MetalLB</a>, which integrates with the IP address provisioning in Stabile.<br>\
-        A number of yaml manifests are included for testing. They are located in /home/stabile. A simple implementation of a provider for <a href="https://github.com/kubernetes-sigs/external-dns" target="_blank">External DNS</a> (which integrates with the Stabile Cloud DNS service) is provided.<br>\
-        To learn more about using Kubernetes on Stabile, please read and try to follow some of our <a href="https://www.origo.io/info/stabiledocs/guides/" target="_blank">guides</a>.\
+        The stack also installs the exellent <a href="https://metallb.universe.tf/" target="_blank">MetalLB</a>, which integrates with the IP address provisioning in Origo OS.<br>\
+        A number of yaml manifests are included for testing. They are located in /home/stabile. A simple implementation of a provider for <a href="https://github.com/kubernetes-sigs/external-dns" target="_blank">External DNS</a> (which integrates with the Origo Cloud DNS service) is provided.<br>\
+        To learn more about using Kubernetes on Origo OS, please read and try to follow some of our <a href="https://www.origo.io/info/stabiledocs/guides/" target="_blank">guides</a>.\
     </div>\
     <p>Here's a short time-laps video of the installation process:</p>\
     <div style="margin-bottom:30px; text-align:center;">\

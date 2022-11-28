@@ -22,8 +22,8 @@ MANAGEMENTLINK=/stabile/pipe/http://{uuid}:10000/stabile/
 DATAIMAGE=20G
 LOGO=https://www.stabile.io/images/apps/centos-logo.png
 THUMBNAIL=https://www.stabile.io/images/apps/centos-logo.png
-SUMMARY=This is a lean install of the CentOS Server 8.2 with Stabile API integration.
-DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-weight Stabile API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.</div>\
+SUMMARY=This is a lean install of the CentOS Server 8.2 with Origo OS API integration.
+DESCRIPTION=<div>This Stack is a lean install of Centos Server 8.2 with light-weight Origo OS API integration. This means that you can easily perform common management tasks such as changing your Linux user password, updating software packages and even access a usable terminal right in the web browser.</div>\
 	<ul>\
 		<li>Install your very own powerful CentOS Linux Server on SSD with one click.</li>\
 		<li>Easily scale out with more servers.</li>\

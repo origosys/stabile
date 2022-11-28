@@ -26,7 +26,7 @@ The administration server handles the following tasks:
 
 The other servers in the collection function as **compute nodes**.
 
-The compute nodes are stateless PXE-booted servers. Once booted they auto-join the OCS and make their ressources available for running virtual servers. A compute node may have local storage attached, typically an SSD or NVMe. A compute node without local storage uses shared storage provided by the administration server via NFS.
+The compute nodes are stateless PXE-booted servers. Once booted they auto-join the "cloud" and make their ressources available for running virtual servers. A compute node may have local storage attached, typically an SSD or NVMe. A compute node without local storage uses shared storage provided by the administration server via NFS.
 
 The compute nodes handle the following tasks:
 

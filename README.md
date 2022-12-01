@@ -7,7 +7,7 @@ Origo OS, also known by its code name, Stabile,  is a open source software platf
 This is the source code distribution of Origo OS, and is intended for developers who want to contribute or explore the inner workings of the system. For general product information please see https://www.origo.io.
 
 The authoritative repo is: https://gitlab.origo.io/origosys/stabile.
-The repo is also mirrored to: https://github.com/origosys/stabile
+The repo is also mirrored to: https://github.com/origosys/stabile.
 
 If you want to install the binary release and help us test the software, please read the EULA (https://www.origo.io/info/stabiledocs/licensing/origo-os-eula), the documentation (https://www.origo.io/os/), before proceeding with the quick-start guide (https://www.origo.io/os/single-node-quick-start). Be sure to provide feedback, so we can fix problems and bugs.
 
